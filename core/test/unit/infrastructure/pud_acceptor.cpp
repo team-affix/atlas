@@ -72,7 +72,7 @@ struct PudAcceptorTest : public ::testing::Test {
     pud_ubs_state caller_state;
     pud_ubs_state entered_state;
     pud_ubs_state accepted_state;
-    pud_goal_list callee_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({&callee_goal});
+    pud_goal_list callee_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&callee_goal);
     std::vector<pud_node_id> path{2, 6};
 
     void SetUp() override {

@@ -49,7 +49,7 @@ private:
         pud_mhcs_head_id candidate;
     };
 
-    std::optional<pud_mhq_head_id> try_admit(std::vector<candidacy> candidacies);
+    std::optional<pud_mhq_head_id> admit_candidacy(std::optional<pud_mhq_head_id> head_id, candidacy admitted);
 
     IEnterReplay& enter_replay_;
     IAxioms& axioms_;
@@ -95,7 +95,7 @@ PUD_MHQ::pud_mhq(
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
     const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset) {
-    std::vector<candidacy> candidacies;
+    std::optional<pud_mhq_head_id> head_id;
     for (pud_node_id axiom : axioms_) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom);
         if (!axiom_root.has_value())
@@ -103,9 +103,13 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
         const std::optional<pud_mhcs_head_id> candidate = try_add_candidate_.try_add(std::move(axiom_root.value()));
         if (!candidate.has_value())
             continue;
-        candidacies.push_back(candidacy{.axiom = axiom, .candidate = candidate.value()});
+        head_id = admit_candidacy(head_id, candidacy{.axiom = axiom, .candidate = candidate.value()});
     }
-    return try_admit(std::move(candidacies));
+    if (!head_id.has_value())
+        return std::nullopt;
+    if (queries_.at(head_id.value()).size() == 1)
+        push_unit_query_.push_back(head_id.value());
+    return head_id;
 }
 
 // A fork only looks under the axioms the forked head still has a candidate under: a specialization
@@ -116,7 +120,7 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_fork(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
-    std::vector<candidacy> candidacies;
+    std::optional<pud_mhq_head_id> forked_head_id;
     for (const candidacy& other : queries_.at(head_id)) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, other.axiom);
         if (!axiom_root.has_value())
@@ -125,9 +129,13 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_fork(
             try_fork_candidate_.try_fork(other.candidate, std::move(axiom_root.value()));
         if (!candidate.has_value())
             continue;
-        candidacies.push_back(candidacy{.axiom = other.axiom, .candidate = candidate.value()});
+        forked_head_id = admit_candidacy(forked_head_id, candidacy{.axiom = other.axiom, .candidate = candidate.value()});
     }
-    return try_admit(std::move(candidacies));
+    if (!forked_head_id.has_value())
+        return std::nullopt;
+    if (queries_.at(forked_head_id.value()).size() == 1)
+        push_unit_query_.push_back(forked_head_id.value());
+    return forked_head_id;
 }
 
 PUD_MHQ_TEMPLATE
@@ -165,15 +173,14 @@ std::vector<pud_mhcs_head_id> PUD_MHQ::candidates(pud_mhq_head_id head_id) const
 }
 
 PUD_MHQ_TEMPLATE
-std::optional<pud_mhq_head_id> PUD_MHQ::try_admit(std::vector<candidacy> candidacies) {
-    if (candidacies.empty())
-        return std::nullopt;
-    const pud_mhq_head_id head_id = next_head_id_++;
-    for (const candidacy& admitted : candidacies)
-        candidate_to_head_.emplace(admitted.candidate, head_id);
-    if (candidacies.size() == 1)
-        push_unit_query_.push_back(head_id);
-    queries_.emplace(head_id, std::move(candidacies));
+std::optional<pud_mhq_head_id> PUD_MHQ::admit_candidacy(
+    std::optional<pud_mhq_head_id> head_id, candidacy admitted) {
+    if (!head_id.has_value()) {
+        head_id = next_head_id_++;
+        queries_.emplace(head_id.value(), std::vector<candidacy>{});
+    }
+    candidate_to_head_.emplace(admitted.candidate, head_id.value());
+    queries_.at(head_id.value()).push_back(admitted);
     return head_id;
 }
 

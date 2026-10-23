@@ -4,6 +4,7 @@
 #include <set>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
@@ -63,7 +64,11 @@ pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::pud_expander(
 
 template<typename IR, typename IU, typename IAC, typename IRL, typename IRLS, typename IIQL, typename IGQH, typename ICC>
 pud_frontier_change pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::expand(pud_node_id leaf, pud_body_goal_id goal) {
-    const std::vector<pud_node_id> children = unfold_.unfold(leaf, goal, resolve_.resolve(leaf, goal));
+    unfold_.begin_unfold(leaf, goal);
+    std::vector<pud_node_id> children;
+    for (const pud_child_delta& delta : resolve_.resolve(leaf, goal))
+        children.push_back(unfold_.unfold_child(leaf, goal, delta));
+    unfold_.finish_unfold(leaf, children);
     std::vector<pud_node_id> refuted_children;
     for (pud_node_id child : children) {
         if (!activate_child_.activate_child(leaf, child))
@@ -94,7 +99,11 @@ pud_frontier_change pud_expander<IR, IU, IAC, IRL, IRLS, IIQL, IGQH, ICC>::expan
         }
         refuting.assign(next_refuting.begin(), next_refuting.end());
     }
-    return collect_change_.collect(children, all_refuted);
+    for (pud_node_id child : children)
+        collect_change_.add_produced(child);
+    for (pud_node_id refuted : all_refuted)
+        collect_change_.add_refuted(refuted);
+    return collect_change_.finish();
 }
 
 #endif

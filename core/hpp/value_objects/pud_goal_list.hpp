@@ -14,7 +14,7 @@ struct pud_goal_list {
     pud_body_goal_id next_id;
 
     pud_goal_list closing(pud_body_goal_id goal) const;
-    pud_goal_list adding(const std::vector<const expr*>& added) const;
+    pud_goal_list adding(const expr* goal) const;
     bool operator==(const pud_goal_list&) const = default;
 };
 

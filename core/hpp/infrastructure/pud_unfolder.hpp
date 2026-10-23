@@ -1,13 +1,14 @@
 #ifndef PUD_UNFOLDER_HPP
 #define PUD_UNFOLDER_HPP
 
+#include <cstddef>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_node_id.hpp"
 
-// Unfolds a leaf on a goal into one child per delta. The leaf becomes interior; with no children it
-// is dead, and so is every ancestor it leaves without a live child.
+// Unfolds a leaf on a goal into children one delta at a time. The leaf becomes interior; with no
+// children it is dead, and so is every ancestor it leaves without a live child.
 template<
     typename IStoreCallSite,
     typename IMakeChild,
@@ -23,7 +24,9 @@ struct pud_unfolder {
         IUnsetLeaf& unset_leaf,
         IStoreLiveChildCount& store_live_child_count,
         IPropagateRefutation& propagate_refutation);
-    std::vector<pud_node_id> unfold(pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_child_delta>& deltas);
+    void begin_unfold(pud_node_id leaf, pud_body_goal_id goal);
+    pud_node_id unfold_child(pud_node_id leaf, pud_body_goal_id goal, const pud_child_delta& delta);
+    void finish_unfold(pud_node_id leaf, const std::vector<pud_node_id>& children);
 private:
     IStoreCallSite& store_call_site_;
     IMakeChild& make_child_;
@@ -56,18 +59,23 @@ PUD_UNFOLDER::pud_unfolder(
     , propagate_refutation_(propagate_refutation) {}
 
 PUD_UNFOLDER_TEMPLATE
-std::vector<pud_node_id> PUD_UNFOLDER::unfold(
-    pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_child_delta>& deltas) {
+void PUD_UNFOLDER::begin_unfold(pud_node_id leaf, pud_body_goal_id goal) {
     store_call_site_.store(leaf, goal);
-    std::vector<pud_node_id> children;
-    for (const pud_child_delta& delta : deltas)
-        children.push_back(make_child_.make_child(leaf, goal, delta));
+}
+
+PUD_UNFOLDER_TEMPLATE
+pud_node_id PUD_UNFOLDER::unfold_child(
+    pud_node_id leaf, pud_body_goal_id goal, const pud_child_delta& delta) {
+    return make_child_.make_child(leaf, goal, delta);
+}
+
+PUD_UNFOLDER_TEMPLATE
+void PUD_UNFOLDER::finish_unfold(pud_node_id leaf, const std::vector<pud_node_id>& children) {
     store_children_.store(leaf, children);
     unset_leaf_.unset_leaf(leaf);
     store_live_child_count_.store(leaf, children.size());
     if (children.empty())
         propagate_refutation_.refute(leaf);
-    return children;
 }
 
 #undef PUD_UNFOLDER

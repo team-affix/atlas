@@ -84,8 +84,10 @@ bool PUD_LEAF_ACTIVATOR::activate_child(pud_node_id parent, pud_node_id child) {
     pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);
     pud_structure_watch_change watched =
         watch_.descend(parent_state.watch, bindings, child, call_site, get_node_goals_.get(child));
-    pud_goal_queries queries =
-        make_queries_.make_child_queries(parent_state.queries, child, bindings, call_site, watched.changed_goals);
+    pud_goal_queries queries = make_queries_.make_child_queries(parent_state.queries, call_site);
+    for (pud_body_goal_id goal : watched.changed_goals)
+        make_queries_.fork_changed_goal(queries, child, bindings, goal);
+    make_queries_.admit_child_queries(queries, child, bindings, parent_state.queries);
     store_active_state_.store(child, pud_active_state{
         .bindings = std::move(bindings),
         .watch = std::move(watched.watch),

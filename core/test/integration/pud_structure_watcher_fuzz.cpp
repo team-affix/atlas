@@ -152,7 +152,9 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     }
 
     level make_root() {
-        const pud_goal_list goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(random_goals({}, 1 + pick(4)));
+        pud_goal_list goals{.goals = {}, .next_id = 0};
+        for (const expr* goal : random_goals({}, 1 + pick(4)))
+            goals = goals.adding(goal);
         return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals), .depth = 0};
     }
 
@@ -161,7 +163,9 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         node_specs_.store(child, random_substitutions(parent.bindings));
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
         const pud_body_goal_id call_site = parent.goals.goals.at(pick(parent.goals.goals.size())).id;
-        const pud_goal_list goals = parent.goals.closing(call_site).adding(random_goals(child_bindings, pick(4)));
+        pud_goal_list goals = parent.goals.closing(call_site);
+        for (const expr* goal : random_goals(child_bindings, pick(4)))
+            goals = goals.adding(goal);
 
         std::set<pud_body_goal_id> expected;
         for (const pud_body_goal& inherited : parent.goals.goals) {

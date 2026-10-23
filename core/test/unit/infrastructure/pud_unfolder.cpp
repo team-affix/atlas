@@ -52,7 +52,10 @@ TEST_F(PudUnfolderTest, TheCallSiteIsStoredBeforeAnyChildIsMade) {
     EXPECT_CALL(call_sites, store(4, 2));
     EXPECT_CALL(make_child, make_child(4, 2, first)).WillOnce(Return(10));
     EXPECT_CALL(make_child, make_child(4, 2, second)).WillOnce(Return(11));
-    EXPECT_EQ(unfolder.unfold(4, 2, {first, second}), (std::vector<pud_node_id>{10, 11}));
+    unfolder.begin_unfold(4, 2);
+    EXPECT_EQ(unfolder.unfold_child(4, 2, first), 10u);
+    EXPECT_EQ(unfolder.unfold_child(4, 2, second), 11u);
+    unfolder.finish_unfold(4, {10, 11});
 }
 
 TEST_F(PudUnfolderTest, TheLeafBecomesInteriorWithEveryChildAlive) {
@@ -62,11 +65,15 @@ TEST_F(PudUnfolderTest, TheLeafBecomesInteriorWithEveryChildAlive) {
     EXPECT_CALL(states, unset_leaf(4));
     EXPECT_CALL(live_child_counts, store(4, 2u));
     EXPECT_CALL(propagator, refute(_)).Times(0);
-    unfolder.unfold(4, 2, {first, second});
+    unfolder.begin_unfold(4, 2);
+    unfolder.unfold_child(4, 2, first);
+    unfolder.unfold_child(4, 2, second);
+    unfolder.finish_unfold(4, {10, 11});
 }
 
 TEST_F(PudUnfolderTest, ALeafWithoutChildrenIsDead) {
     EXPECT_CALL(live_child_counts, store(4, 0u));
     EXPECT_CALL(propagator, refute(4));
-    EXPECT_TRUE(unfolder.unfold(4, 2, {}).empty());
+    unfolder.begin_unfold(4, 2);
+    unfolder.finish_unfold(4, {});
 }

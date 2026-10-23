@@ -122,7 +122,11 @@ pud_frontier_change PUD_ROOT_OPENER::open() {
         }
         refuting.assign(next_refuting.begin(), next_refuting.end());
     }
-    return collect_change_.collect(roots, all_refuted);
+    for (pud_node_id root : roots)
+        collect_change_.add_produced(root);
+    for (pud_node_id refuted : all_refuted)
+        collect_change_.add_refuted(refuted);
+    return collect_change_.finish();
 }
 
 #undef PUD_ROOT_OPENER

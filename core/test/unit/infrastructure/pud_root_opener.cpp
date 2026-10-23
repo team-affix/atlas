@@ -34,7 +34,9 @@ struct MockGetQueryHolders {
     MOCK_METHOD(std::vector<pud_node_id>, get_holders, (pud_mhq_head_id));
 };
 struct MockCollectChange {
-    MOCK_METHOD(pud_frontier_change, collect, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
+    MOCK_METHOD(void, add_produced, (pud_node_id));
+    MOCK_METHOD(void, add_refuted, (pud_node_id));
+    MOCK_METHOD(pud_frontier_change, finish, ());
 };
 
 using test_root_opener_t = pud_root_opener<
@@ -57,6 +59,7 @@ struct PudRootOpenerTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(queries, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+        ON_CALL(collector, finish()).WillByDefault(Return(pud_frontier_change{}));
     }
 };
 
@@ -86,7 +89,10 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTh
     EXPECT_CALL(refuter, refute(7));
     EXPECT_CALL(releaser, release(7));
     EXPECT_CALL(queries, invalidate_leaf(7u));
-    EXPECT_CALL(collector, collect(ElementsAre(7u, 8u), ElementsAre(7u)));
+    EXPECT_CALL(collector, add_produced(7));
+    EXPECT_CALL(collector, add_produced(8));
+    EXPECT_CALL(collector, add_refuted(7));
+    EXPECT_CALL(collector, finish());
     opener.open();
 }
 

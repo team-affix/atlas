@@ -26,10 +26,17 @@ struct pud_leaf_query_maker {
     pud_goal_queries make_root_queries(pud_node_id root, const pud_ubs_state& bindings);
     pud_goal_queries make_child_queries(
         const immer::map<pud_body_goal_id, pud_mhq_head_id>& parent_queries,
+        pud_body_goal_id closed_goal);
+    void admit_child_queries(
+        pud_goal_queries& made,
         pud_node_id child,
         const pud_ubs_state& bindings,
-        pud_body_goal_id closed_goal,
-        const std::vector<pud_body_goal_id>& changed_goals);
+        const immer::map<pud_body_goal_id, pud_mhq_head_id>& inherited);
+    void fork_changed_goal(
+        pud_goal_queries& made,
+        pud_node_id child,
+        const pud_ubs_state& bindings,
+        pud_body_goal_id goal);
 private:
     void admit_leaf(
         pud_goal_queries& made,
@@ -72,20 +79,30 @@ pud_goal_queries PUD_LEAF_QUERY_MAKER::make_root_queries(pud_node_id root, const
 PUD_LEAF_QUERY_MAKER_TEMPLATE
 pud_goal_queries PUD_LEAF_QUERY_MAKER::make_child_queries(
     const immer::map<pud_body_goal_id, pud_mhq_head_id>& parent_queries,
+    pud_body_goal_id closed_goal) {
+    return pud_goal_queries{.heads = parent_queries.erase(closed_goal), .refuted = false};
+}
+
+PUD_LEAF_QUERY_MAKER_TEMPLATE
+void PUD_LEAF_QUERY_MAKER::admit_child_queries(
+    pud_goal_queries& made,
     pud_node_id child,
     const pud_ubs_state& bindings,
-    pud_body_goal_id closed_goal,
-    const std::vector<pud_body_goal_id>& changed_goals) {
+    const immer::map<pud_body_goal_id, pud_mhq_head_id>& inherited) {
+    admit_leaf(made, child, bindings, inherited);
+}
+
+PUD_LEAF_QUERY_MAKER_TEMPLATE
+void PUD_LEAF_QUERY_MAKER::fork_changed_goal(
+    pud_goal_queries& made,
+    pud_node_id child,
+    const pud_ubs_state& bindings,
+    pud_body_goal_id goal) {
     const uint32_t lvc = get_node_lvc_.get(child);
-    pud_goal_queries made{.heads = parent_queries.erase(closed_goal), .refuted = false};
-    for (pud_body_goal_id goal : changed_goals) {
-        const std::optional<pud_mhq_head_id> fork =
-            fork_query_.try_fork(made.heads.at(goal), bindings, get_node_goals_.find(child, goal), lvc);
-        made.refuted = made.refuted || !fork.has_value();
-        made.heads = fork.has_value() ? made.heads.set(goal, fork.value()) : made.heads.erase(goal);
-    }
-    admit_leaf(made, child, bindings, parent_queries);
-    return made;
+    const std::optional<pud_mhq_head_id> fork =
+        fork_query_.try_fork(made.heads.at(goal), bindings, get_node_goals_.find(child, goal), lvc);
+    made.refuted = made.refuted || !fork.has_value();
+    made.heads = fork.has_value() ? made.heads.set(goal, fork.value()) : made.heads.erase(goal);
 }
 
 // Opens a query for every open goal the leaf did not inherit, and makes the leaf hold every query.

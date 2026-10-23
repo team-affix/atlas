@@ -167,19 +167,19 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         r3 = functor("r", {var(3)});
         r1 = functor("r", {var(1)});
         s = atom("s");
-        const pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({p0, q12});
+        const pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(p0).adding(q12);
         store_leaf(root, 3, root_goals, {});
         call_sites.store(root, 0);
-        const pud_goal_list child_goals = root_goals.closing(0).adding({r3});
+        const pud_goal_list child_goals = root_goals.closing(0).adding(r3);
         store_leaf(child, 4, child_goals, {pud_substitution{.var_idx = 0, .value = atom("a")}});
         call_sites.store(child, 2);
         store_leaf(grandchild, 4, child_goals.closing(2), {pud_substitution{.var_idx = 3, .value = atom("b")}});
-        const pud_goal_list nephew_goals = child_goals.closing(2).adding({s});
+        const pud_goal_list nephew_goals = child_goals.closing(2).adding(s);
         store_leaf(nephew, 4, nephew_goals, {pud_substitution{.var_idx = 2, .value = functor("f", {var(3)})}});
         call_sites.store(nephew, 3);
         store_leaf(great_nephew, 4, nephew_goals.closing(3), {pud_substitution{.var_idx = 1, .value = atom("c")}});
         store_leaf(sibling, 3, root_goals.closing(0), {pud_substitution{.var_idx = 1, .value = var(2)}});
-        const pud_goal_list linker_goals = root_goals.closing(0).adding({r1});
+        const pud_goal_list linker_goals = root_goals.closing(0).adding(r1);
         store_leaf(linker, 3, linker_goals, {});
         call_sites.store(linker, 2);
         store_leaf(linked, 3, linker_goals.closing(2), {pud_substitution{.var_idx = 1, .value = atom("a")}});
@@ -289,7 +289,7 @@ TEST_F(PudLeafActivationIntegrationTest, ReleasingALeafRemovesQueriesOnlyItHeld)
 TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {
     axioms.clear();
     const pud_node_id lone = next_axiom++;
-    store_leaf(lone, 0, pud_goal_list{.goals = {}, .next_id = 0}.adding({p0}), {});
+    store_leaf(lone, 0, pud_goal_list{.goals = {}, .next_id = 0}.adding(p0), {});
     make_axiom(atom("s"));
     EXPECT_TRUE(leaf_activator.activate_root(lone));
 }

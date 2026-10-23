@@ -82,7 +82,10 @@ pud_node_id PUD_NODE_MAKER::make_root(const expr* head, const std::vector<const 
     set_leaf_.set_leaf(root);
     store_parent_.store(root, std::nullopt);
     store_root_head_.store(root, head);
-    store_goals_.store(root, pud_goal_list{.goals = {}, .next_id = 0}.adding(goals));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    for (const expr* goal : goals)
+        root_goals = root_goals.adding(goal);
+    store_goals_.store(root, root_goals);
     store_lvc_.store(root, var_count);
     return root;
 }
@@ -93,7 +96,10 @@ pud_node_id PUD_NODE_MAKER::make_child(pud_node_id parent, pud_body_goal_id call
     set_leaf_.set_leaf(child);
     store_parent_.store(child, parent);
     store_substitutions_.store(child, delta.substitutions);
-    store_goals_.store(child, get_goals_.get(parent).closing(call_site).adding(delta.body_goals));
+    pud_goal_list child_goals = get_goals_.get(parent).closing(call_site);
+    for (const expr* goal : delta.body_goals)
+        child_goals = child_goals.adding(goal);
+    store_goals_.store(child, child_goals);
     store_lvc_.store(child, get_lvc_.get(parent) + delta.var_count);
     return child;
 }

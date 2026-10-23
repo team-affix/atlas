@@ -5,6 +5,7 @@
 #include "value_objects/pud_goal_list.hpp"
 
 using ::testing::_;
+using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
@@ -35,8 +36,9 @@ struct MockGetCallSite {
 };
 struct MockMakeQueries {
     MOCK_METHOD(pud_goal_queries, make_root_queries, (pud_node_id, const pud_ubs_state&));
-    MOCK_METHOD(pud_goal_queries, make_child_queries,
-        (const queries_t&, pud_node_id, const pud_ubs_state&, pud_body_goal_id, const std::vector<pud_body_goal_id>&));
+    MOCK_METHOD(pud_goal_queries, make_child_queries, (const queries_t&, pud_body_goal_id));
+    MOCK_METHOD(void, admit_child_queries, (pud_goal_queries&, pud_node_id, const pud_ubs_state&, const queries_t&));
+    MOCK_METHOD(void, fork_changed_goal, (pud_goal_queries&, pud_node_id, const pud_ubs_state&, pud_body_goal_id));
 };
 
 using test_activator_t = pud_leaf_activator<
@@ -58,6 +60,10 @@ struct PudLeafActivatorTest : public ::testing::Test {
     pud_structure_watch child_watch;
     pud_ubs_state child_bindings;
     pud_active_state parent_state;
+
+    void fork_child_query_to_sixty(pud_goal_queries& made, pud_node_id, const pud_ubs_state&, pud_body_goal_id) {
+        made.heads = queries_t{}.set(1, 60);
+    }
 
     void SetUp() override {
         root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
@@ -85,14 +91,17 @@ TEST_F(PudLeafActivatorTest, ARootStartsFromEmptyBindingsAndStoresItsState) {
 
 TEST_F(PudLeafActivatorTest, AChildContinuesItsParentsBindingsWatchAndQueries) {
     EXPECT_CALL(watcher, descend(parent_watch, child_bindings, 4u, 0u, _));
-    EXPECT_CALL(query_maker, make_child_queries(parent_state.queries, 4u, child_bindings, 0u, std::vector<pud_body_goal_id>{1}))
-        .WillOnce(Return(pud_goal_queries{.heads = queries_t{}.set(1, 60), .refuted = false}));
+    EXPECT_CALL(query_maker, make_child_queries(parent_state.queries, 0u))
+        .WillOnce(Return(pud_goal_queries{.heads = queries_t{}.set(1, 41), .refuted = false}));
+    EXPECT_CALL(query_maker, fork_changed_goal(_, 4u, child_bindings, 1u))
+        .WillOnce(Invoke(this, &PudLeafActivatorTest::fork_child_query_to_sixty));
+    EXPECT_CALL(query_maker, admit_child_queries(_, 4u, child_bindings, parent_state.queries));
     EXPECT_CALL(store_states, store(4, pud_active_state{.bindings = child_bindings, .watch = child_watch, .queries = queries_t{}.set(1, 60)}));
     EXPECT_FALSE(activator.activate_child(3, 4));
 }
 
 TEST_F(PudLeafActivatorTest, ALeafWithAGoalWithoutCandidatesIsStoredAndReportedRefuted) {
-    ON_CALL(query_maker, make_child_queries(_, _, _, _, _)).WillByDefault(Return(pud_goal_queries{.heads = {}, .refuted = true}));
+    ON_CALL(query_maker, make_child_queries(_, _)).WillByDefault(Return(pud_goal_queries{.heads = {}, .refuted = true}));
     EXPECT_CALL(store_states, store(4, _));
     EXPECT_TRUE(activator.activate_child(3, 4));
 }

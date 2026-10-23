@@ -44,7 +44,7 @@ struct PudStructureWatcherTest : public ::testing::Test {
     expr h{expr::functor{3, {&x3}}};
     expr k{expr::functor{4, {&x4}}};
     expr ground{expr::functor{5, {}}};
-    pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({&f, &g, &h});
+    pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&f).adding(&g).adding(&h);
     std::vector<pud_substitution> child_substitutions;
 
     void SetUp() override {
@@ -56,7 +56,7 @@ struct PudStructureWatcherTest : public ::testing::Test {
     std::vector<pud_body_goal_id> changed_by(std::vector<pud_substitution> substituted) {
         child_substitutions = std::move(substituted);
         const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
-        return watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding({&k})).changed_goals;
+        return watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding(&k)).changed_goals;
     }
 };
 
@@ -102,7 +102,7 @@ TEST_F(PudStructureWatcherTest, TheClosedGoalIsNoLongerWatched) {
 TEST_F(PudStructureWatcherTest, AGoalTheChildAddsIsWatchedButNeverReportedChanged) {
     child_substitutions = {pud_substitution{.var_idx = 4, .value = &ground}};
     const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
-    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding({&k}));
+    const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, 9, 2, root_goals.closing(2).adding(&k));
     EXPECT_THAT(change.changed_goals, IsEmpty());
     EXPECT_EQ(change.watch.goal_to_reps[3], (immer::set<uint32_t>{}.insert(4)));
     EXPECT_EQ(change.watch.goal_to_reps.find(2), nullptr);

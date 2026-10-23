@@ -43,8 +43,8 @@ struct PudLeafQueryMakerTest : public ::testing::Test {
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
     expr goal_c{expr::functor{3, {}}};
-    pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({&goal_a, &goal_b});
-    pud_goal_list child_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({&goal_a, &goal_b, &goal_c}).closing(0);
+    pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&goal_a).adding(&goal_b);
+    pud_goal_list child_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&goal_a).adding(&goal_b).adding(&goal_c).closing(0);
     queries_t parent_queries = queries_t{}.set(0, 40).set(1, 41).set(2, 42);
     pud_ubs_state bindings;
 
@@ -79,7 +79,8 @@ TEST_F(PudLeafQueryMakerTest, AChildSharesTheParentsQueryForAnUnchangedGoalAndDr
     EXPECT_CALL(fork, try_fork(_, _, _, _)).Times(0);
     EXPECT_CALL(hold, hold(41u, 2u, 1u));
     EXPECT_CALL(hold, hold(42u, 2u, 2u));
-    const pud_goal_queries made = maker.make_child_queries(parent_queries, 2, bindings, 0, {});
+    pud_goal_queries made = maker.make_child_queries(parent_queries, 0);
+    maker.admit_child_queries(made, 2, bindings, parent_queries);
     EXPECT_EQ(made.heads, (queries_t{}.set(1, 41).set(2, 42)));
 }
 
@@ -87,14 +88,18 @@ TEST_F(PudLeafQueryMakerTest, AChangedGoalForksTheParentsQueryInTheChildsEnviron
     EXPECT_CALL(fork, try_fork(42u, _, &goal_c, 6u)).WillOnce(Return(60));
     EXPECT_CALL(hold, hold(41u, 2u, 1u));
     EXPECT_CALL(hold, hold(60u, 2u, 2u));
-    const pud_goal_queries made = maker.make_child_queries(parent_queries, 2, bindings, 0, {2});
+    pud_goal_queries made = maker.make_child_queries(parent_queries, 0);
+    maker.fork_changed_goal(made, 2, bindings, 2);
+    maker.admit_child_queries(made, 2, bindings, parent_queries);
     EXPECT_EQ(made.heads, (queries_t{}.set(1, 41).set(2, 60)));
     EXPECT_FALSE(made.refuted);
 }
 
 TEST_F(PudLeafQueryMakerTest, AForkWithoutCandidatesRefutesTheChild) {
     EXPECT_CALL(fork, try_fork(42u, _, _, _)).WillOnce(Return(std::nullopt));
-    const pud_goal_queries made = maker.make_child_queries(parent_queries, 2, bindings, 0, {2});
+    pud_goal_queries made = maker.make_child_queries(parent_queries, 0);
+    maker.fork_changed_goal(made, 2, bindings, 2);
+    maker.admit_child_queries(made, 2, bindings, parent_queries);
     EXPECT_TRUE(made.refuted);
     EXPECT_EQ(made.heads, (queries_t{}.set(1, 41)));
 }
@@ -104,5 +109,7 @@ TEST_F(PudLeafQueryMakerTest, AGoalTheChildAddsGetsAQueryOfItsOwn) {
     EXPECT_CALL(open, try_open(_, &goal_c, 6u)).WillOnce(Return(70));
     EXPECT_CALL(hold, hold(41u, 2u, 1u));
     EXPECT_CALL(hold, hold(70u, 2u, 2u));
-    EXPECT_EQ(maker.make_child_queries(inherited, 2, bindings, 0, {}).heads, (queries_t{}.set(1, 41).set(2, 70)));
+    pud_goal_queries made = maker.make_child_queries(inherited, 0);
+    maker.admit_child_queries(made, 2, bindings, inherited);
+    EXPECT_EQ(made.heads, (queries_t{}.set(1, 41).set(2, 70)));
 }

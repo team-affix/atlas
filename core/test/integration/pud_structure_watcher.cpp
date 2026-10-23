@@ -56,7 +56,10 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     }
 
     at_node at_root(const std::vector<const expr*>& watched) {
-        const pud_goal_list goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(watched).adding({functor("go", {})});
+        pud_goal_list goals{.goals = {}, .next_id = 0};
+        for (const expr* watched_goal : watched)
+            goals = goals.adding(watched_goal);
+        goals = goals.adding(functor("go", {}));
         return at_node{
             .bindings = {},
             .goals = goals,
@@ -67,13 +70,19 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     }
 
     at_node descend(const at_node& parent, pud_node_id node, const std::vector<const expr*>& added) {
-        const pud_goal_list goals = parent.goals.closing(parent.call_site).adding(added).adding({functor("go", {})});
+        pud_goal_list goals = parent.goals.closing(parent.call_site);
+        for (const expr* added_goal : added)
+            goals = goals.adding(added_goal);
+        goals = goals.adding(functor("go", {}));
         return step(parent, node, parent.call_site, goals, goals.next_id - 1);
     }
 
     at_node descend_closing(
         const at_node& parent, pud_node_id node, pud_body_goal_id closed, const std::vector<const expr*>& added) {
-        return step(parent, node, closed, parent.goals.closing(closed).adding(added), parent.call_site);
+        pud_goal_list goals = parent.goals.closing(closed);
+        for (const expr* added_goal : added)
+            goals = goals.adding(added_goal);
+        return step(parent, node, closed, goals, parent.call_site);
     }
 
     at_node step(

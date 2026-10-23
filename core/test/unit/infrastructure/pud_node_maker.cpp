@@ -60,7 +60,7 @@ struct PudNodeMakerTest : public ::testing::Test {
     expr goal_b{expr::functor{3, {}}};
     expr goal_c{expr::functor{4, {}}};
     expr value{expr::functor{5, {}}};
-    pud_goal_list parent_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding({&goal_a, &goal_b});
+    pud_goal_list parent_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&goal_a).adding(&goal_b);
 
     void SetUp() override {
         ON_CALL(ids, next()).WillByDefault(Return(9));
@@ -76,13 +76,13 @@ TEST_F(PudNodeMakerTest, ARootIsALeafWithoutAParentHoldingItsHeadGoalsAndVariabl
     EXPECT_CALL(states, set_leaf(9));
     EXPECT_CALL(parents, store(9, std::optional<pud_node_id>{}));
     EXPECT_CALL(root_heads, store(9, &head));
-    EXPECT_CALL(store_goals, store(9, pud_goal_list{.goals = {}, .next_id = 0}.adding({&goal_a, &goal_b})));
+    EXPECT_CALL(store_goals, store(9, pud_goal_list{.goals = {}, .next_id = 0}.adding(&goal_a).adding(&goal_b)));
     EXPECT_CALL(store_lvc, store(9, 3u));
     EXPECT_EQ(maker.make_root(&head, {&goal_a, &goal_b}, 3), 9u);
 }
 
 TEST_F(PudNodeMakerTest, AChildClosesItsParentsCallSiteAndAppendsItsOwnGoals) {
-    EXPECT_CALL(store_goals, store(9, parent_goals.closing(0).adding({&goal_c})));
+    EXPECT_CALL(store_goals, store(9, parent_goals.closing(0).adding(&goal_c)));
     maker.make_child(4, 0, pud_child_delta{.substitutions = {}, .body_goals = {&goal_c}, .var_count = 0});
 }
 
