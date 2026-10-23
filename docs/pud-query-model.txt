@@ -63,9 +63,13 @@ Activation
 - pud_binder applies child added_substitutions onto the parent bind map.
 - pud_structure_watcher: goals indexed by pud_body_goal_id; a goal changes when
   any of its watched reps is instantiated or two of its reps merge.
+- pud_query_opener::open(leaf, bindings, goal): one query over the axioms the
+  leaf's group sees, in the leaf's environment.
+- pud_query_forker::fork(inherited, leaf, bindings, goal): an inherited query
+  forked into the leaf's environment for a goal whose structure changed.
 - pud_child_activator: the child inherits every parent query but the call
-  site's, forks each changed goal (pud_leaf_query_maker::fork_query), then opens
-  queries for its own goals and holds every query (open_queries).
+  site's, forks each changed goal, opens a query for each goal of its own, then
+  holds every query.
 - pud_root_activator: opens a query per goal and holds them.
 - Both return whether the node arrived refuted: a goal whose query failed to
   open or fork, or an inherited query already exhausted.
@@ -73,7 +77,7 @@ Activation
 Query ownership
 
 - pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
-- Nodes acquire heads in pud_leaf_query_maker::open_queries and release them in
+- Nodes acquire heads in pud_root_activator / pud_child_activator and release them in
   pud_node_deactivator, which also invalidates the node as a witness and returns
   the nodes left holding a query without a candidate.
 - When the last holder releases a head, mhq::remove is the only removal path.

@@ -19,7 +19,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | D6 | Resolved | `pud_acceptor` diffs bind maps via `pud_changed_class_finder`; path replay via `pud_replayer` (no acceptor-local redo stack). |
 | D7 | Resolved | `ubs_bind_map` is concrete; `pud_transient_ubs_state` and fake bind-map template stacks deleted. |
 | D8 | Resolved | `pud_goal_list` + `pud_node_maker` single numbering along paths. |
-| D9 | Resolved | Unit work: `std::deque<pud_mhq_head_id>` on admission; refutation: `pud_goal_queries::refuted` + holder refutation cascade. |
+| D9 | Resolved | Unit work: `std::deque<pud_mhq_head_id>` on admission; refutation: activators report arriving refuted + `pud_leaf_refuter` cascade. |
 | D10 | Resolved | One `pud_structure_watcher` keyed by `pud_body_goal_id`. |
 | D11 | Resolved | One `pud_manifest` + `pud_solver`; old runtime / dual manifests removed. |
 
@@ -27,7 +27,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 
 | ID | Status | Notes |
 |----|--------|-------|
-| B1 | Resolved | Body-goal/query PQ descent dissolved into `pud_leaf_query_maker` + mhq API. |
+| B1 | Resolved | Body-goal/query PQ descent dissolved into `pud_query_opener` / `pud_query_forker` + mhq API. |
 | B2 | Resolved | `pud_expander` exposes one `expand`; one capability per injected collaborator. |
 | B3 | Resolved | Runtime facade deleted; `pud_node_maker::make_root`, `pud_root_activator`, `pud_expander`, `pud_command_handler` are the surface. |
 | B4 | Resolved | `pud_node_maker` replaces root descent maker passthrough. |

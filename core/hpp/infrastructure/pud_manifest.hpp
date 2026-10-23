@@ -13,8 +13,9 @@
 #include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
-#include "infrastructure/pud_leaf_query_maker.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
+#include "infrastructure/pud_query_forker.hpp"
+#include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_axiom_groups.hpp"
 #include "infrastructure/pud_active_states.hpp"
@@ -70,13 +71,13 @@ struct pud_manifest {
 
     using binder_t = pud_binder<term_factory_t, node_substitutions_t>;
     using structure_watcher_t = pud_structure_watcher<term_factory_t, node_substitutions_t>;
-    using leaf_query_maker_t =
-        pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, mhq_t, pud_node_goals, node_lvcs_t, node_axiom_groups_t>;
+    using query_opener_t = pud_query_opener<mhq_t, pud_node_goals, node_lvcs_t, node_axiom_groups_t>;
+    using query_forker_t = pud_query_forker<mhq_t, pud_node_goals, node_lvcs_t>;
     using root_activator_t =
-        pud_root_activator<pud_active_states, structure_watcher_t, pud_node_goals, leaf_query_maker_t>;
+        pud_root_activator<pud_active_states, structure_watcher_t, pud_node_goals, query_opener_t, pud_query_holders>;
     using child_activator_t = pud_child_activator<
         pud_active_states, pud_active_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t,
-        leaf_query_maker_t, leaf_query_maker_t>;
+        query_forker_t, query_opener_t, pud_query_holders, mhq_t>;
     using node_deactivator_t = pud_node_deactivator<
         pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
     using leaf_refuter_t =
@@ -123,7 +124,8 @@ struct pud_manifest {
     pud_query_holders          query_holders_;
     binder_t                   binder_;
     structure_watcher_t        structure_watcher_;
-    leaf_query_maker_t         leaf_query_maker_;
+    query_opener_t             query_opener_;
+    query_forker_t             query_forker_;
     root_activator_t           root_activator_;
     child_activator_t          child_activator_;
     node_deactivator_t         node_deactivator_;

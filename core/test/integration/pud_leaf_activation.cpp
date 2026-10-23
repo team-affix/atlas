@@ -24,7 +24,8 @@
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_leaf_query_maker.hpp"
+#include "infrastructure/pud_query_forker.hpp"
+#include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include <immer/map.hpp>
 
@@ -51,13 +52,13 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using binder_t = pud_binder<term_factory_t, substitutions_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
     using node_axiom_groups_t = pud_node_table<pud_axiom_group_id>;
-    using leaf_query_maker_t =
-        pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, mhq_t, pud_node_goals, lvcs_t, node_axiom_groups_t>;
+    using query_opener_t = pud_query_opener<mhq_t, pud_node_goals, lvcs_t, node_axiom_groups_t>;
+    using query_forker_t = pud_query_forker<mhq_t, pud_node_goals, lvcs_t>;
     using root_activator_t =
-        pud_root_activator<pud_active_states, watcher_t, pud_node_goals, leaf_query_maker_t>;
+        pud_root_activator<pud_active_states, watcher_t, pud_node_goals, query_opener_t, pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t,
-        leaf_query_maker_t>;
+        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, query_forker_t,
+        query_opener_t, pud_query_holders, mhq_t>;
     using node_deactivator_t =
         pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
 
@@ -90,11 +91,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         : database_group(axiom_groups.create_group()) {}
     binder_t binder{terms, substitutions};
     watcher_t structure_watcher{terms, substitutions};
-    leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, mhq, node_goals, lvcs, node_axiom_groups};
-    root_activator_t root_activator{active_states, structure_watcher, node_goals, leaf_query_maker};
+    query_opener_t query_opener{mhq, node_goals, lvcs, node_axiom_groups};
+    query_forker_t query_forker{mhq, node_goals, lvcs};
+    root_activator_t root_activator{active_states, structure_watcher, node_goals, query_opener, query_holders};
     child_activator_t child_activator{
-        active_states, active_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker,
-        leaf_query_maker};
+        active_states, active_states, binder, structure_watcher, node_goals, call_sites, query_forker, query_opener,
+        query_holders, mhq};
     node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
     pud_node_id next_axiom = 8;

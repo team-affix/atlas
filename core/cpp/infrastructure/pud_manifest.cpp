@@ -33,11 +33,12 @@ pud_manifest::pud_manifest()
     , query_holders_()
     , binder_(term_factory_, node_substitutions_)
     , structure_watcher_(term_factory_, node_substitutions_)
-    , leaf_query_maker_(mhq_, mhq_, query_holders_, mhq_, node_goals_, node_lvcs_, node_axiom_groups_)
-    , root_activator_(active_states_, structure_watcher_, node_goals_, leaf_query_maker_)
+    , query_opener_(mhq_, node_goals_, node_lvcs_, node_axiom_groups_)
+    , query_forker_(mhq_, node_goals_, node_lvcs_)
+    , root_activator_(active_states_, structure_watcher_, node_goals_, query_opener_, query_holders_)
     , child_activator_(
-          active_states_, active_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_,
-          leaf_query_maker_)
+          active_states_, active_states_, binder_, structure_watcher_, node_goals_, call_sites_, query_forker_,
+          query_opener_, query_holders_, mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(refuted_leaves_, refutation_propagator_, node_deactivator_, leaf_nodes_, refuted_leaves_)
     , acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_)
