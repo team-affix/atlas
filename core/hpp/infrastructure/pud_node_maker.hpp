@@ -2,106 +2,83 @@
 #define PUD_NODE_MAKER_HPP
 
 #include <cstdint>
-#include <optional>
-#include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_axiom_group_id.hpp"
-#include "value_objects/pud_body_goal_id.hpp"
-#include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/pud_node_delta.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
-// Makes database nodes. A root is a rule of its own and an axiom of its group; a child is its parent's
-// rule resolved on one of its goals, so it keeps every other goal of the parent, under the same ids,
-// adds its own, and belongs to its parent's group.
+// Makes database nodes: stores them in the tree and records what follows from them. A root is an axiom
+// of its group; a child is its parent's rule resolved on one of its goals, so it keeps every other goal
+// of the parent, under the same ids, adds its own, and belongs to its parent's group.
 template<
-    typename IGetNextNodeId,
-    typename IStoreRootHead,
-    typename IStoreParent,
-    typename IStoreSubstitutions,
+    typename IStoreAxiom,
+    typename IStoreInference,
     typename IGetGoals,
     typename IStoreGoals,
     typename IGetLvc,
     typename IStoreLvc,
-    typename ISetLeaf,
     typename IGetNodeAxiomGroup,
     typename IStoreNodeAxiomGroup,
     typename IAddAxiomGroupMember>
 struct pud_node_maker {
     pud_node_maker(
-        IGetNextNodeId& get_next_node_id,
-        IStoreRootHead& store_root_head,
-        IStoreParent& store_parent,
-        IStoreSubstitutions& store_substitutions,
+        IStoreAxiom& store_axiom,
+        IStoreInference& store_inference,
         IGetGoals& get_goals,
         IStoreGoals& store_goals,
         IGetLvc& get_lvc,
         IStoreLvc& store_lvc,
-        ISetLeaf& set_leaf,
         IGetNodeAxiomGroup& get_node_axiom_group,
         IStoreNodeAxiomGroup& store_node_axiom_group,
         IAddAxiomGroupMember& add_axiom_group_member);
     pud_node_id make_root(const rule& axiom, pud_axiom_group_id group);
-    pud_node_id make_child(pud_node_id parent, pud_body_goal_id call_site, const pud_child_delta& delta);
+    pud_node_id make_child(const pud_node_delta& delta);
 private:
-    IGetNextNodeId& get_next_node_id_;
-    IStoreRootHead& store_root_head_;
-    IStoreParent& store_parent_;
-    IStoreSubstitutions& store_substitutions_;
+    IStoreAxiom& store_axiom_;
+    IStoreInference& store_inference_;
     IGetGoals& get_goals_;
     IStoreGoals& store_goals_;
     IGetLvc& get_lvc_;
     IStoreLvc& store_lvc_;
-    ISetLeaf& set_leaf_;
     IGetNodeAxiomGroup& get_node_axiom_group_;
     IStoreNodeAxiomGroup& store_node_axiom_group_;
     IAddAxiomGroupMember& add_axiom_group_member_;
 };
 
 #define PUD_NODE_MAKER_TEMPLATE                                                            \
-    template<typename IGetNextNodeId, typename IStoreRootHead, typename IStoreParent,       \
-             typename IStoreSubstitutions, typename IGetGoals, typename IStoreGoals,        \
-             typename IGetLvc, typename IStoreLvc, typename ISetLeaf, typename IGetNodeAxiomGroup, \
+    template<typename IStoreAxiom, typename IStoreInference, typename IGetGoals, typename IStoreGoals, \
+             typename IGetLvc, typename IStoreLvc, typename IGetNodeAxiomGroup,             \
              typename IStoreNodeAxiomGroup, typename IAddAxiomGroupMember>
 #define PUD_NODE_MAKER                                                                     \
-    pud_node_maker<IGetNextNodeId, IStoreRootHead, IStoreParent, IStoreSubstitutions,      \
-        IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, ISetLeaf, IGetNodeAxiomGroup, IStoreNodeAxiomGroup, \
-        IAddAxiomGroupMember>
+    pud_node_maker<IStoreAxiom, IStoreInference, IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, \
+        IGetNodeAxiomGroup, IStoreNodeAxiomGroup, IAddAxiomGroupMember>
 
 PUD_NODE_MAKER_TEMPLATE
 PUD_NODE_MAKER::pud_node_maker(
-    IGetNextNodeId& get_next_node_id,
-    IStoreRootHead& store_root_head,
-    IStoreParent& store_parent,
-    IStoreSubstitutions& store_substitutions,
+    IStoreAxiom& store_axiom,
+    IStoreInference& store_inference,
     IGetGoals& get_goals,
     IStoreGoals& store_goals,
     IGetLvc& get_lvc,
     IStoreLvc& store_lvc,
-    ISetLeaf& set_leaf,
     IGetNodeAxiomGroup& get_node_axiom_group,
     IStoreNodeAxiomGroup& store_node_axiom_group,
     IAddAxiomGroupMember& add_axiom_group_member)
-    : get_next_node_id_(get_next_node_id)
-    , store_root_head_(store_root_head)
-    , store_parent_(store_parent)
-    , store_substitutions_(store_substitutions)
+    : store_axiom_(store_axiom)
+    , store_inference_(store_inference)
     , get_goals_(get_goals)
     , store_goals_(store_goals)
     , get_lvc_(get_lvc)
     , store_lvc_(store_lvc)
-    , set_leaf_(set_leaf)
     , get_node_axiom_group_(get_node_axiom_group)
     , store_node_axiom_group_(store_node_axiom_group)
     , add_axiom_group_member_(add_axiom_group_member) {}
 
 PUD_NODE_MAKER_TEMPLATE
 pud_node_id PUD_NODE_MAKER::make_root(const rule& axiom, pud_axiom_group_id group) {
-    const pud_node_id root = get_next_node_id_.next();
-    set_leaf_.set_leaf(root);
-    store_parent_.store(root, std::nullopt);
-    store_root_head_.store(root, axiom.head);
+    const pud_node_id root = store_axiom_.store_axiom(axiom);
     pud_goal_list root_goals{.goals = {}, .next_id = 0};
     for (const expr* goal : axiom.body)
         root_goals = root_goals.adding(goal);
@@ -113,17 +90,14 @@ pud_node_id PUD_NODE_MAKER::make_root(const rule& axiom, pud_axiom_group_id grou
 }
 
 PUD_NODE_MAKER_TEMPLATE
-pud_node_id PUD_NODE_MAKER::make_child(pud_node_id parent, pud_body_goal_id call_site, const pud_child_delta& delta) {
-    const pud_node_id child = get_next_node_id_.next();
-    set_leaf_.set_leaf(child);
-    store_parent_.store(child, parent);
-    store_substitutions_.store(child, delta.substitutions);
-    pud_goal_list child_goals = get_goals_.get(parent).closing(call_site);
+pud_node_id PUD_NODE_MAKER::make_child(const pud_node_delta& delta) {
+    const pud_node_id child = store_inference_.store_inference(delta);
+    pud_goal_list child_goals = get_goals_.get(delta.parent).closing(delta.call_site);
     for (const expr* goal : delta.body_goals)
         child_goals = child_goals.adding(goal);
     store_goals_.store(child, child_goals);
-    store_lvc_.store(child, get_lvc_.get(parent) + delta.var_count);
-    store_node_axiom_group_.store(child, get_node_axiom_group_.get(parent));
+    store_lvc_.store(child, get_lvc_.get(delta.parent) + delta.var_count);
+    store_node_axiom_group_.store(child, get_node_axiom_group_.get(delta.parent));
     return child;
 }
 

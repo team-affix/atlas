@@ -14,16 +14,16 @@
 // Walks a query down the database. Entering an axiom unifies the goal with the axiom's head; stepping
 // to a child replays the child's substitutions. Either fails when a unification fails.
 template<
-    typename IGetRootHead,
-    typename IGetNodeAddedSubstitutions,
+    typename IGetAxiom,
+    typename IGetInference,
     typename IMakeVar,
     typename IMakeBindMap,
     typename IMakeCycleDetector,
     typename IMakeUnifier>
 struct pud_replayer {
     pud_replayer(
-        IGetRootHead& get_root_head,
-        IGetNodeAddedSubstitutions& get_node_added_substitutions,
+        IGetAxiom& get_axiom,
+        IGetInference& get_inference,
         IMakeVar& make_var,
         IMakeBindMap& make_bind_map,
         IMakeCycleDetector& make_cycle_detector,
@@ -35,8 +35,8 @@ struct pud_replayer {
         pud_node_id axiom) const;
     std::optional<pud_replay> descend(const pud_replay& replay, pud_node_id child) const;
 private:
-    IGetRootHead& get_root_head_;
-    IGetNodeAddedSubstitutions& get_node_added_substitutions_;
+    IGetAxiom& get_axiom_;
+    IGetInference& get_inference_;
     IMakeVar& make_var_;
     IMakeBindMap& make_bind_map_;
     IMakeCycleDetector& make_cycle_detector_;
@@ -44,22 +44,22 @@ private:
 };
 
 #define PUD_REPLAYER_TEMPLATE                                                              \
-    template<typename IGetRootHead, typename IGetNodeAddedSubstitutions, typename IMakeVar,  \
+    template<typename IGetAxiom, typename IGetInference, typename IMakeVar,  \
              typename IMakeBindMap, typename IMakeCycleDetector, typename IMakeUnifier>
 #define PUD_REPLAYER                                                                       \
-    pud_replayer<IGetRootHead, IGetNodeAddedSubstitutions, IMakeVar, IMakeBindMap,         \
+    pud_replayer<IGetAxiom, IGetInference, IMakeVar, IMakeBindMap,         \
         IMakeCycleDetector, IMakeUnifier>
 
 PUD_REPLAYER_TEMPLATE
 PUD_REPLAYER::pud_replayer(
-    IGetRootHead& get_root_head,
-    IGetNodeAddedSubstitutions& get_node_added_substitutions,
+    IGetAxiom& get_axiom,
+    IGetInference& get_inference,
     IMakeVar& make_var,
     IMakeBindMap& make_bind_map,
     IMakeCycleDetector& make_cycle_detector,
     IMakeUnifier& make_unifier)
-    : get_root_head_(get_root_head)
-    , get_node_added_substitutions_(get_node_added_substitutions)
+    : get_axiom_(get_axiom)
+    , get_inference_(get_inference)
     , make_var_(make_var)
     , make_bind_map_(make_bind_map)
     , make_cycle_detector_(make_cycle_detector)
@@ -74,7 +74,7 @@ std::optional<pud_replay> PUD_REPLAYER::enter(
     auto&& bind_map = make_bind_map_.make_bind_map(caller_ubs_state);
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(bind_map);
     auto&& unifier = make_unifier_.make_unifier(bind_map, cycle_detector);
-    if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_root_head_.get(axiom), frame_offset}).has_value())
+    if (!unifier.unify(framed_expr{goal, 0}, framed_expr{get_axiom_.get_axiom(axiom).head, frame_offset}).has_value())
         return std::nullopt;
     return pud_replay{.node = axiom, .frame_offset = frame_offset, .ubs_state = std::move(bind_map).persist()};
 }
@@ -84,7 +84,7 @@ std::optional<pud_replay> PUD_REPLAYER::descend(const pud_replay& replay, pud_no
     auto&& bind_map = make_bind_map_.make_bind_map(replay.ubs_state);
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(bind_map);
     auto&& unifier = make_unifier_.make_unifier(bind_map, cycle_detector);
-    for (const pud_substitution& substitution : get_node_added_substitutions_.get(child)) {
+    for (const pud_substitution& substitution : get_inference_.get_inference(child).substitutions) {
         const framed_expr lhs{make_var_.make_var(substitution.var_idx), replay.frame_offset};
         const framed_expr rhs{substitution.value, replay.frame_offset};
         if (!unifier.unify(lhs, rhs).has_value())

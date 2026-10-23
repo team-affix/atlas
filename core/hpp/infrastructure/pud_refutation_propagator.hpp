@@ -23,7 +23,7 @@ pud_refutation_propagator<IGNP, IDLCC>::pud_refutation_propagator(
 template<typename IGNP, typename IDLCC>
 void pud_refutation_propagator<IGNP, IDLCC>::refute(pud_node_id dead_node) {
     pud_node_id dead = dead_node;
-    while (const std::optional<pud_node_id> parent = get_node_parent_.get(dead)) {
+    while (const std::optional<pud_node_id> parent = get_node_parent_.get_parent(dead)) {
         dead = parent.value();
         if (decrement_live_child_count_.decrement(dead) > 0)
             return;

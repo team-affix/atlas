@@ -242,7 +242,7 @@ bool PUD_MHCS::try_justify(candidate& justified) {
 
 PUD_MHCS_TEMPLATE
 std::optional<typename PUD_MHCS::witness> PUD_MHCS::try_add_witness(candidate& searching) {
-    const std::vector<pud_node_id>& children = get_children_.get(searching.current.node);
+    const std::vector<pud_node_id>& children = get_children_.get_children(searching.current.node);
     size_t& next_child = searching.witnesses->next_child;
     while (next_child < children.size()) {
         std::optional<pud_replay> search_root = descend_replay_.descend(searching.current, children.at(next_child++));

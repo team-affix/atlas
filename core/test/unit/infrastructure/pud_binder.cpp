@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_binder.hpp"
+#include "value_objects/pud_node_delta.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -21,8 +22,8 @@ struct MockBindMap {
 struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
 };
-struct MockGetNodeAddedSubstitutions {
-    MOCK_METHOD(const std::vector<pud_substitution>&, get, (pud_node_id));
+struct MockGetInference {
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
 };
 
 ubs_class singleton(uint32_t var) {
@@ -32,13 +33,16 @@ ubs_class singleton(uint32_t var) {
 struct PudBinderTest : public ::testing::Test {
     NiceMock<MockBindMap> bind_map;
     NiceMock<MockMakeBindMap> make_bind_map;
-    NiceMock<MockGetNodeAddedSubstitutions> substitutions;
-    pud_binder<NiceMock<MockMakeBindMap>, NiceMock<MockGetNodeAddedSubstitutions>> binder{make_bind_map, substitutions};
+    NiceMock<MockGetInference> inferences;
+    pud_binder<NiceMock<MockMakeBindMap>, NiceMock<MockGetInference>> binder{make_bind_map, inferences};
     expr var_one{expr::var{1}};
     expr value{expr::functor{5, {}}};
-    std::vector<pud_substitution> child_substitutions{
-        pud_substitution{.var_idx = 3, .value = &var_one},
-        pud_substitution{.var_idx = 4, .value = &value},
+    pud_node_delta child_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = &var_one}, pud_substitution{.var_idx = 4, .value = &value}},
+        .body_goals = {},
+        .var_count = 0,
     };
     pud_ubs_state parent_state;
     pud_ubs_state child_state;
@@ -46,7 +50,7 @@ struct PudBinderTest : public ::testing::Test {
     void SetUp() override {
         child_state.parents = child_state.parents.set(3, 1);
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));
-        ON_CALL(substitutions, get(8)).WillByDefault(ReturnRef(child_substitutions));
+        ON_CALL(inferences, get_inference(8)).WillByDefault(ReturnRef(child_inference));
         ON_CALL(bind_map, find(_)).WillByDefault(::testing::Invoke(&singleton));
         ON_CALL(std::move(bind_map), persist()).WillByDefault(Return(child_state));
     }

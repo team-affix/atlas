@@ -9,7 +9,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_node_table.hpp"
+#include "infrastructure/pud_data.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -19,7 +19,6 @@
 // with unbound classes numbered by first occurrence, differs between parent and child.
 struct PudStructureWatcherFuzzTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using substitutions_t = pud_node_table<std::vector<pud_substitution>>;
 
     struct level {
         pud_ubs_state bindings;
@@ -35,13 +34,17 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    substitutions_t node_specs_;
-    pud_binder<term_factory_t, substitutions_t> binder{terms, node_specs_};
-    pud_structure_watcher<term_factory_t, substitutions_t> watcher{terms, node_specs_};
+    pud_data data;
+    pud_binder<term_factory_t, pud_data> binder{terms, data};
+    pud_structure_watcher<term_factory_t, pud_data> watcher{terms, data};
     std::mt19937 rng{0};
-    pud_node_id next_node_id = 1;
+    pud_node_id dummy_root = 0;
     uint32_t checked_nodes = 0;
     uint32_t observed_changes = 0;
+
+    void SetUp() override {
+        dummy_root = data.store_axiom(rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0));
+    }
 
     uint32_t pick(uint32_t bound) {
         return std::uniform_int_distribution<uint32_t>{0, bound - 1}(rng);
@@ -159,8 +162,13 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     }
 
     level descend_and_check(const level& parent) {
-        const pud_node_id child = next_node_id++;
-        node_specs_.store(child, random_substitutions(parent.bindings));
+        const pud_node_id child = data.store_inference(pud_node_delta{
+            .parent = dummy_root,
+            .call_site = 0,
+            .substitutions = random_substitutions(parent.bindings),
+            .body_goals = {},
+            .var_count = 0,
+        });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
         const pud_body_goal_id call_site = parent.goals.goals.at(pick(parent.goals.goals.size())).id;
         pud_goal_list goals = parent.goals.closing(call_site);

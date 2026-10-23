@@ -6,6 +6,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_acceptor.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/rule.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -22,11 +23,11 @@ using translations_t = std::unordered_map<uint32_t, uint32_t>;
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
 };
-struct MockGetRootHead {
-    MOCK_METHOD(const expr*, get, (pud_node_id));
+struct MockGetAxiom {
+    MOCK_METHOD(const rule&, get_axiom, (pud_node_id));
 };
-struct MockGetNodeAddedSubstitutions {
-    MOCK_METHOD(const std::vector<pud_substitution>&, get, (pud_node_id));
+struct MockGetInference {
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -59,16 +60,16 @@ ubs_class singleton(uint32_t var) {
 }
 
 using test_acceptor_t = pud_acceptor<
-    NiceMock<MockGetNodeGoals>, NiceMock<MockGetRootHead>, NiceMock<MockGetNodeAddedSubstitutions>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetAxiom>, NiceMock<MockGetInference>,
     NiceMock<MockMakeVar>, NiceMock<MockMakeBindMap>, NiceMock<MockMakeCycleDetector>, NiceMock<MockMakeUnifier>,
     NiceMock<MockMakeExporter>>;
 
-// The caller has lvc 10 and resolves its goal against the candidate path 2 -> 6; node 6 replays one
+// Caller 3 has lvc 10 and resolves its goal 1 against the candidate path 2 -> 6; node 6 replays one
 // substitution of its variable 1.
 struct PudAcceptorTest : public ::testing::Test {
     NiceMock<MockGetNodeGoals> goals;
-    NiceMock<MockGetRootHead> root_heads;
-    NiceMock<MockGetNodeAddedSubstitutions> substitutions;
+    NiceMock<MockGetAxiom> axioms;
+    NiceMock<MockGetInference> inferences;
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockBindMap> accepted;
     NiceMock<MockMakeBindMap> make_bind_map;
@@ -79,7 +80,7 @@ struct PudAcceptorTest : public ::testing::Test {
     NiceMock<MockExporter> exporter;
     NiceMock<MockMakeExporter> make_exporter;
     test_acceptor_t acceptor{
-        goals, root_heads, substitutions, make_var, make_bind_map, make_cycle_detector, make_unifier, make_exporter};
+        goals, axioms, inferences, make_var, make_bind_map, make_cycle_detector, make_unifier, make_exporter};
     expr call_site{expr::functor{1, {}}};
     expr axiom_head{expr::functor{1, {}}};
     expr callee_goal{expr::functor{2, {}}};
@@ -90,7 +91,14 @@ struct PudAcceptorTest : public ::testing::Test {
     expr var_one{expr::var{1}};
     pud_ubs_state caller_state;
     pud_goal_list callee_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&callee_goal);
-    std::vector<pud_substitution> node_substitutions{pud_substitution{.var_idx = 1, .value = &substituted_value}};
+    rule axiom{&axiom_head, {}, 0};
+    pud_node_delta node_inference{
+        .parent = 2,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = &substituted_value}},
+        .body_goals = {},
+        .var_count = 0,
+    };
     std::vector<pud_node_id> path{2, 6};
     framed_expr entering_call_site{&call_site, 0};
     framed_expr entered_head{&axiom_head, 10};
@@ -106,8 +114,8 @@ struct PudAcceptorTest : public ::testing::Test {
 
     void SetUp() override {
         caller_state.parents = caller_state.parents.set(1, 0);
-        ON_CALL(root_heads, get(2)).WillByDefault(Return(&axiom_head));
-        ON_CALL(substitutions, get(6)).WillByDefault(ReturnRef(node_substitutions));
+        ON_CALL(axioms, get_axiom(2)).WillByDefault(ReturnRef(axiom));
+        ON_CALL(inferences, get_inference(6)).WillByDefault(ReturnRef(node_inference));
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(accepted));
         ON_CALL(make_cycle_detector, make_cycle_detector(_)).WillByDefault(ReturnRef(cycle_detector));
         ON_CALL(make_unifier, make_unifier(_, _)).WillByDefault(ReturnRef(unifier));
@@ -124,8 +132,8 @@ struct PudAcceptorTest : public ::testing::Test {
         ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::move(edited)}));
     }
 
-    pud_child_delta accept() {
-        return acceptor.accept(caller_state, 10, &call_site, path);
+    pud_node_delta accept() {
+        return acceptor.accept(3, 1, caller_state, 10, &call_site, path);
     }
 };
 
@@ -139,10 +147,12 @@ TEST_F(PudAcceptorTest, TheCallSiteEntersThePathsAxiomAtTheLvcThenEachNodeBelowR
     accept();
 }
 
-TEST_F(PudAcceptorTest, TheCalleesOpenGoalsAreExportedAndEveryTranslationIsAFreshVariable) {
+TEST_F(PudAcceptorTest, TheInferenceIsOfTheCallerOnItsCallSiteWithTheCalleesOpenGoalsExported) {
     EXPECT_CALL(make_exporter, make_exporter(_, 10u, _))
         .WillOnce(Invoke(this, &PudAcceptorTest::export_three_fresh_variables));
-    EXPECT_EQ(accept(), (pud_child_delta{.substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
+    EXPECT_EQ(
+        accept(),
+        (pud_node_delta{.parent = 3, .call_site = 1, .substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
 }
 
 TEST_F(PudAcceptorTest, ACallerClassMergedUnderASmallerRepresentativeIsSubstitutedByIt) {

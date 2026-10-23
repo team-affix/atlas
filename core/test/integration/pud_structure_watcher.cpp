@@ -6,7 +6,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_node_table.hpp"
+#include "infrastructure/pud_data.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "value_objects/pud_goal_list.hpp"
@@ -19,7 +19,6 @@ using ::testing::UnorderedElementsAre;
 // node here carries a ground `go` goal as the call site its child closes.
 struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using substitutions_t = pud_node_table<std::vector<pud_substitution>>;
 
     struct at_node {
         pud_ubs_state bindings;
@@ -33,18 +32,29 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    substitutions_t node_specs_;
-    pud_binder<term_factory_t, substitutions_t> binder{terms, node_specs_};
-    pud_structure_watcher<term_factory_t, substitutions_t> watcher{terms, node_specs_};
-    pud_node_id child = 1;
-    pud_node_id grandchild = 2;
-    pud_node_id sibling = 3;
-    pud_node_id great_grandchild = 4;
+    pud_data data;
+    pud_binder<term_factory_t, pud_data> binder{terms, data};
+    pud_structure_watcher<term_factory_t, pud_data> watcher{terms, data};
+    pud_node_id dummy_root = 0;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 
     const expr* functor(const char* name, std::vector<const expr*> args) {
         return exprs.make_functor(functors.id(name), std::move(args));
+    }
+
+    void SetUp() override {
+        dummy_root = data.store_axiom(rule(functor("dummy", {}), {}, 0));
+    }
+
+    pud_node_id infer(std::vector<pud_substitution> substitutions) {
+        return data.store_inference(pud_node_delta{
+            .parent = dummy_root,
+            .call_site = 0,
+            .substitutions = std::move(substitutions),
+            .body_goals = {},
+            .var_count = 0,
+        });
     }
 
     pud_substitution rep_instantiated(uint32_t rep, const expr* value) {
@@ -108,89 +118,89 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id child = infer({rep_instantiated(0, functor("a", {}))});
     EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothing) {
-    node_specs_.store(child, {rep_instantiated(5, functor("a", {}))});
+    const pud_node_id child = infer({rep_instantiated(5, functor("a", {}))});
     EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingTheRep) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id child = infer({rep_instantiated(0, functor("a", {}))});
     const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(0), var(1)}), functor("h", {var(1)})});
     EXPECT_THAT(changes_at(root, child), UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWatched) {
-    node_specs_.store(child, {rep_instantiated(0, functor("f", {var(3)}))});
-    node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("f", {var(3)}))});
+    const pud_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
     const at_node at_child = descend(at_root({functor("g", {var(0)})}), child, {});
     ASSERT_THAT(at_child.changed_goals, ElementsAre(0u));
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatRep) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
-    node_specs_.store(grandchild, {rep_updated(1, 5)});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id grandchild = infer( {rep_updated(1, 5)});
     const at_node at_child = descend(at_root({functor("f", {var(0), var(1)})}), child, {});
     EXPECT_THAT(changes_at(at_child, grandchild), IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
-    node_specs_.store(child, {rep_updated(1, 0)});
+    const pud_node_id child = infer( {rep_updated(1, 0)});
     EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
-    node_specs_.store(child, {rep_updated(5, 1)});
+    const pud_node_id child = infer( {rep_updated(5, 1)});
     EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
-    node_specs_.store(child, {rep_updated(4, 1)});
-    node_specs_.store(grandchild, {rep_instantiated(1, functor("a", {}))});
+    const pud_node_id child = infer( {rep_updated(4, 1)});
+    const pud_node_id grandchild = infer( {rep_instantiated(1, functor("a", {}))});
     const at_node at_child = descend(at_root({functor("f", {var(4)})}), child, {});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSurvivingRep) {
-    node_specs_.store(child, {rep_updated(1, 0)});
-    node_specs_.store(grandchild, {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id child = infer( {rep_updated(1, 0)});
+    const pud_node_id grandchild = infer( {rep_instantiated(0, functor("a", {}))});
     const at_node at_child = descend(at_root({functor("f", {var(0)}), functor("g", {var(1)})}), child, {});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
-    node_specs_.store(child, {rep_updated(2, 1)});
-    node_specs_.store(grandchild, {rep_updated(1, 0)});
+    const pud_node_id child = infer( {rep_updated(2, 1)});
+    const pud_node_id grandchild = infer( {rep_updated(1, 0)});
     const at_node at_child = descend(at_root({functor("f", {var(0), var(2)})}), child, {});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNodesReps) {
-    node_specs_.store(child, {rep_instantiated(0, functor("f", {var(3)}))});
-    node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("f", {var(3)}))});
+    const pud_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
     const at_node at_child = descend(at_root({}), child, {functor("h", {functor("f", {var(3)})})});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep) {
-    node_specs_.store(child, {rep_updated(4, 1)});
-    node_specs_.store(grandchild, {rep_updated(1, 0)});
+    const pud_node_id child = infer( {rep_updated(4, 1)});
+    const pud_node_id grandchild = infer( {rep_updated(1, 0)});
     const at_node at_child = descend(at_root({}), child, {functor("h", {var(4), var(0)})});
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
-    node_specs_.store(child, {rep_instantiated(0, functor("f", {var(5)}))});
-    node_specs_.store(grandchild, {rep_updated(6, 5)});
-    node_specs_.store(great_grandchild, {rep_instantiated(5, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("f", {var(5)}))});
+    const pud_node_id grandchild = infer( {rep_updated(6, 5)});
+    const pud_node_id great_grandchild = infer( {rep_instantiated(5, functor("a", {}))});
     const at_node at_child = descend_closing(at_root({var(0), var(1)}), child, 1, {functor("g", {var(6)})});
     EXPECT_THAT(at_child.changed_goals, ElementsAre(0u));
     const at_node at_grandchild = descend(at_child, grandchild, {var(5)});
@@ -199,7 +209,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
-    node_specs_.store(child, {
+    const pud_node_id child = infer( {
         rep_updated(3, 2),
         rep_instantiated(4, functor("a", {})),
         rep_updated(5, 1),
@@ -208,14 +218,14 @@ TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone)
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOnce) {
-    node_specs_.store(child, {rep_updated(1, 0), rep_instantiated(2, functor("a", {}))});
+    const pud_node_id child = infer( {rep_updated(1, 0), rep_instantiated(2, functor("a", {}))});
     EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1), var(2)})}), child), ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodesReps) {
-    node_specs_.store(child, {rep_updated(3, 1)});
-    node_specs_.store(grandchild, {rep_instantiated(0, functor("g", {var(1)}))});
-    node_specs_.store(great_grandchild, {rep_instantiated(1, functor("a", {}))});
+    const pud_node_id child = infer( {rep_updated(3, 1)});
+    const pud_node_id grandchild = infer( {rep_instantiated(0, functor("g", {var(1)}))});
+    const pud_node_id great_grandchild = infer( {rep_instantiated(1, functor("a", {}))});
     const at_node at_child = descend(at_root({functor("f", {var(0), var(1)})}), child, {});
     const at_node at_grandchild = descend(at_child, grandchild, {});
     ASSERT_THAT(at_grandchild.changed_goals, ElementsAre(0u));
@@ -223,17 +233,17 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
-    node_specs_.store(sibling, {rep_instantiated(1, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id sibling = infer( {rep_instantiated(1, functor("a", {}))});
     const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(1)})});
     EXPECT_THAT(changes_at(root, child), ElementsAre(0u));
     EXPECT_THAT(changes_at(root, sibling), ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOther) {
-    node_specs_.store(child, {rep_updated(1, 0)});
-    node_specs_.store(sibling, {rep_instantiated(5, functor("a", {}))});
-    node_specs_.store(grandchild, {rep_updated(1, 0)});
+    const pud_node_id child = infer( {rep_updated(1, 0)});
+    const pud_node_id sibling = infer( {rep_instantiated(5, functor("a", {}))});
+    const pud_node_id grandchild = infer( {rep_updated(1, 0)});
     const at_node root = at_root({functor("f", {var(0), var(1)})});
     ASSERT_THAT(changes_at(root, child), ElementsAre(0u));
     const at_node at_sibling = descend(root, sibling, {});
@@ -242,7 +252,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrder) {
-    node_specs_.store(child, {
+    const pud_node_id child = infer( {
         rep_instantiated(2, functor("a", {})),
         rep_updated(1, 0),
         rep_instantiated(3, functor("b", {})),
@@ -252,7 +262,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrd
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSeparately) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
     const expr* first = functor("f", {var(0)});
     const expr* second = functor("f", {var(0)});
     ASSERT_EQ(first, second);
@@ -264,8 +274,7 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
     at_node at = at_root({functor("f", {var(0), var(chain_length)})});
     for (uint32_t step_index = 0; step_index < chain_length; ++step_index) {
         const uint32_t demoted = chain_length - step_index;
-        const pud_node_id level_node = 1000 + step_index;
-        node_specs_.store(level_node, {rep_updated(demoted, demoted - 1)});
+        const pud_node_id level_node = infer({rep_updated(demoted, demoted - 1)});
         at = descend(at, level_node, {});
         const bool last_step = step_index + 1 == chain_length;
         EXPECT_EQ(at.changed_goals.size(), last_step ? 1u : 0u) << "step " << step_index;
@@ -273,24 +282,24 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsReplacementIs) {
-    node_specs_.store(child, {rep_updated(4, 2)});
-    node_specs_.store(grandchild, {rep_instantiated(2, functor("a", {}))});
+    const pud_node_id child = infer( {rep_updated(4, 2)});
+    const pud_node_id grandchild = infer( {rep_instantiated(2, functor("a", {}))});
     const at_node at_child = descend_closing(at_root({functor("f", {var(4)})}), child, 0, {functor("f", {var(2)})});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(2u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOther) {
-    node_specs_.store(child, {rep_instantiated(0, functor("a", {}))});
-    node_specs_.store(sibling, {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
+    const pud_node_id sibling = infer( {rep_instantiated(0, functor("a", {}))});
     const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(0)})});
     EXPECT_THAT(descend_closing(root, child, 0, {}).changed_goals, ElementsAre(1u));
     EXPECT_THAT(changes_at(root, sibling), UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThroughItsValue) {
-    node_specs_.store(child, {rep_instantiated(0, functor("s", {var(3)}))});
-    node_specs_.store(grandchild, {rep_instantiated(3, functor("a", {}))});
+    const pud_node_id child = infer( {rep_instantiated(0, functor("s", {var(3)}))});
+    const pud_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
     const at_node at_child = descend(at_root({}), child, {functor("g", {var(0)})});
     ASSERT_THAT(at_child.changed_goals, IsEmpty());
     EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));

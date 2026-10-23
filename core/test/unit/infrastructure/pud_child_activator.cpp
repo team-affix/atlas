@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_child_activator.hpp"
+#include "value_objects/pud_node_delta.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_goal_list.hpp"
 
@@ -30,8 +31,8 @@ struct MockWatchDescend {
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
 };
-struct MockGetCallSite {
-    MOCK_METHOD(pud_body_goal_id, get, (pud_node_id));
+struct MockGetInference {
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
 };
 struct MockForkQuery {
     MOCK_METHOD(std::optional<pud_mhq_head_id>, fork, (pud_mhq_head_id, pud_node_id, const pud_ubs_state&, pud_body_goal_id));
@@ -48,7 +49,7 @@ struct MockCheckQueryExhausted {
 
 using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetActiveState>, NiceMock<MockStoreActiveState>, NiceMock<MockBind>, NiceMock<MockWatchDescend>,
-    NiceMock<MockGetNodeGoals>, NiceMock<MockGetCallSite>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetInference>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
     NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
 
 // The parent holds queries 40 and 41 for goals 0 and 1 and was resolved on goal 0. The child keeps
@@ -59,13 +60,13 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockBind> binder;
     NiceMock<MockWatchDescend> watcher;
     NiceMock<MockGetNodeGoals> goals;
-    NiceMock<MockGetCallSite> call_sites;
+    NiceMock<MockGetInference> inferences;
     NiceMock<MockForkQuery> forker;
     NiceMock<MockOpenQuery> opener;
     NiceMock<MockHoldQuery> holders;
     NiceMock<MockCheckQueryExhausted> exhausted;
     test_child_activator_t activator{
-        get_states, store_states, binder, watcher, goals, call_sites, forker, opener, holders, exhausted};
+        get_states, store_states, binder, watcher, goals, inferences, forker, opener, holders, exhausted};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
     expr goal_c{expr::functor{3, {}}};
@@ -75,6 +76,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     pud_structure_watch child_watch;
     pud_ubs_state child_bindings;
     pud_active_state parent_state;
+    pud_node_delta child_inference{.parent = 3, .call_site = 0, .substitutions = {}, .body_goals = {&goal_c}, .var_count = 0};
 
     pud_structure_watch_change changing(std::vector<pud_body_goal_id> changed_goals) {
         return pud_structure_watch_change{.watch = child_watch, .changed_goals = std::move(changed_goals)};
@@ -86,7 +88,7 @@ struct PudChildActivatorTest : public ::testing::Test {
         child_bindings.parents = child_bindings.parents.set(5, 1);
         parent_state = pud_active_state{.bindings = {}, .watch = parent_watch, .queries = queries_t{}.set(0, 40).set(1, 41)};
         ON_CALL(get_states, get(3)).WillByDefault(ReturnRef(parent_state));
-        ON_CALL(call_sites, get(3)).WillByDefault(Return(0));
+        ON_CALL(inferences, get_inference(4)).WillByDefault(ReturnRef(child_inference));
         ON_CALL(binder, bind(_, 4)).WillByDefault(Return(child_bindings));
         ON_CALL(goals, get(4)).WillByDefault(ReturnRef(child_goals));
         ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({})));

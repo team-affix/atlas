@@ -23,7 +23,7 @@ template<
     typename IBind,
     typename IWatchDescend,
     typename IGetNodeGoals,
-    typename IGetCallSite,
+    typename IGetInference,
     typename IForkQuery,
     typename IOpenQuery,
     typename IHoldQuery,
@@ -35,7 +35,7 @@ struct pud_child_activator {
         IBind& bind,
         IWatchDescend& watch_descend,
         IGetNodeGoals& get_node_goals,
-        IGetCallSite& get_call_site,
+        IGetInference& get_inference,
         IForkQuery& fork_query,
         IOpenQuery& open_query,
         IHoldQuery& hold_query,
@@ -47,7 +47,7 @@ private:
     IBind& bind_;
     IWatchDescend& watch_descend_;
     IGetNodeGoals& get_node_goals_;
-    IGetCallSite& get_call_site_;
+    IGetInference& get_inference_;
     IForkQuery& fork_query_;
     IOpenQuery& open_query_;
     IHoldQuery& hold_query_;
@@ -56,12 +56,12 @@ private:
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
     template<typename IGetActiveState, typename IStoreActiveState, typename IBind,             \
-             typename IWatchDescend, typename IGetNodeGoals, typename IGetCallSite,             \
+             typename IWatchDescend, typename IGetNodeGoals, typename IGetInference,             \
              typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                     \
              typename ICheckQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetActiveState, IStoreActiveState, IBind, IWatchDescend,              \
-        IGetNodeGoals, IGetCallSite, IForkQuery, IOpenQuery, IHoldQuery, ICheckQueryExhausted>
+        IGetNodeGoals, IGetInference, IForkQuery, IOpenQuery, IHoldQuery, ICheckQueryExhausted>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
@@ -70,7 +70,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IBind& bind,
     IWatchDescend& watch_descend,
     IGetNodeGoals& get_node_goals,
-    IGetCallSite& get_call_site,
+    IGetInference& get_inference,
     IForkQuery& fork_query,
     IOpenQuery& open_query,
     IHoldQuery& hold_query,
@@ -80,7 +80,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , bind_(bind)
     , watch_descend_(watch_descend)
     , get_node_goals_(get_node_goals)
-    , get_call_site_(get_call_site)
+    , get_inference_(get_inference)
     , fork_query_(fork_query)
     , open_query_(open_query)
     , hold_query_(hold_query)
@@ -89,7 +89,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_node_id parent, pud_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
-    const pud_body_goal_id call_site = get_call_site_.get(parent);
+    const pud_body_goal_id call_site = get_inference_.get_inference(child).call_site;
     pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);
     pud_structure_watch_change watched = watch_descend_.descend(
         parent_state.watch, bindings, child, call_site, get_node_goals_.get(child));

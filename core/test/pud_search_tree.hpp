@@ -19,7 +19,7 @@ struct MockCheckNodeRefuted {
     MOCK_METHOD(bool, check_refuted, (pud_node_id), (const));
 };
 struct MockGetChildren {
-    MOCK_METHOD(const std::vector<pud_node_id>&, get, (pud_node_id));
+    MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_node_id));
 };
 
 inline pud_replay pud_replay_at(pud_node_id node, uint32_t frame_offset) {
@@ -47,13 +47,13 @@ struct pud_search_tree {
 
     void branch(pud_node_id parent, std::vector<pud_node_id> kids) {
         child_lists[parent] = std::move(kids);
-        ON_CALL(children, get(parent)).WillByDefault(::testing::ReturnRef(child_lists[parent]));
+        ON_CALL(children, get_children(parent)).WillByDefault(::testing::ReturnRef(child_lists[parent]));
         ON_CALL(leaves, check_leaf(parent)).WillByDefault(::testing::Return(false));
     }
 
     void leaf(pud_node_id node) {
         child_lists[node] = {};
-        ON_CALL(children, get(node)).WillByDefault(::testing::ReturnRef(child_lists[node]));
+        ON_CALL(children, get_children(node)).WillByDefault(::testing::ReturnRef(child_lists[node]));
         ON_CALL(leaves, check_leaf(node)).WillByDefault(::testing::Return(true));
     }
 

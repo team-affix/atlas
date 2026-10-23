@@ -3,17 +3,19 @@
 
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
-#include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_frontier_change.hpp"
+#include "value_objects/pud_node_delta.hpp"
 #include "value_objects/pud_node_id.hpp"
+#include "debug_assert.hpp"
 
 // Expands a leaf on a goal: resolves it against the goal's candidates, makes a child per candidate,
-// unfolds the leaf into them, activates them, then deactivates the leaf. Every child is activated
-// while the leaf still holds its queries, so a query the children share is never let go of in between.
+// every one of them alive, activates them, then deactivates the leaf. A live leaf always has a
+// candidate for the goal, so it never expands into no children. Every child is activated while the
+// leaf still holds its queries, so a query the children share is never let go of in between.
 template<
     typename IResolve,
     typename IMakeChild,
-    typename IUnfold,
+    typename IStoreLiveChildCount,
     typename IActivateChild,
     typename IRefuteLeaf,
     typename IDeactivateNode,
@@ -22,7 +24,7 @@ struct pud_expander {
     pud_expander(
         IResolve& resolve,
         IMakeChild& make_child,
-        IUnfold& unfold,
+        IStoreLiveChildCount& store_live_child_count,
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
         IDeactivateNode& deactivate_node,
@@ -31,7 +33,7 @@ struct pud_expander {
 private:
     IResolve& resolve_;
     IMakeChild& make_child_;
-    IUnfold& unfold_;
+    IStoreLiveChildCount& store_live_child_count_;
     IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
     IDeactivateNode& deactivate_node_;
@@ -39,24 +41,24 @@ private:
 };
 
 #define PUD_EXPANDER_TEMPLATE                                                              \
-    template<typename IResolve, typename IMakeChild, typename IUnfold, typename IActivateChild, \
+    template<typename IResolve, typename IMakeChild, typename IStoreLiveChildCount, typename IActivateChild, \
              typename IRefuteLeaf, typename IDeactivateNode, typename ICheckLeafRefuted>
 #define PUD_EXPANDER                                                                       \
-    pud_expander<IResolve, IMakeChild, IUnfold, IActivateChild, IRefuteLeaf, IDeactivateNode, \
+    pud_expander<IResolve, IMakeChild, IStoreLiveChildCount, IActivateChild, IRefuteLeaf, IDeactivateNode, \
         ICheckLeafRefuted>
 
 PUD_EXPANDER_TEMPLATE
 PUD_EXPANDER::pud_expander(
     IResolve& resolve,
     IMakeChild& make_child,
-    IUnfold& unfold,
+    IStoreLiveChildCount& store_live_child_count,
     IActivateChild& activate_child,
     IRefuteLeaf& refute_leaf,
     IDeactivateNode& deactivate_node,
     ICheckLeafRefuted& check_leaf_refuted)
     : resolve_(resolve)
     , make_child_(make_child)
-    , unfold_(unfold)
+    , store_live_child_count_(store_live_child_count)
     , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
     , deactivate_node_(deactivate_node)
@@ -65,9 +67,10 @@ PUD_EXPANDER::pud_expander(
 PUD_EXPANDER_TEMPLATE
 pud_frontier_change PUD_EXPANDER::expand(pud_node_id leaf, pud_body_goal_id goal) {
     std::vector<pud_node_id> children;
-    for (const pud_child_delta& delta : resolve_.resolve(leaf, goal))
-        children.push_back(make_child_.make_child(leaf, goal, delta));
-    unfold_.unfold(leaf, goal, children);
+    for (const pud_node_delta& delta : resolve_.resolve(leaf, goal))
+        children.push_back(make_child_.make_child(delta));
+    DEBUG_ASSERT(!children.empty());
+    store_live_child_count_.store(leaf, children.size());
     pud_frontier_change change{.offspring = {}, .refuted = {}};
     for (pud_node_id child : children) {
         if (!activate_child_.activate_child(leaf, child))

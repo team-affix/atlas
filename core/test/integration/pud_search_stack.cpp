@@ -7,53 +7,45 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_axiom_groups.hpp"
+#include "infrastructure/pud_data.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_leaf_nodes.hpp"
 #include "infrastructure/pud_refuted_leaves.hpp"
 #include "infrastructure/pud_refuted_node_checker.hpp"
-#include "infrastructure/pud_node_table.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
-// Replayer, witness searches, candidate searches and queries over real node stores.
+// Replayer, witness searches, candidate searches and queries over the real database.
 struct PudSearchStackIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using root_heads_t = pud_node_table<const expr*>;
-    using substitutions_t = pud_node_table<std::vector<pud_substitution>>;
-    using children_t = pud_node_table<std::vector<pud_node_id>>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using refuted_node_checker_t =
-        pud_refuted_node_checker<pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts>;
-    using replayer_t = pud_replayer<root_heads_t, substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
+        pud_refuted_node_checker<pud_data, pud_refuted_leaves, pud_node_live_child_counts>;
+    using replayer_t = pud_replayer<pud_data, pud_data, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
+    using mhws_t = pud_mhws<replayer_t, pud_data, refuted_node_checker_t, pud_data>;
     using mhcs_t =
-        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
+        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, pud_data, refuted_node_checker_t, pud_data>;
     using mhq_t = pud_mhq<replayer_t, pud_axiom_groups, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_leaf_nodes leaf_nodes;
+    pud_data data;
     pud_refuted_leaves refuted_leaves;
     pud_node_live_child_counts live_child_counts;
-    root_heads_t root_heads;
-    substitutions_t substitutions;
-    children_t children;
     pud_axiom_groups axiom_groups;
     pud_axiom_group_id database_group;
     unit_queries_t unit_queries;
-    refuted_node_checker_t refuted_node_checker{leaf_nodes, refuted_leaves, live_child_counts};
-    replayer_t replayer{root_heads, substitutions, exprs, terms, terms, terms};
-    mhws_t mhws{replayer, leaf_nodes, refuted_node_checker, children};
-    mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, leaf_nodes, refuted_node_checker, children};
+    refuted_node_checker_t refuted_node_checker{data, refuted_leaves, live_child_counts};
+    replayer_t replayer{data, data, exprs, terms, terms, terms};
+    mhws_t mhws{replayer, data, refuted_node_checker, data};
+    mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, data, refuted_node_checker, data};
     mhq_t mhq{replayer, axiom_groups, mhcs, mhcs, mhcs, mhcs, unit_queries};
     pud_ubs_state empty_state;
-    pud_node_id next_node = 0;
 
     PudSearchStackIntegrationTest()
         : database_group(axiom_groups.create_group()) {}
@@ -65,24 +57,23 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     const expr* atom(const char* name) { return functor(name, {}); }
 
     pud_node_id axiom(const expr* head) {
-        const pud_node_id node = next_node++;
-        leaf_nodes.set_leaf(node);
-        root_heads.store(node, head);
+        const pud_node_id node = data.store_axiom(rule(head, {}, 0));
         axiom_groups.add_member(database_group, node);
         return node;
     }
 
-    pud_node_id leaf(std::vector<pud_substitution> added) {
-        const pud_node_id node = next_node++;
-        leaf_nodes.set_leaf(node);
-        substitutions.store(node, std::move(added));
-        return node;
+    pud_node_id leaf(pud_node_id parent, std::vector<pud_substitution> added) {
+        return data.store_inference(pud_node_delta{
+            .parent = parent,
+            .call_site = 0,
+            .substitutions = std::move(added),
+            .body_goals = {},
+            .var_count = 0,
+        });
     }
 
-    void expand(pud_node_id parent, std::vector<pud_node_id> kids) {
-        leaf_nodes.unset_leaf(parent);
-        live_child_counts.store(parent, static_cast<uint32_t>(kids.size()));
-        children.store(parent, std::move(kids));
+    void expand(pud_node_id parent) {
+        live_child_counts.store(parent, static_cast<uint32_t>(data.get_children(parent).size()));
     }
 
     void refute(pud_node_id node, pud_node_id parent) {
@@ -129,9 +120,7 @@ TEST_F(PudSearchStackIntegrationTest, OnlyAxiomsWhoseHeadsResolveTheGoalBecomeCa
 
 TEST_F(PudSearchStackIntegrationTest, HeadedNodesThatAreNotAxiomsAreNeverCandidates) {
     const pud_node_id red = axiom(functor("color", {atom("red")}));
-    const pud_node_id headed = next_node++;
-    leaf_nodes.set_leaf(headed);
-    root_heads.store(headed, functor("color", {atom("blue")}));
+    data.store_axiom(rule(functor("color", {atom("blue")}), {}, 0));
     const std::optional<pud_mhq_head_id> query = mhq.try_open(database_group, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(red));
@@ -192,9 +181,9 @@ TEST_F(PudSearchStackIntegrationTest, SingleCandidateQueryIsQueuedAsUnit) {
 
 TEST_F(PudSearchStackIntegrationTest, CandidateSpecializesThroughTheOnlyCompatibleChild) {
     const pud_node_id root = axiom(functor("color", {var(0)}));
-    const pud_node_id red = leaf({pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_node_id blue = leaf({pud_substitution{.var_idx = 0, .value = atom("blue")}});
-    expand(root, {red, blue});
+    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
+    const pud_node_id blue = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    expand(root);
     const std::optional<pud_mhq_head_id> query = mhq.try_open(database_group, empty_state, functor("color", {atom("blue")}), 1);
     ASSERT_TRUE(query.has_value());
     EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
@@ -202,9 +191,9 @@ TEST_F(PudSearchStackIntegrationTest, CandidateSpecializesThroughTheOnlyCompatib
 
 TEST_F(PudSearchStackIntegrationTest, TwoCompatibleChildrenMakeAChoicePoint) {
     const pud_node_id root = axiom(functor("color", {var(0)}));
-    const pud_node_id red = leaf({pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_node_id blue = leaf({pud_substitution{.var_idx = 0, .value = atom("blue")}});
-    expand(root, {red, blue});
+    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
+    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    expand(root);
     const std::optional<pud_mhq_head_id> query = mhq.try_open(database_group, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root)));
@@ -212,10 +201,10 @@ TEST_F(PudSearchStackIntegrationTest, TwoCompatibleChildrenMakeAChoicePoint) {
 
 TEST_F(PudSearchStackIntegrationTest, ChoicePointRejustifiesThroughAThirdWitness) {
     const pud_node_id root = axiom(functor("color", {var(0)}));
-    const pud_node_id red = leaf({pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_node_id green = leaf({pud_substitution{.var_idx = 0, .value = atom("green")}});
-    const pud_node_id blue = leaf({pud_substitution{.var_idx = 0, .value = atom("blue")}});
-    expand(root, {red, green, blue});
+    const pud_node_id red = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
+    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("green")}});
+    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    expand(root);
     const std::optional<pud_mhq_head_id> query = mhq.try_open(database_group, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     refute(red, root);
@@ -225,9 +214,9 @@ TEST_F(PudSearchStackIntegrationTest, ChoicePointRejustifiesThroughAThirdWitness
 
 TEST_F(PudSearchStackIntegrationTest, ChoicePointLosingAWitnessSpecializesToTheSurvivor) {
     const pud_node_id root = axiom(functor("color", {var(0)}));
-    const pud_node_id red = leaf({pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_node_id blue = leaf({pud_substitution{.var_idx = 0, .value = atom("blue")}});
-    expand(root, {red, blue});
+    const pud_node_id red = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
+    const pud_node_id blue = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    expand(root);
     const std::optional<pud_mhq_head_id> query = mhq.try_open(database_group, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     refute(red, root);

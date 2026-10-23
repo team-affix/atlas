@@ -5,12 +5,12 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
-#include "value_objects/pud_child_delta.hpp"
+#include "value_objects/pud_node_delta.hpp"
 #include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 
-// Resolves a leaf's goal against every candidate of the goal's query, in axiom order: one child delta
+// Resolves a leaf's goal against every candidate of the goal's query, in axiom order: one inference
 // per candidate.
 template<
     typename IGetActiveState,
@@ -27,7 +27,7 @@ struct pud_resolver {
         IGetQueryCandidates& get_query_candidates,
         IGetCandidatePath& get_candidate_path,
         IAcceptCandidate& accept_candidate);
-    std::vector<pud_child_delta> resolve(pud_node_id leaf, pud_body_goal_id goal);
+    std::vector<pud_node_delta> resolve(pud_node_id leaf, pud_body_goal_id goal);
 private:
     IGetActiveState& get_active_state_;
     IFindNodeGoal& find_node_goal_;
@@ -60,13 +60,15 @@ PUD_RESOLVER::pud_resolver(
     , accept_candidate_(accept_candidate) {}
 
 PUD_RESOLVER_TEMPLATE
-std::vector<pud_child_delta> PUD_RESOLVER::resolve(pud_node_id leaf, pud_body_goal_id goal) {
+std::vector<pud_node_delta> PUD_RESOLVER::resolve(pud_node_id leaf, pud_body_goal_id goal) {
     const pud_active_state& state = get_active_state_.get(leaf);
     const expr* goal_expr = find_node_goal_.find(leaf, goal);
     const uint32_t lvc = get_node_lvc_.get(leaf);
-    std::vector<pud_child_delta> deltas;
-    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(state.queries.at(goal)))
-        deltas.push_back(accept_candidate_.accept(state.bindings, lvc, goal_expr, get_candidate_path_.path(candidate)));
+    std::vector<pud_node_delta> deltas;
+    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(state.queries.at(goal))) {
+        deltas.push_back(
+            accept_candidate_.accept(leaf, goal, state.bindings, lvc, goal_expr, get_candidate_path_.path(candidate)));
+    }
     return deltas;
 }
 

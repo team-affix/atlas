@@ -187,7 +187,7 @@ std::optional<pud_node_id> PUD_MHWS::resume(search& resumed) {
 
 PUD_MHWS_TEMPLATE
 std::optional<pud_replay> PUD_MHWS::try_descend_sibling(const pud_replay& parent, size_t& next_sibling) {
-    const std::vector<pud_node_id>& siblings = get_children_.get(parent.node);
+    const std::vector<pud_node_id>& siblings = get_children_.get_children(parent.node);
     while (next_sibling < siblings.size()) {
         std::optional<pud_replay> sibling = descend_replay_.descend(parent, siblings.at(next_sibling++));
         if (sibling.has_value())

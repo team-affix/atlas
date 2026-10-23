@@ -27,7 +27,10 @@ struct MockGetCandidatePath {
     MOCK_METHOD(const std::vector<pud_node_id>&, path, (pud_mhcs_head_id));
 };
 struct MockAcceptCandidate {
-    MOCK_METHOD(pud_child_delta, accept, (const pud_ubs_state&, uint32_t, const expr*, const std::vector<pud_node_id>&));
+    MOCK_METHOD(
+        pud_node_delta,
+        accept,
+        (pud_node_id, pud_body_goal_id, const pud_ubs_state&, uint32_t, const expr*, const std::vector<pud_node_id>&));
 };
 
 using test_resolver_t = pud_resolver<
@@ -46,8 +49,8 @@ struct PudResolverTest : public ::testing::Test {
     pud_active_state state{.bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
     std::vector<pud_node_id> first_path{0, 3};
     std::vector<pud_node_id> second_path{1};
-    pud_child_delta first_delta{.substitutions = {}, .body_goals = {}, .var_count = 1};
-    pud_child_delta second_delta{.substitutions = {}, .body_goals = {}, .var_count = 2};
+    pud_node_delta first_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 1};
+    pud_node_delta second_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 2};
 
     void SetUp() override {
         ON_CALL(states, get(5)).WillByDefault(ReturnRef(state));
@@ -61,9 +64,9 @@ struct PudResolverTest : public ::testing::Test {
 
 }
 
-TEST_F(PudResolverTest, TheGoalIsAcceptedAgainstEveryCandidateInOrder) {
+TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrder) {
     InSequence in_order;
-    EXPECT_CALL(acceptor, accept(state.bindings, 8u, &goal, first_path)).WillOnce(Return(first_delta));
-    EXPECT_CALL(acceptor, accept(state.bindings, 8u, &goal, second_path)).WillOnce(Return(second_delta));
-    EXPECT_EQ(resolver.resolve(5, 2), (std::vector<pud_child_delta>{first_delta, second_delta}));
+    EXPECT_CALL(acceptor, accept(5u, 2u, state.bindings, 8u, &goal, first_path)).WillOnce(Return(first_delta));
+    EXPECT_CALL(acceptor, accept(5u, 2u, state.bindings, 8u, &goal, second_path)).WillOnce(Return(second_delta));
+    EXPECT_EQ(resolver.resolve(5, 2), (std::vector<pud_node_delta>{first_delta, second_delta}));
 }

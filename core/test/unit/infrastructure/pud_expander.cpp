@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_expander.hpp"
-#include "value_objects/pud_child_delta.hpp"
+#include "value_objects/pud_node_delta.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -12,13 +12,13 @@ using ::testing::Return;
 namespace {
 
 struct MockResolve {
-    MOCK_METHOD(std::vector<pud_child_delta>, resolve, (pud_node_id, pud_body_goal_id));
+    MOCK_METHOD(std::vector<pud_node_delta>, resolve, (pud_node_id, pud_body_goal_id));
 };
 struct MockMakeChild {
-    MOCK_METHOD(pud_node_id, make_child, (pud_node_id, pud_body_goal_id, const pud_child_delta&));
+    MOCK_METHOD(pud_node_id, make_child, (const pud_node_delta&));
 };
-struct MockUnfold {
-    MOCK_METHOD(void, unfold, (pud_node_id, pud_body_goal_id, const std::vector<pud_node_id>&));
+struct MockStoreLiveChildCount {
+    MOCK_METHOD(void, store, (pud_node_id, size_t));
 };
 struct MockActivateChild {
     MOCK_METHOD(bool, activate_child, (pud_node_id, pud_node_id));
@@ -34,26 +34,26 @@ struct MockCheckLeafRefuted {
 };
 
 using test_expander_t = pud_expander<
-    NiceMock<MockResolve>, NiceMock<MockMakeChild>, NiceMock<MockUnfold>, NiceMock<MockActivateChild>,
+    NiceMock<MockResolve>, NiceMock<MockMakeChild>, NiceMock<MockStoreLiveChildCount>, NiceMock<MockActivateChild>,
     NiceMock<MockRefuteLeaf>, NiceMock<MockDeactivateNode>, NiceMock<MockCheckLeafRefuted>>;
 
 struct PudExpanderTest : public ::testing::Test {
     NiceMock<MockResolve> resolver;
     NiceMock<MockMakeChild> node_maker;
-    NiceMock<MockUnfold> unfolder;
+    NiceMock<MockStoreLiveChildCount> live_child_counts;
     NiceMock<MockActivateChild> activator;
     NiceMock<MockRefuteLeaf> refuter;
     NiceMock<MockDeactivateNode> deactivator;
     NiceMock<MockCheckLeafRefuted> refuted_leaves;
-    test_expander_t expander{resolver, node_maker, unfolder, activator, refuter, deactivator, refuted_leaves};
-    pud_child_delta first{.substitutions = {}, .body_goals = {}, .var_count = 1};
-    pud_child_delta second{.substitutions = {}, .body_goals = {}, .var_count = 2};
-    std::vector<pud_child_delta> two_deltas{first, second};
+    test_expander_t expander{resolver, node_maker, live_child_counts, activator, refuter, deactivator, refuted_leaves};
+    pud_node_delta first{.parent = 4, .call_site = 1, .substitutions = {}, .body_goals = {}, .var_count = 1};
+    pud_node_delta second{.parent = 4, .call_site = 1, .substitutions = {}, .body_goals = {}, .var_count = 2};
+    std::vector<pud_node_delta> two_deltas{first, second};
 
     void SetUp() override {
         ON_CALL(resolver, resolve(4, 1)).WillByDefault(Return(two_deltas));
-        ON_CALL(node_maker, make_child(4, 1, first)).WillByDefault(Return(10));
-        ON_CALL(node_maker, make_child(4, 1, second)).WillByDefault(Return(11));
+        ON_CALL(node_maker, make_child(first)).WillByDefault(Return(10));
+        ON_CALL(node_maker, make_child(second)).WillByDefault(Return(11));
         ON_CALL(deactivator, deactivate(_)).WillByDefault(Return(std::vector<pud_node_id>{}));
         ON_CALL(refuter, refute(_)).WillByDefault(Return(std::vector<pud_node_id>{}));
     }
@@ -61,11 +61,11 @@ struct PudExpanderTest : public ::testing::Test {
 
 }
 
-TEST_F(PudExpanderTest, EachCandidateBecomesAChildAndTheLeafUnfoldsIntoThem) {
+TEST_F(PudExpanderTest, EachInferenceBecomesAChildAndEveryChildStartsAlive) {
     InSequence in_order;
-    EXPECT_CALL(node_maker, make_child(4, 1, first)).WillOnce(Return(10));
-    EXPECT_CALL(node_maker, make_child(4, 1, second)).WillOnce(Return(11));
-    EXPECT_CALL(unfolder, unfold(4, 1, std::vector<pud_node_id>{10, 11}));
+    EXPECT_CALL(node_maker, make_child(first)).WillOnce(Return(10));
+    EXPECT_CALL(node_maker, make_child(second)).WillOnce(Return(11));
+    EXPECT_CALL(live_child_counts, store(4u, 2u));
     expander.expand(4, 1);
 }
 

@@ -4,6 +4,8 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_replayer.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/rule.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -13,11 +15,11 @@ using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetRootHead {
-    MOCK_METHOD(const expr*, get, (pud_node_id));
+struct MockGetAxiom {
+    MOCK_METHOD(const rule&, get_axiom, (pud_node_id));
 };
-struct MockGetNodeAddedSubstitutions {
-    MOCK_METHOD(const std::vector<pud_substitution>&, get, (pud_node_id));
+struct MockGetInference {
+    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -45,12 +47,12 @@ struct MockMakeUnifier {
 };
 
 using test_replayer_t = pud_replayer<
-    NiceMock<MockGetRootHead>, NiceMock<MockGetNodeAddedSubstitutions>, NiceMock<MockMakeVar>,
+    NiceMock<MockGetAxiom>, NiceMock<MockGetInference>, NiceMock<MockMakeVar>,
     NiceMock<MockMakeBindMap>, NiceMock<MockMakeCycleDetector>, NiceMock<MockMakeUnifier>>;
 
 struct PudReplayerTest : public ::testing::Test {
-    NiceMock<MockGetRootHead> root_heads;
-    NiceMock<MockGetNodeAddedSubstitutions> substitutions;
+    NiceMock<MockGetAxiom> axioms;
+    NiceMock<MockGetInference> inferences;
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockBindMap> bind_map;
     MockCycleDetector cycle_detector;
@@ -58,16 +60,20 @@ struct PudReplayerTest : public ::testing::Test {
     NiceMock<MockMakeBindMap> make_bind_map;
     NiceMock<MockMakeCycleDetector> make_cycle_detector;
     NiceMock<MockMakeUnifier> make_unifier;
-    test_replayer_t replayer{root_heads, substitutions, make_var, make_bind_map, make_cycle_detector, make_unifier};
+    test_replayer_t replayer{axioms, inferences, make_var, make_bind_map, make_cycle_detector, make_unifier};
     expr goal{expr::functor{1, {}}};
     expr head{expr::functor{2, {}}};
     expr var_three{expr::var{3}};
     expr var_four{expr::var{4}};
     expr value{expr::functor{5, {}}};
     expr other_value{expr::functor{6, {}}};
-    std::vector<pud_substitution> child_substitutions{
-        pud_substitution{.var_idx = 3, .value = &value},
-        pud_substitution{.var_idx = 4, .value = &other_value},
+    rule axiom{&head, {}, 0};
+    pud_node_delta child_inference{
+        .parent = 8,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = &value}, pud_substitution{.var_idx = 4, .value = &other_value}},
+        .body_goals = {},
+        .var_count = 0,
     };
     pud_ubs_state caller_state;
     pud_ubs_state persisted_state;
@@ -78,8 +84,8 @@ struct PudReplayerTest : public ::testing::Test {
         ON_CALL(make_cycle_detector, make_cycle_detector(_)).WillByDefault(ReturnRef(cycle_detector));
         ON_CALL(make_unifier, make_unifier(_, _)).WillByDefault(ReturnRef(unifier));
         ON_CALL(std::move(bind_map), persist()).WillByDefault(Return(persisted_state));
-        ON_CALL(root_heads, get(8)).WillByDefault(Return(&head));
-        ON_CALL(substitutions, get(9)).WillByDefault(ReturnRef(child_substitutions));
+        ON_CALL(axioms, get_axiom(8)).WillByDefault(ReturnRef(axiom));
+        ON_CALL(inferences, get_inference(9)).WillByDefault(ReturnRef(child_inference));
         ON_CALL(make_var, make_var(3)).WillByDefault(Return(&var_three));
         ON_CALL(make_var, make_var(4)).WillByDefault(Return(&var_four));
         ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_unified));

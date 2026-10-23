@@ -22,9 +22,9 @@
 // Tells which inherited goals of a child changed structure under the child's substitutions. A goal
 // changes when one of its representatives is instantiated or merged with another of its own; merging
 // it with a representative it does not mention only renames it.
-template<typename IMakeBindMap, typename IGetNodeAddedSubstitutions>
+template<typename IMakeBindMap, typename IGetInference>
 struct pud_structure_watcher {
-    pud_structure_watcher(IMakeBindMap& make_bind_map, IGetNodeAddedSubstitutions& get_node_added_substitutions);
+    pud_structure_watcher(IMakeBindMap& make_bind_map, IGetInference& get_inference);
     pud_structure_watch watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const;
     pud_structure_watch_change descend(
         const pud_structure_watch& parent_watch,
@@ -45,17 +45,17 @@ private:
     immer::set<uint32_t> visit_reps(const expr* visited, IFind& bind_map) const;
 
     IMakeBindMap& make_bind_map_;
-    IGetNodeAddedSubstitutions& get_node_added_substitutions_;
+    IGetInference& get_inference_;
 };
 
-#define PUD_STRUCTURE_WATCHER_TEMPLATE template<typename IMakeBindMap, typename IGetNodeAddedSubstitutions>
-#define PUD_STRUCTURE_WATCHER pud_structure_watcher<IMakeBindMap, IGetNodeAddedSubstitutions>
+#define PUD_STRUCTURE_WATCHER_TEMPLATE template<typename IMakeBindMap, typename IGetInference>
+#define PUD_STRUCTURE_WATCHER pud_structure_watcher<IMakeBindMap, IGetInference>
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 PUD_STRUCTURE_WATCHER::pud_structure_watcher(
-    IMakeBindMap& make_bind_map, IGetNodeAddedSubstitutions& get_node_added_substitutions)
+    IMakeBindMap& make_bind_map, IGetInference& get_inference)
     : make_bind_map_(make_bind_map)
-    , get_node_added_substitutions_(get_node_added_substitutions) {}
+    , get_inference_(get_inference) {}
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const {
@@ -79,7 +79,7 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
     pud_structure_watch_change change{.watch = parent_watch, .changed_goals = {}};
     unwatch(change.watch, closed_goal);
     std::unordered_set<pud_body_goal_id> changed_once;
-    for (const pud_substitution& substitution : get_node_added_substitutions_.get(child)) {
+    for (const pud_substitution& substitution : get_inference_.get_inference(child).substitutions) {
         const expr* value = substitution.value;
         std::optional<uint32_t> surviving_rep;
         if (const expr::var* surviving = std::get_if<expr::var>(&value->content)) {

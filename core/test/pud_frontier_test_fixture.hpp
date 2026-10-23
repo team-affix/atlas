@@ -53,7 +53,7 @@ struct pud_frontier_test_fixture {
     }
 
     const std::vector<pud_node_id>& children_of(pud_node_id node) const {
-        return manifest.children_.get(node);
+        return manifest.data_.get_children(node);
     }
 
     bool refuted(pud_node_id node) const { return manifest.refuted_node_checker_.check_refuted(node); }
