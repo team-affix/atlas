@@ -240,7 +240,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, RandomMirroredCrossPoolMatchesSingleP
             right_term = right_builder.app(nest_id, {right_term, right_builder.var(slot)});
         }
         EXPECT_NE(left_term, right_term);
-        const bool cross_ok = cross_stack.unifier.unify(pud_fe(left_term, 0), pud_fe(right_term, 0));
+        const bool cross_ok = cross_stack.unifier.unify(pud_fe(left_term, 0), pud_fe(right_term, 0)).has_value();
         EXPECT_EQ(reference_ok, cross_ok);
 
         if (!reference_ok)

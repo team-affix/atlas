@@ -2,6 +2,7 @@
 #define PUD_TERM_FACTORY_HPP
 
 #include <cstdint>
+#include <unordered_map>
 #include "infrastructure/pud_cycle_detector.hpp"
 #include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/pud_normalizer.hpp"
@@ -24,7 +25,10 @@ struct pud_term_factory {
     cycle_detector_t make_cycle_detector(ubs_bind_map& bind_map) const;
     unifier_t make_unifier(ubs_bind_map& bind_map, cycle_detector_t& cycle_detector) const;
     normalizer_t make_normalizer(ubs_bind_map& bind_map) const;
-    exporter_t make_exporter(ubs_bind_map& bind_map, uint32_t caller_lvc) const;
+    exporter_t make_exporter(
+        ubs_bind_map& bind_map,
+        uint32_t caller_lvc,
+        std::unordered_map<uint32_t, uint32_t>& translations) const;
 private:
     IGlobalize& globalize_;
     IMakeFunctor& make_functor_;
@@ -62,8 +66,11 @@ typename PUD_TERM_FACTORY::normalizer_t PUD_TERM_FACTORY::make_normalizer(ubs_bi
 }
 
 PUD_TERM_FACTORY_TEMPLATE
-typename PUD_TERM_FACTORY::exporter_t PUD_TERM_FACTORY::make_exporter(ubs_bind_map& bind_map, uint32_t caller_lvc) const {
-    return exporter_t{globalize_, make_functor_, make_var_, bind_map, caller_lvc};
+typename PUD_TERM_FACTORY::exporter_t PUD_TERM_FACTORY::make_exporter(
+    ubs_bind_map& bind_map,
+    uint32_t caller_lvc,
+    std::unordered_map<uint32_t, uint32_t>& translations) const {
+    return exporter_t{globalize_, make_functor_, make_var_, bind_map, caller_lvc, translations};
 }
 
 #undef PUD_TERM_FACTORY

@@ -4,7 +4,6 @@ pud_manifest::pud_manifest()
     : expr_pool_()
     , globalizer_()
     , term_factory_(globalizer_, expr_pool_, expr_pool_)
-    , changed_class_finder_()
     , node_id_sequencer_()
     , leaf_nodes_()
     , refuted_leaves_()
@@ -41,7 +40,9 @@ pud_manifest::pud_manifest()
           query_opener_, query_holders_, mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(refuted_leaves_, refutation_propagator_, node_deactivator_, leaf_nodes_, refuted_leaves_)
-    , acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_)
+    , acceptor_(
+          node_goals_, root_heads_, node_substitutions_, expr_pool_, term_factory_, term_factory_, term_factory_,
+          term_factory_)
     , resolver_(active_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
     , unfolder_(call_sites_, children_, leaf_nodes_, live_child_counts_)
     , expander_(

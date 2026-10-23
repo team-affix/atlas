@@ -43,8 +43,8 @@ TEST_F(PudUnifierExtendedIntegrationTest, SwappingFramesPreservesSuccessAndBindi
     const expr* local0 = v(0);
     const expr* local3 = v(3);
     pud_term_stack swapped;
-    const bool ok_a = stack.unifier.unify(pud_fe(local0, 4), pud_fe(local3, 0));
-    const bool ok_b = swapped.unifier.unify(pud_fe(local3, 0), pud_fe(local0, 4));
+    const bool ok_a = stack.unifier.unify(pud_fe(local0, 4), pud_fe(local3, 0)).has_value();
+    const bool ok_b = swapped.unifier.unify(pud_fe(local3, 0), pud_fe(local0, 4)).has_value();
     EXPECT_EQ(ok_a, ok_b);
     const uint32_t stack_global = gkey(stack.globalize, 4, 0);
     const uint32_t swapped_global = gkey(swapped.globalize, 4, 0);

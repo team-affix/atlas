@@ -282,8 +282,8 @@ TEST_F(PudUnifierBindMapIntegrationTest, SymmetryAndIdempotence) {
     const expr* fbc = forward.pool.make_functor(functors.id("p"), {
         atom_b(), atom_y()});
     EXPECT_EQ(
-        forward.unifier.unify(fe(fxa, 0), fe(fbc, 0)),
-        backward.unifier.unify(fe(fbc, 0), fe(fxa, 0)));
+        forward.unifier.unify(fe(fxa, 0), fe(fbc, 0)).has_value(),
+        backward.unifier.unify(fe(fbc, 0), fe(fxa, 0)).has_value());
     pud_term_stack twice;
     const pud_ubs_state before = twice.snapshot();
     EXPECT_TRUE(twice.unifier.unify(fe(twice.pool.make_var(3u), 0), fe(twice.pool.make_var(4u), 0)));
@@ -326,7 +326,7 @@ TEST_F(PudUnifierBindMapIntegrationTest, NaiveReferenceWithOccursCheck) {
             left = fe(atoms[0], 0);
             right = fe(atoms[1], 0);
         }
-        EXPECT_EQ(prod.unifier.unify(left, right), naive_unify(naive, prod, left, right));
+        EXPECT_EQ(prod.unifier.unify(left, right).has_value(), naive_unify(naive, prod, left, right));
     }
 }
 

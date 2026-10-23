@@ -1,5 +1,6 @@
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
@@ -36,7 +37,7 @@ struct PudDeepTermsIntegrationTest : public ::testing::Test {
     }
 
     bool unify(const expr* lhs, const expr* rhs) {
-        return stack.unifier.unify(framed_expr{lhs, 0}, framed_expr{rhs, 0});
+        return stack.unifier.unify(framed_expr{lhs, 0}, framed_expr{rhs, 0}).has_value();
     }
 
     void bind(uint32_t index, const expr* value) {
@@ -92,16 +93,18 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepChainOfBindings) {
 }
 
 TEST_F(PudDeepTermsIntegrationTest, ExporterHandlesAVeryDeepTerm) {
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10);
+    std::unordered_map<uint32_t, uint32_t> translations;
+    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{deep(k_deep, var(3)), 10}), deep(k_deep, var(10)));
-    EXPECT_EQ(exporter.fresh_var_count(), 1u);
+    EXPECT_EQ(translations.size(), 1u);
 }
 
 TEST_F(PudDeepTermsIntegrationTest, ExporterFollowsAVeryDeepChainOfCalleeBindings) {
     const uint32_t chain = 50000;
     for (uint32_t index = 0; index < chain; ++index)
         bind(10 + index, functor("s", {var(11 + index)}));
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10);
+    std::unordered_map<uint32_t, uint32_t> translations;
+    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{var(0), 10}), deep(chain, var(10)));
 }
 
@@ -167,7 +170,8 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerResolvesSharedBindingsInLinearTime
 }
 
 TEST_F(PudDeepTermsIntegrationTest, ExporterRebuildsASharedTermInLinearTime) {
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10);
+    std::unordered_map<uint32_t, uint32_t> translations;
+    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{shared(k_shared_depth, var(2)), 10}), shared(k_shared_depth, var(10)));
 }
 

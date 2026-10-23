@@ -13,8 +13,10 @@
 
 // Rebuilds framed terms for a caller: classes represented below the caller's lvc stay the caller's
 // variables, other bound classes are resolved, and other unbound classes become fresh variables
-// numbered densely from the lvc. The numbering and the rebuilt subterms are shared by every export
-// of one exporter, so every term of a child delta is rebuilt in one environment.
+// numbered densely from the lvc. Each fresh variable is recorded in the translations, keyed by the
+// representative it replaces, so the translations' size is the number of fresh variables. The
+// translations and the rebuilt subterms are shared by every export of one exporter, so every term of
+// a child delta is rebuilt in one environment.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind>
 struct pud_exporter {
     pud_exporter(
@@ -22,9 +24,9 @@ struct pud_exporter {
         IMakeFunctor& make_functor,
         IMakeVar& make_var,
         IFind& find,
-        uint32_t caller_lvc);
+        uint32_t caller_lvc,
+        std::unordered_map<uint32_t, uint32_t>& translations);
     const expr* export_expr(framed_expr framed);
-    uint32_t fresh_var_count() const;
 private:
     struct frame {
         framed_expr functor;
@@ -38,7 +40,7 @@ private:
     IMakeVar& make_var_;
     IFind& find_;
     uint32_t caller_lvc_;
-    std::unordered_map<uint32_t, uint32_t> fresh_vars_;
+    std::unordered_map<uint32_t, uint32_t>& translations_;
     std::unordered_map<framed_expr, const expr*, framed_expr_hash> exported_;
 };
 
@@ -52,13 +54,14 @@ PUD_EXPORTER::pud_exporter(
     IMakeFunctor& make_functor,
     IMakeVar& make_var,
     IFind& find,
-    uint32_t caller_lvc)
+    uint32_t caller_lvc,
+    std::unordered_map<uint32_t, uint32_t>& translations)
     : globalize_(globalize)
     , make_functor_(make_functor)
     , make_var_(make_var)
     , find_(find)
     , caller_lvc_(caller_lvc)
-    , fresh_vars_()
+    , translations_(translations)
     , exported_() {}
 
 PUD_EXPORTER_TEMPLATE
@@ -83,11 +86,6 @@ const expr* PUD_EXPORTER::export_expr(framed_expr framed) {
     return finished.value();
 }
 
-PUD_EXPORTER_TEMPLATE
-uint32_t PUD_EXPORTER::fresh_var_count() const {
-    return static_cast<uint32_t>(fresh_vars_.size());
-}
-
 // Returns the exported term when it is already known, or pushes the functor still to be rebuilt.
 PUD_EXPORTER_TEMPLATE
 std::optional<const expr*> PUD_EXPORTER::enter(framed_expr framed, std::vector<frame>& pending) {
@@ -96,8 +94,8 @@ std::optional<const expr*> PUD_EXPORTER::enter(framed_expr framed, std::vector<f
         if (var_class.rep < caller_lvc_)
             return make_var_.make_var(var_class.rep);
         if (!var_class.value.has_value()) {
-            const uint32_t next_fresh = caller_lvc_ + static_cast<uint32_t>(fresh_vars_.size());
-            return make_var_.make_var(fresh_vars_.try_emplace(var_class.root, next_fresh).first->second);
+            const uint32_t next_fresh = caller_lvc_ + static_cast<uint32_t>(translations_.size());
+            return make_var_.make_var(translations_.try_emplace(var_class.rep, next_fresh).first->second);
         }
         framed = var_class.value.value();
     }

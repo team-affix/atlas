@@ -62,7 +62,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, RandomTermsMatchReferenceUnifier) {
         const fuzz_pair prod_pair = make_fuzz_pair(functors, prod, prod_rng);
         const fuzz_pair ref_pair = make_fuzz_pair(functors, ref, ref_rng);
         EXPECT_EQ(
-            prod.unifier.unify(prod_pair.left, prod_pair.right),
+            prod.unifier.unify(prod_pair.left, prod_pair.right).has_value(),
             reference_pud_unify_terms(ref, ref_pair.left, ref_pair.right));
     }
 }
@@ -94,7 +94,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, HeavyVariableReuseMatchesReference) {
         const framed_expr ref_lhs{pud_fe(ref_left, 0)};
         const framed_expr ref_rhs{pud_fe(ref_right, 0)};
         EXPECT_EQ(
-            prod.unifier.unify(lhs, rhs),
+            prod.unifier.unify(lhs, rhs).has_value(),
             reference_pud_unify_terms(ref, ref_lhs, ref_rhs));
     }
 }
@@ -127,7 +127,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, RandomUnifySequenceMatchesReferenceAfterEa
             ref_right = pud_fe(ref_atoms[atom_pick], 0);
         }
         EXPECT_EQ(
-            prod.unifier.unify(left, right),
+            prod.unifier.unify(left, right).has_value(),
             reference_pud_unify_terms(ref, ref_left, ref_right));
     }
 }
@@ -149,7 +149,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, RandomFrameOffsetsMatchReference) {
         const uint32_t left_frame = static_cast<uint32_t>(rng() % 12u);
         const uint32_t right_frame = static_cast<uint32_t>(rng() % 12u);
         EXPECT_EQ(
-            prod.unifier.unify(pud_fe(left, left_frame), pud_fe(right, right_frame)),
+            prod.unifier.unify(pud_fe(left, left_frame), pud_fe(right, right_frame)).has_value(),
             reference_pud_unify_terms(
                 ref, pud_fe(ref_left, left_frame), pud_fe(ref_right, right_frame)));
     }
@@ -187,7 +187,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, ShrinkingFindsSmallerReproWhenMismatchDete
     const framed_expr rhs{pud_fe(big_right, 0)};
     const framed_expr ref_lhs{pud_fe(ref_big_left, 0)};
     const framed_expr ref_rhs{pud_fe(ref_big_right, 0)};
-    const bool prod_ok = prod.unifier.unify(lhs, rhs);
+    const bool prod_ok = prod.unifier.unify(lhs, rhs).has_value();
     const bool ref_ok = reference_pud_unify_terms(ref, ref_lhs, ref_rhs);
     EXPECT_EQ(prod_ok, ref_ok);
     if (prod_ok != ref_ok) {
@@ -198,7 +198,7 @@ TEST_F(PudUnifierFuzzIntegrationTest, ShrinkingFindsSmallerReproWhenMismatchDete
         const expr* ref_minimal_left = mini_ref.pool.make_var(0u);
         const expr* ref_minimal_right = mini_ref.pool.make_functor(functors.id("a"), {});
         EXPECT_EQ(
-            mini_prod.unifier.unify(pud_fe(minimal_left, 0), pud_fe(minimal_right, 0)),
+            mini_prod.unifier.unify(pud_fe(minimal_left, 0), pud_fe(minimal_right, 0)).has_value(),
             reference_pud_unify_terms(
                 mini_ref, pud_fe(ref_minimal_left, 0), pud_fe(ref_minimal_right, 0)));
     }

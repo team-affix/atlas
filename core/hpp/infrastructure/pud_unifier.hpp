@@ -14,7 +14,9 @@
 #include "value_objects/ubs_class.hpp"
 
 // Unifies two framed terms in place. Terms are hash-consed DAGs, so each functor pair is unified at
-// most once per call; cycles are looked for once, after every pair has been unified.
+// most once per call; cycles are looked for once, after every pair has been unified. Returns every
+// class the unification edited, each as it was just before its edit, or none when the terms do not
+// unify.
 template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle>
 struct pud_unifier {
     pud_unifier(
@@ -23,7 +25,7 @@ struct pud_unifier {
         IEquate& equate,
         IInstantiate& instantiate,
         IDetectCycle& detect_cycle);
-    bool unify(framed_expr lhs, framed_expr rhs);
+    std::optional<std::vector<ubs_class>> unify(framed_expr lhs, framed_expr rhs);
 private:
     using pair_t = std::pair<framed_expr, framed_expr>;
     struct pair_hash {
@@ -58,9 +60,10 @@ PUD_UNIFIER::pud_unifier(
     , detect_cycle_(detect_cycle) {}
 
 PUD_UNIFIER_TEMPLATE
-bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
+std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     std::vector<pair_t> pending{{lhs, rhs}};
     std::unordered_set<pair_t, pair_hash> unified_functors;
+    std::vector<ubs_class> edited;
     std::vector<uint32_t> touched_class_roots;
     typename IDetectCycle::visitation binding_cycle_visitation;
     while (!pending.empty()) {
@@ -77,6 +80,8 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
             if (left_class.root == right_class.root)
                 continue;
             const std::optional<framed_expr> displaced = equate_.equate(left_class, right_class);
+            edited.push_back(left_class);
+            edited.push_back(right_class);
             touched_class_roots.push_back(left_class.root);
             if (displaced.has_value())
                 pending.emplace_back(left, displaced.value());
@@ -91,6 +96,7 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
                 continue;
             }
             instantiate_.instantiate(var_class, term);
+            edited.push_back(var_class);
             touched_class_roots.push_back(var_class.root);
             continue;
         }
@@ -98,7 +104,7 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
         const expr::functor& left_functor = std::get<expr::functor>(left.skeleton->content);
         const expr::functor& right_functor = std::get<expr::functor>(right.skeleton->content);
         if (left_functor.id != right_functor.id || left_functor.args.size() != right_functor.args.size())
-            return false;
+            return std::nullopt;
         if (left_functor.args.empty() || !unified_functors.insert({left, right}).second)
             continue;
         for (size_t arg = left_functor.args.size(); arg-- > 0;)
@@ -108,9 +114,9 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
     }
     for (uint32_t class_root : touched_class_roots) {
         if (detect_cycle_.find_cycle_from_class(class_root, binding_cycle_visitation))
-            return false;
+            return std::nullopt;
     }
-    return true;
+    return edited;
 }
 
 PUD_UNIFIER_TEMPLATE

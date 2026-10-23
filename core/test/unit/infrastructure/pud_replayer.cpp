@@ -25,9 +25,14 @@ struct MockMakeVar {
 struct MockBindMap {
     MOCK_METHOD(pud_ubs_state, persist, (), (ref(&&)));
 };
+using edited_t = std::optional<std::vector<ubs_class>>;
+
+const edited_t k_unified{std::vector<ubs_class>{}};
+const edited_t k_not_unified{std::nullopt};
+
 struct MockCycleDetector {};
 struct MockUnifier {
-    MOCK_METHOD(bool, unify, (framed_expr, framed_expr));
+    MOCK_METHOD(edited_t, unify, (framed_expr, framed_expr));
 };
 struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
@@ -77,7 +82,7 @@ struct PudReplayerTest : public ::testing::Test {
         ON_CALL(substitutions, get(9)).WillByDefault(ReturnRef(child_substitutions));
         ON_CALL(make_var, make_var(3)).WillByDefault(Return(&var_three));
         ON_CALL(make_var, make_var(4)).WillByDefault(Return(&var_four));
-        ON_CALL(unifier, unify(_, _)).WillByDefault(Return(true));
+        ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_unified));
     }
 
     // Distinguishes the persisted state from the caller's, so a test sees which one a replay carries.
@@ -90,14 +95,14 @@ struct PudReplayerTest : public ::testing::Test {
 
 TEST_F(PudReplayerTest, EnteringAnAxiomUnifiesTheGoalWithTheHeadFramedAtTheOffset) {
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
-    EXPECT_CALL(unifier, unify((framed_expr{&goal, 0}), (framed_expr{&head, 7}))).WillOnce(Return(true));
+    EXPECT_CALL(unifier, unify((framed_expr{&goal, 0}), (framed_expr{&head, 7}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
         replayer.enter(caller_state, &goal, 7, 8),
         (pud_replay{.node = 8, .frame_offset = 7, .ubs_state = persisted_state}));
 }
 
 TEST_F(PudReplayerTest, EnteringFailsWhenTheHeadDoesNotUnify) {
-    ON_CALL(unifier, unify(_, _)).WillByDefault(Return(false));
+    ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_not_unified));
     EXPECT_FALSE(replayer.enter(caller_state, &goal, 7, 8).has_value());
 }
 
@@ -105,8 +110,8 @@ TEST_F(PudReplayerTest, DescendingReplaysEverySubstitutionAtTheFrameOffsetInOrde
     const pud_replay parent{.node = 8, .frame_offset = 7, .ubs_state = caller_state};
     InSequence in_order;
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
-    EXPECT_CALL(unifier, unify((framed_expr{&var_three, 7}), (framed_expr{&value, 7}))).WillOnce(Return(true));
-    EXPECT_CALL(unifier, unify((framed_expr{&var_four, 7}), (framed_expr{&other_value, 7}))).WillOnce(Return(true));
+    EXPECT_CALL(unifier, unify((framed_expr{&var_three, 7}), (framed_expr{&value, 7}))).WillOnce(Return(k_unified));
+    EXPECT_CALL(unifier, unify((framed_expr{&var_four, 7}), (framed_expr{&other_value, 7}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
         replayer.descend(parent, 9),
         (pud_replay{.node = 9, .frame_offset = 7, .ubs_state = persisted_state}));
@@ -114,7 +119,7 @@ TEST_F(PudReplayerTest, DescendingReplaysEverySubstitutionAtTheFrameOffsetInOrde
 
 TEST_F(PudReplayerTest, DescendingStopsAtTheFirstSubstitutionThatFails) {
     const pud_replay parent{.node = 8, .frame_offset = 7, .ubs_state = caller_state};
-    EXPECT_CALL(unifier, unify(_, _)).WillOnce(Return(false));
+    EXPECT_CALL(unifier, unify(_, _)).WillOnce(Return(k_not_unified));
     EXPECT_CALL(std::move(bind_map), persist()).Times(0);
     EXPECT_FALSE(replayer.descend(parent, 9).has_value());
 }

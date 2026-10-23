@@ -9,7 +9,6 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_acceptor.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_changed_class_finder.hpp"
 #include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
@@ -83,7 +82,9 @@ struct pud_manifest {
     using leaf_refuter_t =
         pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t, node_deactivator_t, pud_leaf_nodes, pud_refuted_leaves>;
 
-    using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
+    using acceptor_t = pud_acceptor<
+        pud_node_goals, root_heads_t, node_substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t,
+        term_factory_t>;
     using resolver_t = pud_resolver<pud_active_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
     using unfolder_t = pud_unfolder<call_sites_t, children_t, pud_leaf_nodes, pud_node_live_child_counts>;
     using expander_t = pud_expander<
@@ -94,8 +95,6 @@ struct pud_manifest {
     expr_pool                  expr_pool_;
     globalizer                 globalizer_;
     term_factory_t             term_factory_;
-    pud_changed_class_finder   changed_class_finder_;
-
     pud_node_id_sequencer      node_id_sequencer_;
     pud_leaf_nodes             leaf_nodes_;
     pud_refuted_leaves         refuted_leaves_;

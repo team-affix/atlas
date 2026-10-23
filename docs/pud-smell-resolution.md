@@ -16,7 +16,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | D3 | Resolved | Single removal path: `mhq::remove` when last holder releases; no parallel erase guards. |
 | D4 | Resolved | Holders are authoritative; not rebuilt from side maps on each descent. |
 | D5 | Resolved | One candidacy list per `pud_mhq` head (axiom-ordered); mhcs holds search state only. |
-| D6 | Resolved | `pud_acceptor` diffs bind maps via `pud_changed_class_finder`; path replay via `pud_replayer` (no acceptor-local redo stack). |
+| D6 | Resolved | `pud_acceptor` replays the candidate path in one bind map and notes each caller class as `pud_unifier::unify` reports editing it; no bind-map diff, no redo stack. |
 | D7 | Resolved | `ubs_bind_map` is concrete; `pud_transient_ubs_state` and fake bind-map template stacks deleted. |
 | D8 | Resolved | `pud_goal_list` + `pud_node_maker` single numbering along paths. |
 | D9 | Resolved | Unit work: `std::deque<pud_mhq_head_id>` on admission; refutation: activators report arriving refuted + `pud_leaf_refuter` cascade. |

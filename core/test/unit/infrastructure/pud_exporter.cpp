@@ -1,5 +1,7 @@
+#include <cstdint>
 #include <deque>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -9,8 +11,11 @@
 
 using ::testing::_;
 using ::testing::Invoke;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
+using ::testing::Pair;
 using ::testing::Return;
+using ::testing::UnorderedElementsAre;
 
 namespace {
 
@@ -44,7 +49,8 @@ struct PudExporterTest : public ::testing::Test {
     NiceMock<MockMakeFunctor> make_functor;
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockFind> find;
-    test_exporter_t exporter{globalize, make_functor, make_var, find, 10};
+    std::unordered_map<uint32_t, uint32_t> translations;
+    test_exporter_t exporter{globalize, make_functor, make_var, find, 10, translations};
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
@@ -70,7 +76,7 @@ TEST_F(PudExporterTest, AClassRepresentedBelowTheLvcIsTheCallersVariable) {
     ON_CALL(find, find(14)).WillByDefault(Return(ubs_class{.root = 14, .size = 2, .rep = 3, .value = std::nullopt}));
     EXPECT_CALL(make_var, make_var(3u)).WillOnce(Return(caller_var));
     EXPECT_EQ(exporter.export_expr({var(4), 10}), caller_var);
-    EXPECT_EQ(exporter.fresh_var_count(), 0u);
+    EXPECT_THAT(translations, IsEmpty());
 }
 
 TEST_F(PudExporterTest, ACallerClassIsKeptEvenWhenBound) {
@@ -85,7 +91,7 @@ TEST_F(PudExporterTest, UnboundCalleeClassesAreNumberedDenselyFromTheLvcInFirstM
     EXPECT_CALL(make_var, make_var(10u)).Times(2);
     EXPECT_CALL(make_var, make_var(11u)).Times(1);
     exporter.export_expr({functor(1, {var(7), var(4), var(7)}), 10});
-    EXPECT_EQ(exporter.fresh_var_count(), 2u);
+    EXPECT_THAT(translations, UnorderedElementsAre(Pair(17u, 10u), Pair(14u, 11u)));
 }
 
 TEST_F(PudExporterTest, AFreshVariableIsKeptForItsClassAcrossExports) {
@@ -93,7 +99,15 @@ TEST_F(PudExporterTest, AFreshVariableIsKeptForItsClassAcrossExports) {
     EXPECT_CALL(make_var, make_var(10u)).Times(2);
     exporter.export_expr({var(5), 10});
     exporter.export_expr({var(6), 10});
-    EXPECT_EQ(exporter.fresh_var_count(), 1u);
+    EXPECT_THAT(translations, UnorderedElementsAre(Pair(15u, 10u)));
+}
+
+TEST_F(PudExporterTest, ATranslationAlreadyGivenIsReusedAndNumberingContinuesAfterIt) {
+    translations.emplace(14, 10);
+    EXPECT_CALL(make_var, make_var(10u));
+    EXPECT_CALL(make_var, make_var(11u));
+    exporter.export_expr({functor(1, {var(4), var(5)}), 10});
+    EXPECT_THAT(translations, UnorderedElementsAre(Pair(14u, 10u), Pair(15u, 11u)));
 }
 
 TEST_F(PudExporterTest, ABoundCalleeClassIsReplacedByItsValueReadInItsOwnFrame) {

@@ -15,8 +15,23 @@ Terms and bindings
 - ubs_bind_map owns transient parents/classes, supports find, equate (returns
   displaced value when both sides were bound), instantiate, and persist() && into
   pud_ubs_state. Absorbed equivalence classes are erased from the map.
-- pud_unifier memoizes identical pairs and functor-pair work; pud_normalizer and
-  pud_exporter memoize per traversal.
+- pud_unifier memoizes identical pairs and functor-pair work, and returns every
+  class it edited as it was just before the edit (none when the terms do not
+  unify); pud_normalizer and pud_exporter memoize per traversal.
+- pud_exporter rebuilds terms for a caller; each fresh variable it introduces is
+  written to a translation map the caller owns (representative -> fresh index),
+  so the map's size is the fresh variable count.
+
+Accepting a candidate (pud_acceptor)
+
+- The call-site goal enters the candidate's axiom and the candidate's path is
+  replayed below it, callee framed at the caller's lvc, in one bind map on top
+  of the caller's bindings.
+- After each unification, every caller class (representative below the lvc)
+  that was unbound when edited is noted. One that ends up bound or merged under
+  another representative becomes a substitution, in representative order.
+- The callee's open goals are exported as the child's body goals; the child's
+  fresh variable count is the size of the translation map.
 
 Search stack (no separate query tree)
 

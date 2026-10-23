@@ -187,6 +187,29 @@ TEST_F(PudUnifierTest, ACycleFailsTheUnification) {
     EXPECT_FALSE(unifier.unify({var(0), 0}, {functor(1, {var(0)}), 0}));
 }
 
+TEST_F(PudUnifierTest, EqualTermsEditNothing) {
+    const expr* term = functor(1, {functor(2, {})});
+    EXPECT_EQ(unifier.unify({term, 0}, {term, 5}), std::optional<std::vector<ubs_class>>{std::vector<ubs_class>{}});
+}
+
+TEST_F(PudUnifierTest, AnInstantiatedClassIsReportedAsItWasBeforeTheEdit) {
+    EXPECT_THAT(unifier.unify({var(2), 0}, {functor(1, {}), 8}).value(), ElementsAre(singleton(2)));
+}
+
+TEST_F(PudUnifierTest, BothEquatedClassesAreReportedAsTheyWereBeforeTheEdit) {
+    EXPECT_THAT(unifier.unify({var(4), 0}, {var(6), 3}).value(), ElementsAre(singleton(4), singleton(9)));
+}
+
+TEST_F(PudUnifierTest, EveryEditIsReportedInTheOrderItWasMade) {
+    EXPECT_THAT(
+        unifier.unify({functor(1, {var(0), var(1)}), 0}, {functor(1, {functor(2, {}), var(5)}), 0}).value(),
+        ElementsAre(singleton(0), singleton(1), singleton(5)));
+}
+
+TEST_F(PudUnifierTest, AFailedUnificationReportsNoEdits) {
+    EXPECT_FALSE(unifier.unify({functor(1, {}), 0}, {functor(2, {}), 0}).has_value());
+}
+
 TEST_F(PudUnifierTest, AFailedUnificationSkipsTheCycleCheck) {
     EXPECT_CALL(detect_cycle, find_cycle_from_class(_, _)).Times(0);
     EXPECT_FALSE(unifier.unify({functor(1, {}), 0}, {functor(2, {}), 0}));
