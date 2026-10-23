@@ -6,11 +6,11 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_global_node_id_hash.hpp"
 
-// How many children of each interior node are still alive; stored when the node gets its children.
+// How many children of each node are alive: each child counts from its activation until it dies. A
+// node none of whose children was activated has none.
 struct pud_node_live_child_counts {
     pud_node_live_child_counts();
-    void store(pud_global_node_id id, size_t live_child_count);
-    size_t get(pud_global_node_id id) const;
+    void increment(pud_global_node_id id);
     size_t decrement(pud_global_node_id id);
 private:
     std::unordered_map<pud_global_node_id, size_t, pud_global_node_id_hash> counts_;

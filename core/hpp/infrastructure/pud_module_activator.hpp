@@ -9,19 +9,16 @@
 #include "value_objects/pud_node_id.hpp"
 #include "debug_assert.hpp"
 
-// Puts a registered module on the frontier. Every axiom not already refuted is indexed, then every
-// one is activated. The module's stored tree is then descended: each node hands its place on the
-// frontier to its children not already refuted, the way an expansion hands a leaf's place to its new
-// children, until the descent reaches the leaves. A node already refuted is skipped with everything
-// below it. An interior node with no child left alive is refuted, so it is skipped too.
+// Puts a registered module on the frontier by descending its stored tree. Every axiom not already
+// refuted is activated. Then each node reached hands its place on the frontier to its children not
+// already refuted, the way an expansion hands a leaf's place to its new children: every child is
+// activated, then those refuted on arrival are refuted, then the node is deactivated. The descent
+// stops at the leaves, which stay active. A node already refuted is skipped with everything below it.
 template<
     typename IListAxioms,
     typename ICheckNodeRefuted,
     typename IGetChildren,
-    typename IIndexAxiom,
-    typename IIndexInference,
     typename IActivateRoot,
-    typename IStoreLiveChildCount,
     typename IActivateChild,
     typename IRefuteLeaf,
     typename IDeactivateNode>
@@ -30,10 +27,7 @@ struct pud_module_activator {
         IListAxioms& list_axioms,
         ICheckNodeRefuted& check_node_refuted,
         IGetChildren& get_children,
-        IIndexAxiom& index_axiom,
-        IIndexInference& index_inference,
         IActivateRoot& activate_root,
-        IStoreLiveChildCount& store_live_child_count,
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
         IDeactivateNode& deactivate_node);
@@ -42,10 +36,7 @@ private:
     IListAxioms& list_axioms_;
     ICheckNodeRefuted& check_node_refuted_;
     IGetChildren& get_children_;
-    IIndexAxiom& index_axiom_;
-    IIndexInference& index_inference_;
     IActivateRoot& activate_root_;
-    IStoreLiveChildCount& store_live_child_count_;
     IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
     IDeactivateNode& deactivate_node_;
@@ -53,32 +44,25 @@ private:
 
 #define PUD_MODULE_ACTIVATOR_TEMPLATE                                                      \
     template<typename IListAxioms, typename ICheckNodeRefuted, typename IGetChildren,      \
-             typename IIndexAxiom, typename IIndexInference, typename IActivateRoot,       \
-             typename IStoreLiveChildCount, typename IActivateChild, typename IRefuteLeaf, \
+             typename IActivateRoot, typename IActivateChild, typename IRefuteLeaf,        \
              typename IDeactivateNode>
 #define PUD_MODULE_ACTIVATOR                                                               \
-    pud_module_activator<IListAxioms, ICheckNodeRefuted, IGetChildren, IIndexAxiom, IIndexInference, \
-        IActivateRoot, IStoreLiveChildCount, IActivateChild, IRefuteLeaf, IDeactivateNode>
+    pud_module_activator<IListAxioms, ICheckNodeRefuted, IGetChildren, IActivateRoot, IActivateChild, \
+        IRefuteLeaf, IDeactivateNode>
 
 PUD_MODULE_ACTIVATOR_TEMPLATE
 PUD_MODULE_ACTIVATOR::pud_module_activator(
     IListAxioms& list_axioms,
     ICheckNodeRefuted& check_node_refuted,
     IGetChildren& get_children,
-    IIndexAxiom& index_axiom,
-    IIndexInference& index_inference,
     IActivateRoot& activate_root,
-    IStoreLiveChildCount& store_live_child_count,
     IActivateChild& activate_child,
     IRefuteLeaf& refute_leaf,
     IDeactivateNode& deactivate_node)
     : list_axioms_(list_axioms)
     , check_node_refuted_(check_node_refuted)
     , get_children_(get_children)
-    , index_axiom_(index_axiom)
-    , index_inference_(index_inference)
     , activate_root_(activate_root)
-    , store_live_child_count_(store_live_child_count)
     , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
     , deactivate_node_(deactivate_node) {}
@@ -86,16 +70,17 @@ PUD_MODULE_ACTIVATOR::pud_module_activator(
 PUD_MODULE_ACTIVATOR_TEMPLATE
 pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) {
     std::deque<pud_global_node_id> descending;
+    std::vector<pud_global_node_id> axioms_arrived_refuted;
     for (pud_global_node_id axiom : list_axioms_.list_axioms(module)) {
         if (check_node_refuted_.check_refuted(axiom))
             continue;
-        index_axiom_.index_axiom(axiom);
         descending.push_back(axiom);
-    }
-    pud_frontier_change change{.offspring = {}, .refuted = {}};
-    for (pud_global_node_id axiom : descending) {
         if (!activate_root_.activate_root(axiom))
             continue;
+        axioms_arrived_refuted.push_back(axiom);
+    }
+    pud_frontier_change change{.offspring = {}, .refuted = {}};
+    for (pud_global_node_id axiom : axioms_arrived_refuted) {
         const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(axiom);
         change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
     }
@@ -115,14 +100,16 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
             const pud_global_node_id child{.module = module, .node = stored_child};
             if (check_node_refuted_.check_refuted(child))
                 continue;
-            index_inference_.index_inference(child);
             children.push_back(child);
         }
         DEBUG_ASSERT(!children.empty());
-        store_live_child_count_.store(node, children.size());
+        std::vector<pud_global_node_id> children_arrived_refuted;
         for (pud_global_node_id child : children) {
             if (!activate_child_.activate_child(node, child))
                 continue;
+            children_arrived_refuted.push_back(child);
+        }
+        for (pud_global_node_id child : children_arrived_refuted) {
             const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(child);
             change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
         }

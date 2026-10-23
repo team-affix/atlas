@@ -18,9 +18,6 @@ struct MockGetActiveState {
 struct MockFindNodeGoal {
     MOCK_METHOD(const expr*, find, (pud_global_node_id, pud_body_goal_id));
 };
-struct MockGetNodeLvc {
-    MOCK_METHOD(uint32_t, get, (pud_global_node_id));
-};
 struct MockGetQueryCandidates {
     MOCK_METHOD(std::vector<pud_mhcs_head_id>, candidates, (pud_mhq_head_id));
 };
@@ -40,19 +37,19 @@ struct MockAcceptCandidate {
 };
 
 using test_resolver_t = pud_resolver<
-    NiceMock<MockGetActiveState>, NiceMock<MockFindNodeGoal>, NiceMock<MockGetNodeLvc>, NiceMock<MockGetQueryCandidates>,
+    NiceMock<MockGetActiveState>, NiceMock<MockFindNodeGoal>, NiceMock<MockGetQueryCandidates>,
     NiceMock<MockGetCandidatePath>, NiceMock<MockAcceptCandidate>>;
 
 struct PudResolverTest : public ::testing::Test {
     NiceMock<MockGetActiveState> states;
     NiceMock<MockFindNodeGoal> goals;
-    NiceMock<MockGetNodeLvc> lvcs;
     NiceMock<MockGetQueryCandidates> candidates;
     NiceMock<MockGetCandidatePath> paths;
     NiceMock<MockAcceptCandidate> acceptor;
-    test_resolver_t resolver{states, goals, lvcs, candidates, paths, acceptor};
+    test_resolver_t resolver{states, goals, candidates, paths, acceptor};
     expr goal{expr::functor{1, {}}};
-    pud_active_state state{.bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
+    pud_active_state state{
+        .lvc = 8, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
     std::vector<pud_global_node_id> first_path{pud_test_node(0), pud_test_node(3)};
     std::vector<pud_global_node_id> second_path{pud_test_node(1)};
     pud_node_delta first_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 1};
@@ -61,7 +58,6 @@ struct PudResolverTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(states, get(pud_test_node(5))).WillByDefault(ReturnRef(state));
         ON_CALL(goals, find(pud_test_node(5), 2)).WillByDefault(Return(&goal));
-        ON_CALL(lvcs, get(pud_test_node(5))).WillByDefault(Return(8));
         ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30, 31}));
         ON_CALL(paths, path(30)).WillByDefault(ReturnRef(first_path));
         ON_CALL(paths, path(31)).WillByDefault(ReturnRef(second_path));
@@ -70,7 +66,7 @@ struct PudResolverTest : public ::testing::Test {
 
 }
 
-TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrder) {
+TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrderAtTheLeafsLvc) {
     InSequence in_order;
     EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
         .WillOnce(Return(first_delta));

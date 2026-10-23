@@ -17,13 +17,11 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_node_goals.hpp"
-#include "infrastructure/pud_node_table.hpp"
+#include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_query_forker.hpp"
-#include "infrastructure/pud_query_opener.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include <immer/map.hpp>
 
@@ -31,11 +29,10 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-// Leaf activation over the real binder, watcher, query opener, search stack, and explicit query holders.
-// The tree's root and the facts its goals resolve against are the axioms of one module.
+// Leaf activation over the real binder, watcher, search stack, and explicit query holders. The tree's
+// root and the facts its goals resolve against are the axioms of one module.
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using lvcs_t = pud_node_table<uint32_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_data>;
     using replayer_t = pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
@@ -45,13 +42,11 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
     using binder_t = pud_binder<term_factory_t, modules_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, modules_t>;
-    using query_opener_t = pud_query_opener<mhq_t, pud_node_goals, lvcs_t>;
-    using query_forker_t = pud_query_forker<mhq_t, pud_node_goals, lvcs_t>;
     using root_activator_t =
-        pud_root_activator<pud_active_states, watcher_t, pud_node_goals, query_opener_t, pud_query_holders>;
+        pud_root_activator<modules_t, pud_node_goals, pud_active_states, watcher_t, mhq_t, pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, modules_t, query_forker_t,
-        query_opener_t, pud_query_holders, mhq_t>;
+        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_goals, pud_node_goals,
+        pud_node_live_child_counts, binder_t, watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>;
     using node_deactivator_t =
         pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
 
@@ -64,8 +59,8 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     term_factory_t terms{globalize, exprs, exprs};
     std::deque<pud_data> module_data;
     modules_t modules;
-    lvcs_t lvcs;
     pud_node_goals node_goals;
+    pud_node_live_child_counts live_child_counts;
     unit_queries_t unit_queries;
     pud_active_states active_states;
     pud_query_holders query_holders;
@@ -75,12 +70,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     mhq_t mhq{replayer, modules, mhcs, mhcs, mhcs, mhcs, unit_queries};
     binder_t binder{terms, modules};
     watcher_t structure_watcher{terms, modules};
-    query_opener_t query_opener{mhq, node_goals, lvcs};
-    query_forker_t query_forker{mhq, node_goals, lvcs};
-    root_activator_t root_activator{active_states, structure_watcher, node_goals, query_opener, query_holders};
+    root_activator_t root_activator{modules, node_goals, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{
-        active_states, active_states, binder, structure_watcher, node_goals, modules, query_forker, query_opener,
-        query_holders, mhq};
+        active_states, active_states, modules, node_goals, node_goals, node_goals, live_child_counts, binder,
+        structure_watcher, mhq, mhq, query_holders, mhq};
     node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
     pud_global_node_id root{};
@@ -114,19 +107,16 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     pud_global_node_id infer(
         pud_global_node_id parent,
         pud_body_goal_id call_site,
-        uint32_t lvc,
-        pud_goal_list goals,
+        std::vector<const expr*> body_goals,
+        uint32_t var_count,
         std::vector<pud_substitution> substitutions) {
-        const pud_global_node_id node = modules.store_inference(parent.module, pud_node_delta{
+        return modules.store_inference(parent.module, pud_node_delta{
             .parent = parent.node,
             .call_site = call_site,
             .substitutions = std::move(substitutions),
-            .body_goals = {},
-            .var_count = 0,
+            .body_goals = std::move(body_goals),
+            .var_count = var_count,
         });
-        node_goals.store(node, std::move(goals));
-        lvcs.store(node, lvc);
-        return node;
     }
 
     void activate(pud_global_node_id node) {
@@ -158,20 +148,14 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
             rule(functor("r", {var(1)}), {}, 0),
             rule(atom("s"), {}, 0),
         });
-        const pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(p0).adding(q12);
         root = modules.list_axioms(k_module).front();
-        node_goals.store(root, root_goals);
-        lvcs.store(root, 3);
-        const pud_goal_list child_goals = root_goals.closing(0).adding(r3);
-        child = infer(root, 0, 4, child_goals, {pud_substitution{.var_idx = 0, .value = atom("a")}});
-        grandchild = infer(child, 2, 4, child_goals.closing(2), {pud_substitution{.var_idx = 3, .value = atom("b")}});
-        const pud_goal_list nephew_goals = child_goals.closing(2).adding(s);
-        nephew = infer(child, 2, 4, nephew_goals, {pud_substitution{.var_idx = 2, .value = functor("f", {var(3)})}});
-        great_nephew = infer(nephew, 3, 4, nephew_goals.closing(3), {pud_substitution{.var_idx = 1, .value = atom("c")}});
-        sibling = infer(root, 0, 3, root_goals.closing(0), {pud_substitution{.var_idx = 1, .value = var(2)}});
-        const pud_goal_list linker_goals = root_goals.closing(0).adding(r1);
-        linker = infer(root, 0, 3, linker_goals, {});
-        linked = infer(linker, 2, 3, linker_goals.closing(2), {pud_substitution{.var_idx = 1, .value = atom("a")}});
+        child = infer(root, 0, {r3}, 1, {pud_substitution{.var_idx = 0, .value = atom("a")}});
+        grandchild = infer(child, 2, {}, 0, {pud_substitution{.var_idx = 3, .value = atom("b")}});
+        nephew = infer(child, 2, {s}, 0, {pud_substitution{.var_idx = 2, .value = functor("f", {var(3)})}});
+        great_nephew = infer(nephew, 3, {}, 0, {pud_substitution{.var_idx = 1, .value = atom("c")}});
+        sibling = infer(root, 0, {}, 0, {pud_substitution{.var_idx = 1, .value = var(2)}});
+        linker = infer(root, 0, {r1}, 0, {});
+        linked = infer(linker, 2, {}, 0, {pud_substitution{.var_idx = 1, .value = atom("a")}});
     }
 };
 
@@ -273,7 +257,40 @@ TEST_F(PudLeafActivationIntegrationTest, ReleasingALeafRemovesQueriesOnlyItHeld)
 TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {
     register_module(k_lone_module, {rule(atom("lone"), {p0}, 0), rule(atom("s"), {}, 0)});
     const pud_global_node_id lone = modules.list_axioms(k_lone_module).front();
-    node_goals.store(lone, pud_goal_list{.goals = {}, .next_id = 0}.adding(p0));
-    lvcs.store(lone, 0);
     EXPECT_TRUE(root_activator.activate_root(lone));
+}
+
+TEST_F(PudLeafActivationIntegrationTest, ActivationRecordsEachNodesGoalsFromItsParents) {
+    activate(root);
+    activate(child);
+    activate(nephew);
+    const pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(p0).adding(q12);
+    const pud_goal_list child_goals = root_goals.closing(0).adding(r3);
+    EXPECT_EQ(node_goals.get(root), root_goals);
+    EXPECT_EQ(node_goals.get(child), child_goals);
+    EXPECT_EQ(node_goals.get(nephew), child_goals.closing(2).adding(s));
+}
+
+TEST_F(PudLeafActivationIntegrationTest, ActivationGivesEachNodeItsParentsLvcPlusItsOwnVariables) {
+    activate(root);
+    activate(child);
+    activate(grandchild);
+    EXPECT_EQ(active_states.get(root).lvc, 3u);
+    EXPECT_EQ(active_states.get(child).lvc, 4u);
+    EXPECT_EQ(active_states.get(grandchild).lvc, 4u);
+}
+
+TEST_F(PudLeafActivationIntegrationTest, ADeactivatedNodesGoalsAreKept) {
+    activate(root);
+    activate(child);
+    release(root);
+    EXPECT_EQ(node_goals.get(root), (pud_goal_list{.goals = {}, .next_id = 0}.adding(p0).adding(q12)));
+}
+
+TEST_F(PudLeafActivationIntegrationTest, EveryActivatedChildCountsAsALiveChildOfItsParent) {
+    activate(root);
+    activate(child);
+    activate(sibling);
+    EXPECT_EQ(live_child_counts.decrement(root), 1u);
+    EXPECT_EQ(live_child_counts.decrement(root), 0u);
 }

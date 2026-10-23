@@ -8,7 +8,6 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
-#include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_node_delta.hpp"
@@ -130,8 +129,8 @@ pud_node_delta PUD_ACCEPTOR::accept(
                 : exporter.export_expr(accepted_class.value.value()),
         });
     }
-    for (const pud_body_goal& callee_goal : get_node_goals_.get(candidate_path.back()).goals)
-        delta.body_goals.push_back(exporter.export_expr(framed_expr{callee_goal.goal, acceptor_lvc}));
+    for (const auto& [id, callee_goal] : get_node_goals_.get(candidate_path.back()).goals)
+        delta.body_goals.push_back(exporter.export_expr(framed_expr{callee_goal, acceptor_lvc}));
     delta.var_count = static_cast<uint32_t>(translations.size());
     return delta;
 }

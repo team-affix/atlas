@@ -9,7 +9,6 @@
 #include <immer/set.hpp>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
-#include "value_objects/pud_body_goal.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_global_node_id.hpp"
@@ -34,7 +33,7 @@ struct pud_structure_watcher {
         const pud_goal_list& child_goals) const;
 private:
     template<typename IFind>
-    void watch(pud_structure_watch& watched, const pud_body_goal& goal, IFind& bind_map) const;
+    void watch(pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, IFind& bind_map) const;
     void unwatch(pud_structure_watch& watched, pud_body_goal_id goal) const;
     std::vector<pud_body_goal_id> propagate_rep_updated(
         pud_structure_watch& watched, uint32_t demoted_rep, uint32_t surviving_rep) const;
@@ -61,8 +60,8 @@ PUD_STRUCTURE_WATCHER_TEMPLATE
 pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const {
     auto&& bind_map = make_bind_map_.make_bind_map(root_bindings);
     pud_structure_watch watched{.rep_to_goals = {}, .goal_to_reps = {}};
-    for (const pud_body_goal& goal : goals.goals)
-        watch(watched, goal, bind_map);
+    for (const auto& [id, goal] : goals.goals)
+        watch(watched, id, goal, bind_map);
     return watched;
 }
 
@@ -99,22 +98,23 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
             change.changed_goals.push_back(goal);
         }
     }
-    for (const pud_body_goal& goal : child_goals.goals) {
-        const bool added = change.watch.goal_to_reps.find(goal.id) == nullptr;
+    for (const auto& [id, goal] : child_goals.goals) {
+        const bool added = change.watch.goal_to_reps.find(id) == nullptr;
         if (!added)
             continue;
-        watch(change.watch, goal, bind_map);
+        watch(change.watch, id, goal, bind_map);
     }
     return change;
 }
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 template<typename IFind>
-void PUD_STRUCTURE_WATCHER::watch(pud_structure_watch& watched, const pud_body_goal& goal, IFind& bind_map) const {
-    const immer::set<uint32_t> reps = visit_reps(goal.goal, bind_map);
-    watched.goal_to_reps = watched.goal_to_reps.set(goal.id, reps);
+void PUD_STRUCTURE_WATCHER::watch(
+    pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, IFind& bind_map) const {
+    const immer::set<uint32_t> reps = visit_reps(goal, bind_map);
+    watched.goal_to_reps = watched.goal_to_reps.set(id, reps);
     for (uint32_t rep : reps)
-        watched.rep_to_goals = watched.rep_to_goals.set(rep, watched.rep_to_goals[rep].insert(goal.id));
+        watched.rep_to_goals = watched.rep_to_goals.set(rep, watched.rep_to_goals[rep].insert(id));
 }
 
 PUD_STRUCTURE_WATCHER_TEMPLATE

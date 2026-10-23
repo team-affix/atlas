@@ -9,7 +9,6 @@
 using ::testing::_;
 using ::testing::AnyNumber;
 using ::testing::ElementsAre;
-using ::testing::Expectation;
 using ::testing::InSequence;
 using ::testing::Invoke;
 using ::testing::IsEmpty;
@@ -29,17 +28,8 @@ struct MockCheckNodeRefuted {
 struct MockGetChildren {
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_global_node_id));
 };
-struct MockIndexAxiom {
-    MOCK_METHOD(void, index_axiom, (pud_global_node_id));
-};
-struct MockIndexInference {
-    MOCK_METHOD(void, index_inference, (pud_global_node_id));
-};
 struct MockActivateRoot {
     MOCK_METHOD(bool, activate_root, (pud_global_node_id));
-};
-struct MockStoreLiveChildCount {
-    MOCK_METHOD(void, store, (pud_global_node_id, size_t));
 };
 struct MockActivateChild {
     MOCK_METHOD(bool, activate_child, (pud_global_node_id, pud_global_node_id));
@@ -52,8 +42,7 @@ struct MockDeactivateNode {
 };
 
 using test_module_activator_t = pud_module_activator<
-    NiceMock<MockListAxioms>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockGetChildren>, NiceMock<MockIndexAxiom>,
-    NiceMock<MockIndexInference>, NiceMock<MockActivateRoot>, NiceMock<MockStoreLiveChildCount>,
+    NiceMock<MockListAxioms>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockGetChildren>, NiceMock<MockActivateRoot>,
     NiceMock<MockActivateChild>, NiceMock<MockRefuteLeaf>, NiceMock<MockDeactivateNode>>;
 
 // The stored module, in the test module: axiom 0 has children 2 and 3, axiom 1 is a leaf, 2 is a
@@ -62,16 +51,12 @@ struct PudModuleActivatorTest : public ::testing::Test {
     NiceMock<MockListAxioms> axioms;
     NiceMock<MockCheckNodeRefuted> refuted;
     NiceMock<MockGetChildren> children;
-    NiceMock<MockIndexAxiom> axiom_indexer;
-    NiceMock<MockIndexInference> inference_indexer;
     NiceMock<MockActivateRoot> root_activator;
-    NiceMock<MockStoreLiveChildCount> live_child_counts;
     NiceMock<MockActivateChild> child_activator;
     NiceMock<MockRefuteLeaf> refuter;
     NiceMock<MockDeactivateNode> deactivator;
     test_module_activator_t activator{
-        axioms, refuted, children, axiom_indexer, inference_indexer, root_activator, live_child_counts,
-        child_activator, refuter, deactivator};
+        axioms, refuted, children, root_activator, child_activator, refuter, deactivator};
     std::vector<pud_global_node_id> axiom_list{pud_test_node(0), pud_test_node(1)};
     std::unordered_map<pud_node_id, std::vector<pud_node_id>> child_lists{
         {0, {2, 3}}, {1, {}}, {2, {}}, {3, {4}}, {4, {}}};
@@ -96,25 +81,32 @@ struct PudModuleActivatorTest : public ::testing::Test {
 
 }
 
-TEST_F(PudModuleActivatorTest, EveryAxiomIsIndexedBeforeAnyIsActivated) {
-    Expectation first_indexed = EXPECT_CALL(axiom_indexer, index_axiom(pud_test_node(0)));
-    Expectation second_indexed = EXPECT_CALL(axiom_indexer, index_axiom(pud_test_node(1)));
-    EXPECT_CALL(root_activator, activate_root(pud_test_node(0))).After(first_indexed, second_indexed);
-    EXPECT_CALL(root_activator, activate_root(pud_test_node(1))).After(first_indexed, second_indexed);
+TEST_F(PudModuleActivatorTest, EveryAxiomIsActivatedInOrder) {
+    InSequence in_order;
+    EXPECT_CALL(root_activator, activate_root(pud_test_node(0)));
+    EXPECT_CALL(root_activator, activate_root(pud_test_node(1)));
     activator.activate_module(k_test_module);
 }
 
-TEST_F(PudModuleActivatorTest, AnAxiomAlreadyRefutedIsNeitherIndexedNorActivatedNorDescended) {
+TEST_F(PudModuleActivatorTest, AnAxiomAlreadyRefutedIsNeitherActivatedNorDescended) {
     refuted_nodes.insert(pud_test_node(0));
-    EXPECT_CALL(axiom_indexer, index_axiom(_)).Times(AnyNumber());
     EXPECT_CALL(root_activator, activate_root(_)).Times(AnyNumber());
-    EXPECT_CALL(axiom_indexer, index_axiom(pud_test_node(0))).Times(0);
     EXPECT_CALL(root_activator, activate_root(pud_test_node(0))).Times(0);
-    EXPECT_CALL(inference_indexer, index_inference(_)).Times(0);
+    EXPECT_CALL(child_activator, activate_child(_, _)).Times(0);
     EXPECT_THAT(activator.activate_module(k_test_module).offspring, ElementsAre(pud_test_node(1)));
 }
 
-TEST_F(PudModuleActivatorTest, AnAxiomRefutedOnActivationIsRefutedAndReported) {
+TEST_F(PudModuleActivatorTest, AnAxiomRefutedOnArrivalIsRefutedOnlyOnceEveryAxiomIsActivated) {
+    ON_CALL(root_activator, activate_root(pud_test_node(0))).WillByDefault(Return(true));
+    EXPECT_CALL(refuter, refute(_)).Times(AnyNumber());
+    InSequence in_order;
+    EXPECT_CALL(root_activator, activate_root(pud_test_node(0)));
+    EXPECT_CALL(root_activator, activate_root(pud_test_node(1)));
+    EXPECT_CALL(refuter, refute(pud_test_node(0)));
+    activator.activate_module(k_test_module);
+}
+
+TEST_F(PudModuleActivatorTest, AnAxiomRefutedOnArrivalIsReported) {
     ON_CALL(root_activator, activate_root(pud_test_node(1))).WillByDefault(Return(true));
     const pud_frontier_change change = activator.activate_module(k_test_module);
     EXPECT_THAT(change.refuted, ElementsAre(pud_test_node(1)));
@@ -127,16 +119,11 @@ TEST_F(PudModuleActivatorTest, TheDescentReachesEveryStoredLeafAndReportsThemAsO
     EXPECT_THAT(change.refuted, IsEmpty());
 }
 
-TEST_F(PudModuleActivatorTest, AnInteriorNodeHandsItsPlaceToItsChildrenTheWayAnExpansionDoes) {
+TEST_F(PudModuleActivatorTest, EachInteriorNodeActivatesItsChildrenThenIsDeactivatedLevelByLevel) {
     InSequence in_order;
-    EXPECT_CALL(inference_indexer, index_inference(pud_test_node(2)));
-    EXPECT_CALL(inference_indexer, index_inference(pud_test_node(3)));
-    EXPECT_CALL(live_child_counts, store(pud_test_node(0), 2u));
     EXPECT_CALL(child_activator, activate_child(pud_test_node(0), pud_test_node(2)));
     EXPECT_CALL(child_activator, activate_child(pud_test_node(0), pud_test_node(3)));
     EXPECT_CALL(deactivator, deactivate(pud_test_node(0)));
-    EXPECT_CALL(inference_indexer, index_inference(pud_test_node(4)));
-    EXPECT_CALL(live_child_counts, store(pud_test_node(3), 1u));
     EXPECT_CALL(child_activator, activate_child(pud_test_node(3), pud_test_node(4)));
     EXPECT_CALL(deactivator, deactivate(pud_test_node(3)));
     activator.activate_module(k_test_module);
@@ -152,25 +139,21 @@ TEST_F(PudModuleActivatorTest, ALeafIsNeverDeactivated) {
 
 TEST_F(PudModuleActivatorTest, AChildAlreadyRefutedIsSkippedWithEverythingBelowIt) {
     refuted_nodes.insert(pud_test_node(3));
-    EXPECT_CALL(inference_indexer, index_inference(_)).Times(AnyNumber());
     EXPECT_CALL(child_activator, activate_child(_, _)).Times(AnyNumber());
-    EXPECT_CALL(live_child_counts, store(_, _)).Times(AnyNumber());
-    EXPECT_CALL(inference_indexer, index_inference(pud_test_node(3))).Times(0);
-    EXPECT_CALL(inference_indexer, index_inference(pud_test_node(4))).Times(0);
     EXPECT_CALL(child_activator, activate_child(_, pud_test_node(3))).Times(0);
-    EXPECT_CALL(live_child_counts, store(pud_test_node(0), 1u));
+    EXPECT_CALL(child_activator, activate_child(_, pud_test_node(4))).Times(0);
     EXPECT_THAT(activator.activate_module(k_test_module).offspring, UnorderedElementsAre(pud_test_node(1), pud_test_node(2)));
 }
 
-TEST_F(PudModuleActivatorTest, AChildRefutedOnArrivalIsRefutedBeforeTheNextChildIsActivated) {
+TEST_F(PudModuleActivatorTest, AChildRefutedOnArrivalIsRefutedOnlyOnceEverySiblingIsActivated) {
     ON_CALL(child_activator, activate_child(pud_test_node(0), pud_test_node(2))).WillByDefault(Return(true));
     EXPECT_CALL(child_activator, activate_child(_, _)).Times(AnyNumber());
     EXPECT_CALL(refuter, refute(_)).Times(AnyNumber());
     EXPECT_CALL(deactivator, deactivate(_)).Times(AnyNumber());
     InSequence in_order;
     EXPECT_CALL(child_activator, activate_child(pud_test_node(0), pud_test_node(2)));
-    EXPECT_CALL(refuter, refute(pud_test_node(2)));
     EXPECT_CALL(child_activator, activate_child(pud_test_node(0), pud_test_node(3)));
+    EXPECT_CALL(refuter, refute(pud_test_node(2)));
     EXPECT_CALL(deactivator, deactivate(pud_test_node(0)));
     const pud_frontier_change change = activator.activate_module(k_test_module);
     EXPECT_THAT(change.refuted, ElementsAre(pud_test_node(2)));

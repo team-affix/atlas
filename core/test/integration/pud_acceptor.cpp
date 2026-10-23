@@ -12,10 +12,11 @@
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
+using ::testing::UnorderedElementsAre;
 
 // The acceptor over real node stores and the real replayer and term machinery. Every root is the one
 // axiom of its own module and its children are stored straight into that module, so a test states
-// exactly what each node adds.
+// exactly what each node adds. Every node is activated as it is made, which records its goals.
 struct PudAcceptorIntegrationTest : public ::testing::Test {
     using manifest_t = pud_manifest<pud_data, expr_pool>;
 
@@ -39,7 +40,7 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
         module_data.emplace_back(module, std::vector<pud_module_id>{}, std::vector<rule>{rule(head, std::move(goals), 0)});
         manifest.modules_.register_module(module_data.back());
         const pud_global_node_id axiom = manifest.modules_.list_axioms(module).front();
-        manifest.node_indexer_.index_axiom(axiom);
+        manifest.root_activator_.activate_root(axiom);
         return axiom;
     }
 
@@ -55,7 +56,7 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
             .body_goals = std::move(goals),
             .var_count = 0,
         });
-        manifest.node_indexer_.index_inference(inference);
+        manifest.child_activator_.activate_child(parent, inference);
         return inference;
     }
 
@@ -158,7 +159,7 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(
         delta.body_goals,
-        ElementsAre(functor("q", {functor("g", {var(0)})}), functor("r", {functor("g", {var(0)}), var(0)})));
+        UnorderedElementsAre(functor("q", {functor("g", {var(0)})}), functor("r", {functor("g", {var(0)}), var(0)})));
     EXPECT_EQ(delta.var_count, 0u);
 }
 

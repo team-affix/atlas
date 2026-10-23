@@ -173,18 +173,19 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
             .var_count = 0,
         });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
-        const pud_body_goal_id call_site = parent.goals.goals.at(pick(parent.goals.goals.size())).id;
+        const pud_body_goal_id call_site =
+            std::next(parent.goals.goals.begin(), pick(parent.goals.goals.size()))->first;
         pud_goal_list goals = parent.goals.closing(call_site);
         for (const expr* goal : random_goals(child_bindings, pick(4)))
             goals = goals.adding(goal);
 
         std::set<pud_body_goal_id> expected;
-        for (const pud_body_goal& inherited : parent.goals.goals) {
-            if (inherited.id == call_site)
+        for (const auto& [inherited_id, inherited_goal] : parent.goals.goals) {
+            if (inherited_id == call_site)
                 continue;
-            const bool changed = canonical(parent.bindings, inherited.goal) != canonical(child_bindings, inherited.goal);
+            const bool changed = canonical(parent.bindings, inherited_goal) != canonical(child_bindings, inherited_goal);
             if (changed)
-                expected.insert(inherited.id);
+                expected.insert(inherited_id);
         }
 
         const pud_structure_watch_change change = watcher.descend(parent.watch, child_bindings, child, call_site, goals);
