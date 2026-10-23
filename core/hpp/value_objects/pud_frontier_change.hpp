@@ -5,8 +5,8 @@
 #include <vector>
 #include "value_objects/pud_node_id.hpp"
 
-// What one expand or root-open did to the tree: new child node ids from that step, and every leaf
-// refuted anywhere as a result (including query cascades).
+// What one expansion did to the tree: the children that are still alive, and every leaf refuted
+// anywhere as a result, through query cascades included.
 struct pud_frontier_change {
     std::vector<pud_node_id> offspring;
     std::vector<pud_node_id> refuted;

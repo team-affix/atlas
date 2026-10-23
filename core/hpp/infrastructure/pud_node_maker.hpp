@@ -5,14 +5,16 @@
 #include <optional>
 #include <vector>
 #include "value_objects/expr.hpp"
+#include "value_objects/pud_axiom_group_id.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
-// Makes database nodes. A root is a rule of its own; a child is its parent's rule resolved on one of
-// its goals, so it keeps every other goal of the parent, under the same ids, and adds its own.
+// Makes database nodes. A root is a rule of its own and an axiom of its group; a child is its parent's
+// rule resolved on one of its goals, so it keeps every other goal of the parent, under the same ids,
+// adds its own, and belongs to its parent's group.
 template<
     typename IGetNextNodeId,
     typename IStoreRootHead,
@@ -24,7 +26,8 @@ template<
     typename IStoreLvc,
     typename ISetLeaf,
     typename IGetNodeAxiomGroup,
-    typename IStoreNodeAxiomGroup>
+    typename IStoreNodeAxiomGroup,
+    typename IAddAxiomGroupMember>
 struct pud_node_maker {
     pud_node_maker(
         IGetNextNodeId& get_next_node_id,
@@ -37,8 +40,9 @@ struct pud_node_maker {
         IStoreLvc& store_lvc,
         ISetLeaf& set_leaf,
         IGetNodeAxiomGroup& get_node_axiom_group,
-        IStoreNodeAxiomGroup& store_node_axiom_group);
-    pud_node_id make_root(const rule& axiom);
+        IStoreNodeAxiomGroup& store_node_axiom_group,
+        IAddAxiomGroupMember& add_axiom_group_member);
+    pud_node_id make_root(const rule& axiom, pud_axiom_group_id group);
     pud_node_id make_child(pud_node_id parent, pud_body_goal_id call_site, const pud_child_delta& delta);
 private:
     IGetNextNodeId& get_next_node_id_;
@@ -52,16 +56,18 @@ private:
     ISetLeaf& set_leaf_;
     IGetNodeAxiomGroup& get_node_axiom_group_;
     IStoreNodeAxiomGroup& store_node_axiom_group_;
+    IAddAxiomGroupMember& add_axiom_group_member_;
 };
 
 #define PUD_NODE_MAKER_TEMPLATE                                                            \
     template<typename IGetNextNodeId, typename IStoreRootHead, typename IStoreParent,       \
              typename IStoreSubstitutions, typename IGetGoals, typename IStoreGoals,        \
              typename IGetLvc, typename IStoreLvc, typename ISetLeaf, typename IGetNodeAxiomGroup, \
-             typename IStoreNodeAxiomGroup>
+             typename IStoreNodeAxiomGroup, typename IAddAxiomGroupMember>
 #define PUD_NODE_MAKER                                                                     \
     pud_node_maker<IGetNextNodeId, IStoreRootHead, IStoreParent, IStoreSubstitutions,      \
-        IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, ISetLeaf, IGetNodeAxiomGroup, IStoreNodeAxiomGroup>
+        IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, ISetLeaf, IGetNodeAxiomGroup, IStoreNodeAxiomGroup, \
+        IAddAxiomGroupMember>
 
 PUD_NODE_MAKER_TEMPLATE
 PUD_NODE_MAKER::pud_node_maker(
@@ -75,7 +81,8 @@ PUD_NODE_MAKER::pud_node_maker(
     IStoreLvc& store_lvc,
     ISetLeaf& set_leaf,
     IGetNodeAxiomGroup& get_node_axiom_group,
-    IStoreNodeAxiomGroup& store_node_axiom_group)
+    IStoreNodeAxiomGroup& store_node_axiom_group,
+    IAddAxiomGroupMember& add_axiom_group_member)
     : get_next_node_id_(get_next_node_id)
     , store_root_head_(store_root_head)
     , store_parent_(store_parent)
@@ -86,10 +93,11 @@ PUD_NODE_MAKER::pud_node_maker(
     , store_lvc_(store_lvc)
     , set_leaf_(set_leaf)
     , get_node_axiom_group_(get_node_axiom_group)
-    , store_node_axiom_group_(store_node_axiom_group) {}
+    , store_node_axiom_group_(store_node_axiom_group)
+    , add_axiom_group_member_(add_axiom_group_member) {}
 
 PUD_NODE_MAKER_TEMPLATE
-pud_node_id PUD_NODE_MAKER::make_root(const rule& axiom) {
+pud_node_id PUD_NODE_MAKER::make_root(const rule& axiom, pud_axiom_group_id group) {
     const pud_node_id root = get_next_node_id_.next();
     set_leaf_.set_leaf(root);
     store_parent_.store(root, std::nullopt);
@@ -99,6 +107,8 @@ pud_node_id PUD_NODE_MAKER::make_root(const rule& axiom) {
         root_goals = root_goals.adding(goal);
     store_goals_.store(root, root_goals);
     store_lvc_.store(root, axiom.var_count);
+    store_node_axiom_group_.store(root, group);
+    add_axiom_group_member_.add_member(group, root);
     return root;
 }
 
@@ -113,7 +123,7 @@ pud_node_id PUD_NODE_MAKER::make_child(pud_node_id parent, pud_body_goal_id call
         child_goals = child_goals.adding(goal);
     store_goals_.store(child, child_goals);
     store_lvc_.store(child, get_lvc_.get(parent) + delta.var_count);
-    store_node_axiom_group_.store_node_group(child, get_node_axiom_group_.node_group(parent));
+    store_node_axiom_group_.store(child, get_node_axiom_group_.get(parent));
     return child;
 }
 

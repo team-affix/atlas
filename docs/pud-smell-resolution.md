@@ -28,8 +28,8 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | ID | Status | Notes |
 |----|--------|-------|
 | B1 | Resolved | Body-goal/query PQ descent dissolved into `pud_leaf_query_maker` + mhq API. |
-| B2 | Resolved | `pud_expander` exposes one `expand`; collaborators injected (5 capabilities). |
-| B3 | Resolved | Runtime facade deleted; `pud_axiom_registrar`, `pud_solver`, `pud_command_handler` are the surface. |
+| B2 | Resolved | `pud_expander` exposes one `expand`; one capability per injected collaborator. |
+| B3 | Resolved | Runtime facade deleted; `pud_node_maker::make_root`, `pud_root_activator`, `pud_expander`, `pud_command_handler` are the surface. |
 | B4 | Resolved | `pud_node_maker` replaces root descent maker passthrough. |
 | B5 | Resolved | mhws/mhcs/mhq own state; no head objects carrying collaborator bags. |
 
@@ -85,7 +85,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | S2 | Resolved | Descents removed; replayer/binder/watcher have one signature each. |
 | S3 | Justified | `const expr*` remains: hash-consed DAG nodes in `expr_pool`; justified by interning, not ownership ambiguity. |
 | S4 | Resolved | Structure watch keyed by goal id, not separate watch-head ids. |
-| S5 | Resolved | `pud_frontier_retirer` / layered invalidate replace indexed invalidator names. |
+| S5 | Resolved | `pud_leaf_refuter` refutes a leaf with every consequence (deactivation, cascade to leaf holders of exhausted queries); layered invalidate replaces indexed invalidator names. |
 | S6 | Resolved | `pud_root_activator` / `pud_child_activator` (no duplicate activation descents). |
 | S7 | Resolved | Duplicate value objects (admission, resume contexts, unit/refuted query types, etc.) deleted. |
 | S8 | Resolved | `pud_term_factory` centralizes term collaborators. |

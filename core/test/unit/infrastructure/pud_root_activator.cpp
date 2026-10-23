@@ -4,6 +4,7 @@
 #include "value_objects/pud_goal_list.hpp"
 
 using ::testing::_;
+using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
@@ -21,21 +22,29 @@ struct MockWatchRoot {
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
 };
-struct MockMakeRootQueries {
-    MOCK_METHOD(pud_goal_queries, make_root_queries, (pud_node_id, const pud_ubs_state&));
+struct MockOpenQueries {
+    MOCK_METHOD(void, open_queries, (pud_goal_queries&, pud_node_id, const pud_ubs_state&, const queries_t&));
 };
 
 using test_root_activator_t =
-    pud_root_activator<NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockGetNodeGoals>, NiceMock<MockMakeRootQueries>>;
+    pud_root_activator<NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockGetNodeGoals>, NiceMock<MockOpenQueries>>;
 
 struct PudRootActivatorTest : public ::testing::Test {
     NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockWatchRoot> watcher;
     NiceMock<MockGetNodeGoals> goals;
-    NiceMock<MockMakeRootQueries> query_maker;
+    NiceMock<MockOpenQueries> query_maker;
     test_root_activator_t activator{store_states, watcher, goals, query_maker};
     pud_goal_list node_goals{.goals = {}, .next_id = 0};
     pud_structure_watch root_watch;
+
+    void open_query_fifty(pud_goal_queries& made, pud_node_id, const pud_ubs_state&, const queries_t&) {
+        made.heads = queries_t{}.set(0, 50);
+    }
+
+    void open_nothing_refuted(pud_goal_queries& made, pud_node_id, const pud_ubs_state&, const queries_t&) {
+        made.refuted = true;
+    }
 
     void SetUp() override {
         root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
@@ -46,9 +55,15 @@ struct PudRootActivatorTest : public ::testing::Test {
 
 }
 
-TEST_F(PudRootActivatorTest, ARootStartsFromEmptyBindingsAndStoresItsState) {
-    ON_CALL(query_maker, make_root_queries(2, pud_ubs_state{}))
-        .WillByDefault(Return(pud_goal_queries{.heads = queries_t{}.set(0, 50), .refuted = false}));
+TEST_F(PudRootActivatorTest, ARootStartsFromEmptyBindingsWithNothingInheritedAndStoresItsState) {
+    EXPECT_CALL(query_maker, open_queries(_, 2u, pud_ubs_state{}, queries_t{}))
+        .WillOnce(Invoke(this, &PudRootActivatorTest::open_query_fifty));
     EXPECT_CALL(store_states, store(2, pud_active_state{.bindings = {}, .watch = root_watch, .queries = queries_t{}.set(0, 50)}));
     EXPECT_FALSE(activator.activate_root(2));
+}
+
+TEST_F(PudRootActivatorTest, ARootWithAGoalWithoutCandidatesIsStoredAndReportedRefuted) {
+    ON_CALL(query_maker, open_queries(_, _, _, _)).WillByDefault(Invoke(this, &PudRootActivatorTest::open_nothing_refuted));
+    EXPECT_CALL(store_states, store(2, _));
+    EXPECT_TRUE(activator.activate_root(2));
 }

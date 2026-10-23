@@ -13,6 +13,7 @@ pud_manifest::pud_manifest()
     , node_substitutions_()
     , node_goals_()
     , node_lvcs_()
+    , node_axiom_groups_()
     , call_sites_()
     , children_()
     , live_child_counts_()
@@ -22,7 +23,7 @@ pud_manifest::pud_manifest()
     , refutation_propagator_(node_parents_, live_child_counts_)
     , node_maker_(
           node_id_sequencer_, root_heads_, node_parents_, node_substitutions_, node_goals_, node_goals_,
-          node_lvcs_, node_lvcs_, leaf_nodes_, axiom_groups_, axiom_groups_)
+          node_lvcs_, node_lvcs_, leaf_nodes_, node_axiom_groups_, node_axiom_groups_, axiom_groups_)
     , unit_queries_()
     , replayer_(root_heads_, node_substitutions_, expr_pool_, term_factory_, term_factory_, term_factory_)
     , mhws_(replayer_, leaf_nodes_, refuted_node_checker_, children_)
@@ -32,17 +33,15 @@ pud_manifest::pud_manifest()
     , query_holders_()
     , binder_(term_factory_, node_substitutions_)
     , structure_watcher_(term_factory_, node_substitutions_)
-    , leaf_query_maker_(mhq_, mhq_, query_holders_, node_goals_, node_lvcs_)
+    , leaf_query_maker_(mhq_, mhq_, query_holders_, mhq_, node_goals_, node_lvcs_, node_axiom_groups_)
     , root_activator_(active_states_, structure_watcher_, node_goals_, leaf_query_maker_)
     , child_activator_(
-          active_states_, active_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_)
-    , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_)
-    , leaf_refuter_(refuted_leaves_, refutation_propagator_)
-    , change_collector_(refuted_node_checker_)
+          active_states_, active_states_, binder_, structure_watcher_, node_goals_, call_sites_, leaf_query_maker_,
+          leaf_query_maker_)
+    , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
+    , leaf_refuter_(refuted_leaves_, refutation_propagator_, node_deactivator_, leaf_nodes_, refuted_leaves_)
     , acceptor_(node_goals_, replayer_, replayer_, expr_pool_, term_factory_, term_factory_, changed_class_finder_)
     , resolver_(active_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
-    , unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_)
-    , expander_(resolver_, unfolder_, child_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_)
-    , axiom_registrar_(
-          node_maker_, axiom_groups_, axiom_groups_, root_activator_, leaf_refuter_, node_deactivator_, query_holders_,
-          change_collector_) {}
+    , unfolder_(call_sites_, children_, leaf_nodes_, live_child_counts_)
+    , expander_(
+          resolver_, node_maker_, unfolder_, child_activator_, leaf_refuter_, node_deactivator_, refuted_leaves_) {}

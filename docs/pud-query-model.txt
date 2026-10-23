@@ -26,38 +26,65 @@ Search stack (no separate query tree)
 - pud_mhws: witness search under one outgoing edge (DFS, resumable).
 - pud_mhcs: at most one candidate per axiom for a goal; choice point = two witness
   searches; self-witness = candidate path is a single leaf.
-- pud_axiom_groups: rule roots live in a group; dependencies form a DAG. A leaf in
-  group G may use candidate roots from G and every group G depends on, never from
-  a group that depends on G.
-- pud_mhq: one head per body goal; candidates stored in dependency-then-group
-  order; admits only when at least one candidate exists; pushes unit heads onto an
-  injected deque when a head drops to one candidate.
+- pud_axiom_groups: axiom roots live in a group; dependencies form a DAG. A query
+  opened in group G may use candidate roots from G and every group G depends on,
+  never from a group that depends on G. A query sees only the roots its group
+  could see when it was opened, so once a group's roots are read, no group it
+  sees may gain members or dependencies (debug-asserted).
+- pud_mhq: one head per body goal; try_open(group, ...) stores candidates in
+  dependency-then-registration order; admits only when at least one candidate
+  exists; pushes unit heads onto an injected deque when a head drops to one
+  candidate; check_exhausted(head) once its last candidate is refuted.
 
-Query ownership
+Node lifecycle
 
-- pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
-- Leaves acquire heads in pud_leaf_query_maker::admit_leaf; release via
-  pud_node_deactivator when a node leaves the frontier.
-- When the last holder releases a head, mhq::remove is the only removal path.
-- A refuted head refutes every leaf still holding it (frontier_retirer).
+- Made (pud_node_maker): tree tables written. make_root(rule, group) also makes
+  the root an axiom of its group; make_child(parent, call_site, delta) puts the
+  child in its parent's group. A node is a leaf from birth.
+- Active: has pud_active_state { bindings, watch, queries } and holds its
+  queries. Active leaves are the frontier. An interior node is active only while
+  its children are being activated: the leaf just unfolded by expand, or nodes
+  on the way down while active state is propagated from the roots after a load.
+- Interior (pud_unfolder::unfold): call site, children, live-child count.
+- Refuted (pud_leaf_refuter::refute): a leaf marked refuted, propagated up the
+  tree, deactivated, and every leaf holding a query that deactivation exhausted
+  refuted in turn. Interior holders are left alone: their children inherit the
+  exhausted query and arrive refuted. An interior node is dead when every child
+  is.
 
-Leaf activation (replaces descents)
+Loading axioms
+
+- Make every root of a group and of every group it depends on, then activate
+  each root (pud_root_activator::activate_root), refuting those that arrive
+  refuted. Two plain loops; nothing takes a batch.
+
+Activation
 
 - pud_binder applies child added_substitutions onto the parent bind map.
 - pud_structure_watcher: goals indexed by pud_body_goal_id; a goal changes when
   any of its watched reps is instantiated or two of its reps merge.
-- pud_leaf_query_maker: on a child, erase closed goal's head; fork changed goals
-  in the child environment; open queries for newly added goals; hold every head
-  the leaf keeps.
-- pud_axiom_registrar register_axiom / register_axiom_group; pud_root_activator / pud_child_activator
-  store pud_active_state { bindings, watch, queries }.
+- pud_child_activator: the child inherits every parent query but the call
+  site's, forks each changed goal (pud_leaf_query_maker::fork_query), then opens
+  queries for its own goals and holds every query (open_queries).
+- pud_root_activator: opens a query per goal and holds them.
+- Both return whether the node arrived refuted: a goal whose query failed to
+  open or fork, or an inherited query already exhausted.
 
-Unfold and solver
+Query ownership
 
-- pud_resolver accepts a candidate path; pud_unfolder adds children; retire
-  expands/refutes leaves and cascades query invalidation.
-- pud_solver: coroutine yielding pud_unfold or pud_solution; prefers unit deque
-  unfolds, then random open leaf on tracked conjectures.
+- pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
+- Nodes acquire heads in pud_leaf_query_maker::open_queries and release them in
+  pud_node_deactivator, which also invalidates the node as a witness and returns
+  the nodes left holding a query without a candidate.
+- When the last holder releases a head, mhq::remove is the only removal path.
+
+Expansion
+
+- pud_expander::expand(leaf, goal): pud_resolver yields one delta per candidate;
+  pud_node_maker makes a child per delta; pud_unfolder makes the leaf interior;
+  each child is activated and refuted at once if it arrives refuted; the leaf is
+  deactivated and every leaf that strands is refuted. Returns
+  pud_frontier_change { offspring: live children, refuted: every leaf refuted }.
 
 CLI
 

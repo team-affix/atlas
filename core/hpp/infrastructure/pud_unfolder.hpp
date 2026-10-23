@@ -1,81 +1,51 @@
 #ifndef PUD_UNFOLDER_HPP
 #define PUD_UNFOLDER_HPP
 
-#include <cstddef>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
-#include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_node_id.hpp"
+#include "debug_assert.hpp"
 
-// Unfolds a leaf on a goal into children one delta at a time. The leaf becomes interior; with no
-// children it is dead, and so is every ancestor it leaves without a live child.
-template<
-    typename IStoreCallSite,
-    typename IMakeChild,
-    typename IStoreChildren,
-    typename IUnsetLeaf,
-    typename IStoreLiveChildCount,
-    typename IPropagateRefutation>
+// Makes a leaf interior: it records the goal the leaf was unfolded on and the children that came of
+// it, every one of them alive. A live leaf always has a candidate for the goal, so it never unfolds
+// into no children.
+template<typename IStoreCallSite, typename IStoreChildren, typename IUnsetLeaf, typename IStoreLiveChildCount>
 struct pud_unfolder {
     pud_unfolder(
         IStoreCallSite& store_call_site,
-        IMakeChild& make_child,
         IStoreChildren& store_children,
         IUnsetLeaf& unset_leaf,
-        IStoreLiveChildCount& store_live_child_count,
-        IPropagateRefutation& propagate_refutation);
-    void begin_unfold(pud_node_id leaf, pud_body_goal_id goal);
-    pud_node_id unfold_child(pud_node_id leaf, pud_body_goal_id goal, const pud_child_delta& delta);
-    void finish_unfold(pud_node_id leaf, const std::vector<pud_node_id>& children);
+        IStoreLiveChildCount& store_live_child_count);
+    void unfold(pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_node_id>& children);
 private:
     IStoreCallSite& store_call_site_;
-    IMakeChild& make_child_;
     IStoreChildren& store_children_;
     IUnsetLeaf& unset_leaf_;
     IStoreLiveChildCount& store_live_child_count_;
-    IPropagateRefutation& propagate_refutation_;
 };
 
 #define PUD_UNFOLDER_TEMPLATE                                                              \
-    template<typename IStoreCallSite, typename IMakeChild, typename IStoreChildren,        \
-             typename IUnsetLeaf, typename IStoreLiveChildCount, typename IPropagateRefutation>
-#define PUD_UNFOLDER                                                                       \
-    pud_unfolder<IStoreCallSite, IMakeChild, IStoreChildren, IUnsetLeaf,               \
-        IStoreLiveChildCount, IPropagateRefutation>
+    template<typename IStoreCallSite, typename IStoreChildren, typename IUnsetLeaf, typename IStoreLiveChildCount>
+#define PUD_UNFOLDER pud_unfolder<IStoreCallSite, IStoreChildren, IUnsetLeaf, IStoreLiveChildCount>
 
 PUD_UNFOLDER_TEMPLATE
 PUD_UNFOLDER::pud_unfolder(
     IStoreCallSite& store_call_site,
-    IMakeChild& make_child,
     IStoreChildren& store_children,
     IUnsetLeaf& unset_leaf,
-    IStoreLiveChildCount& store_live_child_count,
-    IPropagateRefutation& propagate_refutation)
+    IStoreLiveChildCount& store_live_child_count)
     : store_call_site_(store_call_site)
-    , make_child_(make_child)
     , store_children_(store_children)
     , unset_leaf_(unset_leaf)
-    , store_live_child_count_(store_live_child_count)
-    , propagate_refutation_(propagate_refutation) {}
+    , store_live_child_count_(store_live_child_count) {}
 
 PUD_UNFOLDER_TEMPLATE
-void PUD_UNFOLDER::begin_unfold(pud_node_id leaf, pud_body_goal_id goal) {
+void PUD_UNFOLDER::unfold(pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_node_id>& children) {
+    DEBUG_ASSERT(!children.empty());
     store_call_site_.store(leaf, goal);
-}
-
-PUD_UNFOLDER_TEMPLATE
-pud_node_id PUD_UNFOLDER::unfold_child(
-    pud_node_id leaf, pud_body_goal_id goal, const pud_child_delta& delta) {
-    return make_child_.make_child(leaf, goal, delta);
-}
-
-PUD_UNFOLDER_TEMPLATE
-void PUD_UNFOLDER::finish_unfold(pud_node_id leaf, const std::vector<pud_node_id>& children) {
     store_children_.store(leaf, children);
     unset_leaf_.unset_leaf(leaf);
     store_live_child_count_.store(leaf, children.size());
-    if (children.empty())
-        propagate_refutation_.refute(leaf);
 }
 
 #undef PUD_UNFOLDER

@@ -11,7 +11,6 @@
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_changed_class_finder.hpp"
 #include "infrastructure/pud_expander.hpp"
-#include "infrastructure/pud_frontier_change_collector.hpp"
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_leaf_query_maker.hpp"
@@ -34,7 +33,6 @@
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
-#include "infrastructure/pud_axiom_registrar.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
@@ -45,13 +43,14 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_substitution.hpp"
 
-// Composition root for the progressive unfolding database (open roots, expand leaves).
+// Composition root for the progressive unfolding database (make and activate roots, expand leaves).
 struct pud_manifest {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
     using root_heads_t = pud_node_table<const expr*>;
     using node_parents_t = pud_node_table<std::optional<pud_node_id>>;
     using node_substitutions_t = pud_node_table<std::vector<pud_substitution>>;
     using node_lvcs_t = pud_node_table<uint32_t>;
+    using node_axiom_groups_t = pud_node_table<pud_axiom_group_id>;
     using call_sites_t = pud_node_table<pud_body_goal_id>;
     using children_t = pud_node_table<std::vector<pud_node_id>>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
@@ -61,7 +60,7 @@ struct pud_manifest {
     using refutation_propagator_t = pud_refutation_propagator<node_parents_t, pud_node_live_child_counts>;
     using node_maker_t = pud_node_maker<
         pud_node_id_sequencer, root_heads_t, node_parents_t, node_substitutions_t, pud_node_goals, pud_node_goals,
-        node_lvcs_t, node_lvcs_t, pud_leaf_nodes, pud_axiom_groups, pud_axiom_groups>;
+        node_lvcs_t, node_lvcs_t, pud_leaf_nodes, node_axiom_groups_t, node_axiom_groups_t, pud_axiom_groups>;
 
     using replayer_t = pud_replayer<root_heads_t, node_substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
     using mhws_t = pud_mhws<replayer_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
@@ -71,26 +70,23 @@ struct pud_manifest {
 
     using binder_t = pud_binder<term_factory_t, node_substitutions_t>;
     using structure_watcher_t = pud_structure_watcher<term_factory_t, node_substitutions_t>;
-    using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, node_lvcs_t>;
+    using leaf_query_maker_t =
+        pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, mhq_t, pud_node_goals, node_lvcs_t, node_axiom_groups_t>;
     using root_activator_t =
         pud_root_activator<pud_active_states, structure_watcher_t, pud_node_goals, leaf_query_maker_t>;
     using child_activator_t = pud_child_activator<
         pud_active_states, pud_active_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t,
-        leaf_query_maker_t>;
+        leaf_query_maker_t, leaf_query_maker_t>;
     using node_deactivator_t = pud_node_deactivator<
-        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t>;
-    using leaf_refuter_t = pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t>;
-    using change_collector_t = pud_frontier_change_collector<refuted_node_checker_t>;
+        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
+    using leaf_refuter_t =
+        pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t, node_deactivator_t, pud_leaf_nodes, pud_refuted_leaves>;
 
     using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
     using resolver_t = pud_resolver<pud_active_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
-    using unfolder_t =
-        pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
+    using unfolder_t = pud_unfolder<call_sites_t, children_t, pud_leaf_nodes, pud_node_live_child_counts>;
     using expander_t = pud_expander<
-        resolver_t, unfolder_t, child_activator_t, leaf_refuter_t, node_deactivator_t, pud_query_holders, change_collector_t>;
-    using axiom_registrar_t = pud_axiom_registrar<
-        node_maker_t, pud_axiom_groups, pud_axiom_groups, root_activator_t, leaf_refuter_t, node_deactivator_t,
-        pud_query_holders, change_collector_t>;
+        resolver_t, node_maker_t, unfolder_t, child_activator_t, leaf_refuter_t, node_deactivator_t, pud_refuted_leaves>;
 
     pud_manifest();
 
@@ -107,6 +103,7 @@ struct pud_manifest {
     node_substitutions_t       node_substitutions_;
     pud_node_goals             node_goals_;
     node_lvcs_t                node_lvcs_;
+    node_axiom_groups_t        node_axiom_groups_;
     call_sites_t               call_sites_;
     children_t                 children_;
     pud_node_live_child_counts live_child_counts_;
@@ -131,13 +128,11 @@ struct pud_manifest {
     child_activator_t          child_activator_;
     node_deactivator_t         node_deactivator_;
     leaf_refuter_t             leaf_refuter_;
-    change_collector_t         change_collector_;
 
     acceptor_t                 acceptor_;
     resolver_t                 resolver_;
     unfolder_t                 unfolder_;
     expander_t                 expander_;
-    axiom_registrar_t          axiom_registrar_;
 };
 
 #endif

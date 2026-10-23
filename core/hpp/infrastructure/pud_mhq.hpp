@@ -8,14 +8,15 @@
 #include <utility>
 #include <vector>
 #include "value_objects/expr.hpp"
+#include "value_objects/pud_axiom_group_id.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_replay.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// The multi-headed query. Each head is a goal's query: at most one candidate under each axiom, kept
-// in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
+// The multi-headed query. Each head is a goal's query: at most one candidate under each axiom its
+// group sees, kept in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
 // to one. A head whose last candidate is refuted is reported as refuted; it stays until removed.
 template<
     typename IEnterReplay,
@@ -35,7 +36,7 @@ struct pud_mhq {
         IInvalidateCandidateLeaf& invalidate_candidate_leaf,
         IPushUnitQuery& push_unit_query);
     std::optional<pud_mhq_head_id> try_open(
-        pud_node_id query_leaf,
+        pud_axiom_group_id group,
         const pud_ubs_state& caller_ubs_state,
         const expr* goal,
         uint32_t frame_offset);
@@ -47,6 +48,7 @@ struct pud_mhq {
     void remove(pud_mhq_head_id head_id);
     std::vector<pud_mhq_head_id> invalidate_leaf(pud_node_id leaf);
     std::vector<pud_mhcs_head_id> candidates(pud_mhq_head_id head_id) const;
+    bool check_exhausted(pud_mhq_head_id head_id) const;
 private:
     struct candidacy {
         pud_node_id axiom;
@@ -98,12 +100,12 @@ PUD_MHQ::pud_mhq(
 
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
-    pud_node_id query_leaf,
+    pud_axiom_group_id group,
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
     std::optional<pud_mhq_head_id> head_id;
-    for (pud_node_id axiom : list_axiom_roots_.axiom_roots(query_leaf)) {
+    for (pud_node_id axiom : list_axiom_roots_.axiom_roots(group)) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom);
         if (!axiom_root.has_value())
             continue;
@@ -177,6 +179,11 @@ std::vector<pud_mhcs_head_id> PUD_MHQ::candidates(pud_mhq_head_id head_id) const
     for (const candidacy& held : queries_.at(head_id))
         candidate_ids.push_back(held.candidate);
     return candidate_ids;
+}
+
+PUD_MHQ_TEMPLATE
+bool PUD_MHQ::check_exhausted(pud_mhq_head_id head_id) const {
+    return queries_.at(head_id).empty();
 }
 
 PUD_MHQ_TEMPLATE

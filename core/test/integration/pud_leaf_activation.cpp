@@ -50,13 +50,16 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using mhq_t = pud_mhq<replayer_t, pud_axiom_groups, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
     using binder_t = pud_binder<term_factory_t, substitutions_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
-    using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, lvcs_t>;
+    using node_axiom_groups_t = pud_node_table<pud_axiom_group_id>;
+    using leaf_query_maker_t =
+        pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, mhq_t, pud_node_goals, lvcs_t, node_axiom_groups_t>;
     using root_activator_t =
         pud_root_activator<pud_active_states, watcher_t, pud_node_goals, leaf_query_maker_t>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
+        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t,
+        leaf_query_maker_t>;
     using node_deactivator_t =
-        pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t>;
+        pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
 
     test_functors functors;
     expr_pool exprs;
@@ -72,6 +75,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     call_sites_t call_sites;
     pud_node_goals node_goals;
     pud_axiom_groups axiom_groups;
+    node_axiom_groups_t node_axiom_groups;
     pud_axiom_group_id database_group;
     unit_queries_t unit_queries;
     pud_active_states active_states;
@@ -86,11 +90,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         : database_group(axiom_groups.create_group()) {}
     binder_t binder{terms, substitutions};
     watcher_t structure_watcher{terms, substitutions};
-    leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, node_goals, lvcs};
+    leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, mhq, node_goals, lvcs, node_axiom_groups};
     root_activator_t root_activator{active_states, structure_watcher, node_goals, leaf_query_maker};
     child_activator_t child_activator{
-        active_states, active_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker};
-    node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq};
+        active_states, active_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker,
+        leaf_query_maker};
+    node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
     pud_node_id next_axiom = 8;
     pud_node_id root = 0;
@@ -116,14 +121,13 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
     const expr* atom(const char* name) { return functor(name, {}); }
 
-    void tag_group(pud_node_id node) { axiom_groups.store_node_group(node, database_group); }
+    void tag_group(pud_node_id node) { node_axiom_groups.store(node, database_group); }
 
     pud_node_id make_axiom(const expr* head) {
         const pud_node_id node = next_axiom++;
         leaf_nodes.set_leaf(node);
         root_heads.store(node, head);
         axiom_groups.add_member(database_group, node);
-        tag_group(node);
         return node;
     }
 
@@ -310,11 +314,10 @@ TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {
     const pud_axiom_group_id isolated = axiom_groups.create_group();
     const pud_node_id lone = next_axiom++;
     store_leaf(lone, 0, pud_goal_list{.goals = {}, .next_id = 0}.adding(p0), {});
-    axiom_groups.store_node_group(lone, isolated);
+    node_axiom_groups.store(lone, isolated);
     const pud_node_id s_axiom = next_axiom++;
     leaf_nodes.set_leaf(s_axiom);
     root_heads.store(s_axiom, atom("s"));
     axiom_groups.add_member(isolated, s_axiom);
-    axiom_groups.store_node_group(s_axiom, isolated);
     EXPECT_TRUE(root_activator.activate_root(lone));
 }

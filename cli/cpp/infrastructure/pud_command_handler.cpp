@@ -14,16 +14,20 @@ struct pud_goal_exprs {
 };
 
 void load_axioms(db& database, pud_manifest& manifest) {
-    std::vector<rule> axioms;
+    std::vector<pud_node_id> roots;
     coroutine<rule_id, void> rules = database.lookup_all_rules().iterate();
     while (!rules.done()) {
         rules.resume();
         if (!rules.has_yield())
             break;
         const rule_id rule = rules.consume_yield();
-        axioms.push_back(*database.get_rule(rule));
+        roots.push_back(manifest.node_maker_.make_root(*database.get_rule(rule), manifest.database_axiom_group_));
     }
-    manifest.axiom_registrar_.register_axiom_group(manifest.database_axiom_group_, axioms);
+    for (pud_node_id root : roots) {
+        if (!manifest.root_activator_.activate_root(root))
+            continue;
+        manifest.leaf_refuter_.refute(root);
+    }
 }
 
 } // namespace

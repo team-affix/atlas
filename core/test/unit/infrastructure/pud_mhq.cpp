@@ -54,7 +54,6 @@ struct PudMhqTest : public ::testing::Test {
     pud_axiom_groups axiom_groups;
     pud_axiom_group_id group;
     test_mhq_t mhq{enter, axiom_groups, add_candidate, fork_candidate, remove_candidate, invalidate_candidates, unit_queries};
-    pud_node_id query_leaf = 99;
     expr goal{expr::functor{3, {}}};
     expr specialized_goal{expr::functor{4, {}}};
 
@@ -63,10 +62,6 @@ struct PudMhqTest : public ::testing::Test {
         axiom_groups.add_member(group, 0);
         axiom_groups.add_member(group, 1);
         axiom_groups.add_member(group, 2);
-        axiom_groups.store_node_group(query_leaf, group);
-        axiom_groups.store_node_group(0, group);
-        axiom_groups.store_node_group(1, group);
-        axiom_groups.store_node_group(2, group);
     }
 
     void enterable(pud_node_id axiom) {
@@ -80,7 +75,7 @@ struct PudMhqTest : public ::testing::Test {
     }
 
     std::optional<pud_mhq_head_id> open() {
-        return mhq.try_open(query_leaf, pud_ubs_state{}, &goal, 7);
+        return mhq.try_open(group, pud_ubs_state{}, &goal, 7);
     }
 
     std::optional<pud_mhq_head_id> fork(pud_mhq_head_id head) {
@@ -171,6 +166,19 @@ TEST_F(PudMhqTest, RefutedCandidatesReachOnlyTheirOwnQuery) {
     EXPECT_THAT(mhq.candidates(second), ElementsAre(41u));
 }
 
+TEST_F(PudMhqTest, AQueryIsExhaustedOnlyOnceItsLastCandidateIsRefuted) {
+    candidate_under(0, 30);
+    candidate_under(1, 31);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_FALSE(mhq.check_exhausted(head));
+    refute_candidates({30});
+    mhq.invalidate_leaf(5);
+    EXPECT_FALSE(mhq.check_exhausted(head));
+    refute_candidates({31});
+    mhq.invalidate_leaf(6);
+    EXPECT_TRUE(mhq.check_exhausted(head));
+}
+
 TEST_F(PudMhqTest, RemovingAQueryRemovesItsCandidates) {
     candidate_under(0, 30);
     candidate_under(2, 32);
@@ -221,9 +229,10 @@ TEST_F(PudMhqTest, AxiomsFromAnotherGroupAreNotVisible) {
     const pud_axiom_group_id other_group = axiom_groups.create_group();
     const pud_node_id foreign = 50;
     axiom_groups.add_member(other_group, foreign);
-    axiom_groups.store_node_group(foreign, other_group);
     candidate_under(0, 30);
     candidate_under(2, 20);
-    EXPECT_THAT(axiom_groups.axiom_roots(query_leaf), ElementsAre(0u, 1u, 2u));
+    candidate_under(foreign, 40);
+    EXPECT_CALL(enter, enter(_, _, _, _)).Times(::testing::AnyNumber());
+    EXPECT_CALL(enter, enter(_, _, _, foreign)).Times(0);
     EXPECT_THAT(mhq.candidates(open().value()), ElementsAre(30u, 20u));
 }

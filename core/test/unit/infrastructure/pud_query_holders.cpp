@@ -4,6 +4,7 @@
 #include "infrastructure/pud_query_holders.hpp"
 
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 
 namespace {
 
@@ -35,6 +36,13 @@ TEST_F(PudQueryHoldersTest, ReleasingReportsOnlyTheLastHolder) {
     EXPECT_FALSE(holders.release(3, 4));
     EXPECT_TRUE(holders.release(3, 5));
     EXPECT_FALSE(holders.find_holder(3).has_value());
+}
+
+TEST_F(PudQueryHoldersTest, AQueryNobodyHoldsAnyMoreHasNoHolders) {
+    holders.hold(3, 4, 0);
+    holders.release(3, 4);
+    EXPECT_THAT(holders.get_holders(3), IsEmpty());
+    EXPECT_THAT(holders.get_holders(7), IsEmpty());
 }
 
 TEST_F(PudQueryHoldersTest, QueriesAreHeldIndependently) {

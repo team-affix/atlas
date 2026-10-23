@@ -8,11 +8,12 @@
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/rule.hpp"
 
-// Minimal helpers for integration tests that drive register/activate/expand on a real manifest.
+// Minimal helpers for integration tests that make, activate, and expand nodes on a real manifest.
+// Axioms are made as they are declared and activated together by activate_axioms.
 struct pud_frontier_test_fixture {
     pud_manifest manifest;
     test_functors functors;
-    std::vector<pud_node_id> pending_axiom_roots_;
+    std::vector<pud_node_id> unactivated_roots;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -25,16 +26,25 @@ struct pud_frontier_test_fixture {
     }
 
     pud_node_id axiom(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        const pud_node_id root = manifest.axiom_registrar_.register_axiom(
-            rule(head, body, var_count), manifest.database_axiom_group_);
-        pending_axiom_roots_.push_back(root);
+        const pud_node_id root = manifest.node_maker_.make_root(rule(head, body, var_count), manifest.database_axiom_group_);
+        unactivated_roots.push_back(root);
         return root;
     }
 
-    pud_frontier_change open_axioms() {
-        const pud_frontier_change change =
-            manifest.axiom_registrar_.activate_axiom_group(manifest.database_axiom_group_, pending_axiom_roots_);
-        pending_axiom_roots_.clear();
+    pud_frontier_change activate_axioms() {
+        pud_frontier_change change{.offspring = {}, .refuted = {}};
+        for (pud_node_id root : unactivated_roots) {
+            if (!manifest.root_activator_.activate_root(root))
+                continue;
+            const std::vector<pud_node_id> refuted = manifest.leaf_refuter_.refute(root);
+            change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
+        }
+        for (pud_node_id root : unactivated_roots) {
+            if (manifest.refuted_leaves_.check_refuted(root))
+                continue;
+            change.offspring.push_back(root);
+        }
+        unactivated_roots.clear();
         return change;
     }
 
