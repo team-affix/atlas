@@ -13,7 +13,8 @@
 #include "infrastructure/pud_changed_class_finder.hpp"
 #include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_frontier_change_collector.hpp"
-#include "infrastructure/pud_frontier_refuter.hpp"
+#include "infrastructure/pud_leaf_deactivator.hpp"
+#include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_leaf_materializer.hpp"
 #include "infrastructure/pud_leaf_query_maker.hpp"
@@ -78,16 +79,18 @@ struct pud_manifest {
     using leaf_activator_t = pud_leaf_activator<
         pud_leaf_states, pud_leaf_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
     using leaf_releaser_t = pud_leaf_releaser<pud_leaf_states, pud_leaf_states, pud_query_holders, mhq_t>;
-    using frontier_refuter_t =
-        pud_frontier_refuter<pud_refuted_leaves, refutation_propagator_t, leaf_releaser_t, mhq_t, pud_query_holders>;
+    using leaf_refuter_t = pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t>;
+    using leaf_deactivator_t = pud_leaf_deactivator<leaf_releaser_t, mhq_t>;
     using change_collector_t = pud_frontier_change_collector<refuted_node_checker_t>;
 
     using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
     using resolver_t = pud_resolver<pud_leaf_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
     using unfolder_t =
         pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
-    using expander_t = pud_expander<resolver_t, unfolder_t, leaf_activator_t, frontier_refuter_t, change_collector_t>;
-    using root_opener_t = pud_root_opener<node_maker_t, axioms_t, leaf_activator_t, frontier_refuter_t, change_collector_t>;
+    using expander_t = pud_expander<
+        resolver_t, unfolder_t, leaf_activator_t, leaf_refuter_t, leaf_releaser_t, mhq_t, pud_query_holders, change_collector_t>;
+    using root_opener_t = pud_root_opener<
+        node_maker_t, axioms_t, leaf_activator_t, leaf_refuter_t, leaf_releaser_t, mhq_t, pud_query_holders, change_collector_t>;
 
     using unit_unfold_finder_t = pud_unit_unfold_finder<unit_queries_t, unit_queries_t, unit_queries_t, pud_query_holders>;
     using expansion_chooser_t = pud_random_expansion_chooser<pud_node_goals>;
@@ -131,7 +134,8 @@ struct pud_manifest {
     leaf_query_maker_t         leaf_query_maker_;
     leaf_activator_t           leaf_activator_;
     leaf_releaser_t            leaf_releaser_;
-    frontier_refuter_t         frontier_refuter_;
+    leaf_refuter_t             leaf_refuter_;
+    leaf_deactivator_t         leaf_deactivator_;
     change_collector_t         change_collector_;
 
     acceptor_t                 acceptor_;

@@ -21,26 +21,43 @@ struct MockAddAxiom {
 struct MockActivateRoot {
     MOCK_METHOD(bool, activate_root, (pud_node_id));
 };
-struct MockRefuteFrontier {
-    MOCK_METHOD(std::vector<pud_node_id>, refute, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
+struct MockRefuteLeaf {
+    MOCK_METHOD(void, refute, (pud_node_id));
+};
+struct MockReleaseLeaf {
+    MOCK_METHOD(void, release, (pud_node_id));
+};
+struct MockInvalidateQueryLeaves {
+    MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaves, ((const std::vector<pud_node_id>&)));
+};
+struct MockGetQueryHolders {
+    MOCK_METHOD(std::vector<pud_node_id>, get_holders, (pud_mhq_head_id));
 };
 struct MockCollectChange {
     MOCK_METHOD(pud_frontier_change, collect, (const std::vector<pud_node_id>&, const std::vector<pud_node_id>&));
 };
 
 using test_root_opener_t = pud_root_opener<
-    NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteFrontier>,
+    NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>,
+    NiceMock<MockReleaseLeaf>, NiceMock<MockInvalidateQueryLeaves>, NiceMock<MockGetQueryHolders>,
     NiceMock<MockCollectChange>>;
 
 struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockMakeRoot> node_maker;
     NiceMock<MockAddAxiom> axioms;
     NiceMock<MockActivateRoot> activator;
-    NiceMock<MockRefuteFrontier> refuter;
+    NiceMock<MockRefuteLeaf> refuter;
+    NiceMock<MockReleaseLeaf> releaser;
+    NiceMock<MockInvalidateQueryLeaves> queries;
+    NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
-    test_root_opener_t opener{node_maker, axioms, activator, refuter, collector};
+    test_root_opener_t opener{node_maker, axioms, activator, refuter, releaser, queries, holders, collector};
     expr head{expr::functor{1, {}}};
     expr goal{expr::functor{2, {}}};
+
+    void SetUp() override {
+        ON_CALL(queries, invalidate_leaves(_)).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+    }
 };
 
 }
@@ -58,7 +75,7 @@ TEST_F(PudRootOpenerTest, AConjectureIsMadeButNeverListedAsAnAxiom) {
     EXPECT_EQ(opener.add_conjecture(&head, {&goal}, 1), 8u);
 }
 
-TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootInOrderThenRetiresTheRefutedOnes) {
+TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTheRefutedOnes) {
     ON_CALL(node_maker, make_root(_, _, _)).WillByDefault(Return(7));
     opener.add_axiom(rule(&head, {}, 0));
     ON_CALL(node_maker, make_root(_, _, _)).WillByDefault(Return(8));
@@ -66,7 +83,9 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootInOrderThenRetiresTheRef
     InSequence in_order;
     EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(true));
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
-    EXPECT_CALL(refuter, refute(IsEmpty(), ElementsAre(7u))).WillOnce(Return(std::vector<pud_node_id>{7}));
+    EXPECT_CALL(refuter, refute(7));
+    EXPECT_CALL(releaser, release(7));
+    EXPECT_CALL(queries, invalidate_leaves(ElementsAre(7u)));
     EXPECT_CALL(collector, collect(ElementsAre(7u, 8u), ElementsAre(7u)));
     opener.open();
 }

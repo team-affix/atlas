@@ -175,7 +175,28 @@ struct pud_manifest_harness {
             if (std::find(path.begin(), path.end(), node) != path.end())
                 leaves.push_back(descendant);
         }
-        for (pud_node_id refuted_leaf : manifest.frontier_refuter_.refute({}, leaves))
+        std::vector<pud_node_id> all_refuted;
+        std::vector<pud_node_id> releasing;
+        std::vector<pud_node_id> refuting = leaves;
+        while (!releasing.empty() || !refuting.empty()) {
+            for (pud_node_id leaf : refuting) {
+                manifest.leaf_refuter_.refute(leaf);
+                all_refuted.push_back(leaf);
+                releasing.push_back(leaf);
+            }
+            refuting.clear();
+            const std::vector<pud_node_id> releasable = std::move(releasing);
+            releasing.clear();
+            std::set<pud_node_id> next_refuting;
+            for (pud_node_id leaf : releasable)
+                manifest.leaf_releaser_.release(leaf);
+            for (pud_mhq_head_id head_id : manifest.mhq_.invalidate_leaves(releasable)) {
+                const std::vector<pud_node_id> held_by = manifest.query_holders_.get_holders(head_id);
+                next_refuting.insert(held_by.begin(), held_by.end());
+            }
+            refuting.assign(next_refuting.begin(), next_refuting.end());
+        }
+        for (pud_node_id refuted_leaf : all_refuted)
             database_frontier.erase(refuted_leaf);
     }
 
