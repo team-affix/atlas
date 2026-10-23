@@ -19,7 +19,7 @@
 // to one. A head whose last candidate is refuted is reported as refuted; it stays until removed.
 template<
     typename IEnterReplay,
-    typename IAxioms,
+    typename IListAxiomRoots,
     typename ITryAddCandidate,
     typename ITryForkCandidate,
     typename IRemoveCandidate,
@@ -28,13 +28,17 @@ template<
 struct pud_mhq {
     pud_mhq(
         IEnterReplay& enter_replay,
-        IAxioms& axioms,
+        IListAxiomRoots& list_axiom_roots,
         ITryAddCandidate& try_add_candidate,
         ITryForkCandidate& try_fork_candidate,
         IRemoveCandidate& remove_candidate,
         IInvalidateCandidateLeaf& invalidate_candidate_leaf,
         IPushUnitQuery& push_unit_query);
-    std::optional<pud_mhq_head_id> try_open(const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset);
+    std::optional<pud_mhq_head_id> try_open(
+        pud_node_id query_leaf,
+        const pud_ubs_state& caller_ubs_state,
+        const expr* goal,
+        uint32_t frame_offset);
     std::optional<pud_mhq_head_id> try_fork(
         pud_mhq_head_id head_id,
         const pud_ubs_state& caller_ubs_state,
@@ -52,7 +56,7 @@ private:
     std::optional<pud_mhq_head_id> admit_candidacy(std::optional<pud_mhq_head_id> head_id, candidacy admitted);
 
     IEnterReplay& enter_replay_;
-    IAxioms& axioms_;
+    IListAxiomRoots& list_axiom_roots_;
     ITryAddCandidate& try_add_candidate_;
     ITryForkCandidate& try_fork_candidate_;
     IRemoveCandidate& remove_candidate_;
@@ -65,24 +69,24 @@ private:
 };
 
 #define PUD_MHQ_TEMPLATE                                                                   \
-    template<typename IEnterReplay, typename IAxioms, typename ITryAddCandidate,        \
+    template<typename IEnterReplay, typename IListAxiomRoots, typename ITryAddCandidate,        \
              typename ITryForkCandidate, typename IRemoveCandidate,                        \
              typename IInvalidateCandidateLeaf, typename IPushUnitQuery>
 #define PUD_MHQ                                                                            \
-    pud_mhq<IEnterReplay, IAxioms, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
+    pud_mhq<IEnterReplay, IListAxiomRoots, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
         IInvalidateCandidateLeaf, IPushUnitQuery>
 
 PUD_MHQ_TEMPLATE
 PUD_MHQ::pud_mhq(
     IEnterReplay& enter_replay,
-    IAxioms& axioms,
+    IListAxiomRoots& list_axiom_roots,
     ITryAddCandidate& try_add_candidate,
     ITryForkCandidate& try_fork_candidate,
     IRemoveCandidate& remove_candidate,
     IInvalidateCandidateLeaf& invalidate_candidate_leaf,
     IPushUnitQuery& push_unit_query)
     : enter_replay_(enter_replay)
-    , axioms_(axioms)
+    , list_axiom_roots_(list_axiom_roots)
     , try_add_candidate_(try_add_candidate)
     , try_fork_candidate_(try_fork_candidate)
     , remove_candidate_(remove_candidate)
@@ -94,9 +98,12 @@ PUD_MHQ::pud_mhq(
 
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
-    const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset) {
+    pud_node_id query_leaf,
+    const pud_ubs_state& caller_ubs_state,
+    const expr* goal,
+    uint32_t frame_offset) {
     std::optional<pud_mhq_head_id> head_id;
-    for (pud_node_id axiom : axioms_) {
+    for (pud_node_id axiom : list_axiom_roots_.axiom_roots(query_leaf)) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom);
         if (!axiom_root.has_value())
             continue;

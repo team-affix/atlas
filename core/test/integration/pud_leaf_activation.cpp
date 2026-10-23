@@ -10,6 +10,7 @@
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
 #include "infrastructure/pud_root_activator.hpp"
+#include "infrastructure/pud_axiom_groups.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -39,7 +40,6 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using children_t = pud_node_table<std::vector<pud_node_id>>;
     using lvcs_t = pud_node_table<uint32_t>;
     using call_sites_t = pud_node_table<pud_body_goal_id>;
-    using axioms_t = std::vector<pud_node_id>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using refuted_node_checker_t =
         pud_refuted_node_checker<pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts>;
@@ -47,7 +47,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using mhws_t = pud_mhws<replayer_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
     using mhcs_t =
         pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
-    using mhq_t = pud_mhq<replayer_t, axioms_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
+    using mhq_t = pud_mhq<replayer_t, pud_axiom_groups, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
     using binder_t = pud_binder<term_factory_t, substitutions_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
     using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, lvcs_t>;
@@ -71,7 +71,8 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     lvcs_t lvcs;
     call_sites_t call_sites;
     pud_node_goals node_goals;
-    axioms_t axioms;
+    pud_axiom_groups axiom_groups;
+    pud_axiom_group_id database_group;
     unit_queries_t unit_queries;
     pud_active_states active_states;
     pud_query_holders query_holders;
@@ -79,7 +80,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     replayer_t replayer{root_heads, substitutions, exprs, terms, terms, terms};
     mhws_t mhws{replayer, leaf_nodes, refuted_node_checker, children};
     mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, leaf_nodes, refuted_node_checker, children};
-    mhq_t mhq{replayer, axioms, mhcs, mhcs, mhcs, mhcs, unit_queries};
+    mhq_t mhq{replayer, axiom_groups, mhcs, mhcs, mhcs, mhcs, unit_queries};
+
+    PudLeafActivationIntegrationTest()
+        : database_group(axiom_groups.create_group()) {}
     binder_t binder{terms, substitutions};
     watcher_t structure_watcher{terms, substitutions};
     leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, node_goals, lvcs};
@@ -112,11 +116,14 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
     const expr* atom(const char* name) { return functor(name, {}); }
 
+    void tag_group(pud_node_id node) { axiom_groups.store_node_group(node, database_group); }
+
     pud_node_id make_axiom(const expr* head) {
         const pud_node_id node = next_axiom++;
         leaf_nodes.set_leaf(node);
         root_heads.store(node, head);
-        axioms.push_back(node);
+        axiom_groups.add_member(database_group, node);
+        tag_group(node);
         return node;
     }
 
@@ -174,20 +181,28 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         s = atom("s");
         const pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(p0).adding(q12);
         store_leaf(root, 3, root_goals, {});
+        tag_group(root);
         call_sites.store(root, 0);
         const pud_goal_list child_goals = root_goals.closing(0).adding(r3);
         store_leaf(child, 4, child_goals, {pud_substitution{.var_idx = 0, .value = atom("a")}});
+        tag_group(child);
         call_sites.store(child, 2);
         store_leaf(grandchild, 4, child_goals.closing(2), {pud_substitution{.var_idx = 3, .value = atom("b")}});
+        tag_group(grandchild);
         const pud_goal_list nephew_goals = child_goals.closing(2).adding(s);
         store_leaf(nephew, 4, nephew_goals, {pud_substitution{.var_idx = 2, .value = functor("f", {var(3)})}});
+        tag_group(nephew);
         call_sites.store(nephew, 3);
         store_leaf(great_nephew, 4, nephew_goals.closing(3), {pud_substitution{.var_idx = 1, .value = atom("c")}});
+        tag_group(great_nephew);
         store_leaf(sibling, 3, root_goals.closing(0), {pud_substitution{.var_idx = 1, .value = var(2)}});
+        tag_group(sibling);
         const pud_goal_list linker_goals = root_goals.closing(0).adding(r1);
         store_leaf(linker, 3, linker_goals, {});
+        tag_group(linker);
         call_sites.store(linker, 2);
         store_leaf(linked, 3, linker_goals.closing(2), {pud_substitution{.var_idx = 1, .value = atom("a")}});
+        tag_group(linked);
         make_axiom(functor("p", {var(0)}));
         make_axiom(functor("q", {var(1), var(2)}));
         make_axiom(functor("r", {var(0)}));
@@ -292,9 +307,14 @@ TEST_F(PudLeafActivationIntegrationTest, ReleasingALeafRemovesQueriesOnlyItHeld)
 }
 
 TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {
-    axioms.clear();
+    const pud_axiom_group_id isolated = axiom_groups.create_group();
     const pud_node_id lone = next_axiom++;
     store_leaf(lone, 0, pud_goal_list{.goals = {}, .next_id = 0}.adding(p0), {});
-    make_axiom(atom("s"));
+    axiom_groups.store_node_group(lone, isolated);
+    const pud_node_id s_axiom = next_axiom++;
+    leaf_nodes.set_leaf(s_axiom);
+    root_heads.store(s_axiom, atom("s"));
+    axiom_groups.add_member(isolated, s_axiom);
+    axiom_groups.store_node_group(s_axiom, isolated);
     EXPECT_TRUE(root_activator.activate_root(lone));
 }

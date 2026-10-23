@@ -2,6 +2,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "infrastructure/pud_axiom_groups.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "value_objects/expr.hpp"
 
@@ -40,7 +41,7 @@ pud_replay replay_at(pud_node_id node, uint32_t frame_offset) {
 }
 
 using test_mhq_t = pud_mhq<
-    NiceMock<MockEnterReplay>, std::vector<pud_node_id>, NiceMock<MockTryAddCandidate>, NiceMock<MockTryForkCandidate>,
+    NiceMock<MockEnterReplay>, pud_axiom_groups, NiceMock<MockTryAddCandidate>, NiceMock<MockTryForkCandidate>,
     NiceMock<MockRemoveCandidate>, NiceMock<MockInvalidateCandidateLeaf>, NiceMock<MockPushUnitQuery>>;
 
 struct PudMhqTest : public ::testing::Test {
@@ -50,12 +51,24 @@ struct PudMhqTest : public ::testing::Test {
     NiceMock<MockRemoveCandidate> remove_candidate;
     NiceMock<MockInvalidateCandidateLeaf> invalidate_candidates;
     NiceMock<MockPushUnitQuery> unit_queries;
-    std::vector<pud_node_id> axioms{0, 1, 2};
-    test_mhq_t mhq{enter, axioms, add_candidate, fork_candidate, remove_candidate, invalidate_candidates, unit_queries};
+    pud_axiom_groups axiom_groups;
+    pud_axiom_group_id group;
+    test_mhq_t mhq{enter, axiom_groups, add_candidate, fork_candidate, remove_candidate, invalidate_candidates, unit_queries};
+    pud_node_id query_leaf = 99;
     expr goal{expr::functor{3, {}}};
     expr specialized_goal{expr::functor{4, {}}};
 
-    // The goal enters every axiom at frame 7 and the specialized goal at frame 9.
+    void SetUp() override {
+        group = axiom_groups.create_group();
+        axiom_groups.add_member(group, 0);
+        axiom_groups.add_member(group, 1);
+        axiom_groups.add_member(group, 2);
+        axiom_groups.store_node_group(query_leaf, group);
+        axiom_groups.store_node_group(0, group);
+        axiom_groups.store_node_group(1, group);
+        axiom_groups.store_node_group(2, group);
+    }
+
     void enterable(pud_node_id axiom) {
         ON_CALL(enter, enter(_, &goal, 7u, axiom)).WillByDefault(Return(replay_at(axiom, 7)));
         ON_CALL(enter, enter(_, &specialized_goal, 9u, axiom)).WillByDefault(Return(replay_at(axiom, 9)));
@@ -67,7 +80,7 @@ struct PudMhqTest : public ::testing::Test {
     }
 
     std::optional<pud_mhq_head_id> open() {
-        return mhq.try_open(pud_ubs_state{}, &goal, 7);
+        return mhq.try_open(query_leaf, pud_ubs_state{}, &goal, 7);
     }
 
     std::optional<pud_mhq_head_id> fork(pud_mhq_head_id head) {
@@ -202,4 +215,15 @@ TEST_F(PudMhqTest, AForkKeepingOneCandidateIsUnit) {
     ON_CALL(fork_candidate, try_fork(32u, _)).WillByDefault(Return(52u));
     EXPECT_CALL(unit_queries, push_back(_));
     fork(head);
+}
+
+TEST_F(PudMhqTest, AxiomsFromAnotherGroupAreNotVisible) {
+    const pud_axiom_group_id other_group = axiom_groups.create_group();
+    const pud_node_id foreign = 50;
+    axiom_groups.add_member(other_group, foreign);
+    axiom_groups.store_node_group(foreign, other_group);
+    candidate_under(0, 30);
+    candidate_under(2, 20);
+    EXPECT_THAT(axiom_groups.axiom_roots(query_leaf), ElementsAre(0u, 1u, 2u));
+    EXPECT_THAT(mhq.candidates(open().value()), ElementsAre(30u, 20u));
 }

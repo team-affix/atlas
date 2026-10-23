@@ -17,16 +17,17 @@ pud_manifest::pud_manifest()
     , children_()
     , live_child_counts_()
     , refuted_node_checker_(leaf_nodes_, refuted_leaves_, live_child_counts_)
-    , axioms_()
+    , axiom_groups_()
+    , database_axiom_group_(axiom_groups_.create_group())
     , refutation_propagator_(node_parents_, live_child_counts_)
     , node_maker_(
           node_id_sequencer_, root_heads_, node_parents_, node_substitutions_, node_goals_, node_goals_,
-          node_lvcs_, node_lvcs_, leaf_nodes_)
+          node_lvcs_, node_lvcs_, leaf_nodes_, axiom_groups_, axiom_groups_)
     , unit_queries_()
     , replayer_(root_heads_, node_substitutions_, expr_pool_, term_factory_, term_factory_, term_factory_)
     , mhws_(replayer_, leaf_nodes_, refuted_node_checker_, children_)
     , mhcs_(replayer_, mhws_, mhws_, mhws_, mhws_, mhws_, leaf_nodes_, refuted_node_checker_, children_)
-    , mhq_(replayer_, axioms_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_)
+    , mhq_(replayer_, axiom_groups_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_)
     , active_states_()
     , query_holders_()
     , binder_(term_factory_, node_substitutions_)
@@ -42,4 +43,6 @@ pud_manifest::pud_manifest()
     , resolver_(active_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
     , unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_)
     , expander_(resolver_, unfolder_, child_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_)
-    , root_opener_(node_maker_, axioms_, root_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_) {}
+    , root_opener_(
+          node_maker_, axiom_groups_, axiom_groups_, root_activator_, leaf_refuter_, node_deactivator_, query_holders_,
+          change_collector_) {}

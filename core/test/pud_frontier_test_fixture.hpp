@@ -24,7 +24,7 @@ struct pud_frontier_test_fixture {
     }
 
     pud_node_id axiom(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        return manifest.root_opener_.add_axiom(rule(head, body, var_count));
+        return manifest.root_opener_.add_axiom(rule(head, body, var_count), manifest.database_axiom_group_);
     }
 
     pud_frontier_change open_axioms() { return manifest.root_opener_.open(); }

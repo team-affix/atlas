@@ -26,9 +26,12 @@ Search stack (no separate query tree)
 - pud_mhws: witness search under one outgoing edge (DFS, resumable).
 - pud_mhcs: at most one candidate per axiom for a goal; choice point = two witness
   searches; self-witness = candidate path is a single leaf.
-- pud_mhq: one head per body goal; candidates stored once in axiom order; admits
-  only when at least one candidate exists; pushes unit heads onto an injected
-  deque when a head drops to one candidate.
+- pud_axiom_groups: rule roots live in a group; dependencies form a DAG. A leaf in
+  group G may use candidate roots from G and every group G depends on, never from
+  a group that depends on G.
+- pud_mhq: one head per body goal; candidates stored in dependency-then-group
+  order; admits only when at least one candidate exists; pushes unit heads onto an
+  injected deque when a head drops to one candidate.
 
 Query ownership
 
@@ -46,7 +49,8 @@ Leaf activation (replaces descents)
 - pud_leaf_query_maker: on a child, erase closed goal's head; fork changed goals
   in the child environment; open queries for newly added goals; hold every head
   the leaf keeps.
-- pud_root_activator / pud_child_activator store pud_active_state { bindings, watch, queries }.
+- pud_root_opener adds rules to an axiom group; pud_root_activator / pud_child_activator
+  store pud_active_state { bindings, watch, queries }.
 
 Unfold and solver
 

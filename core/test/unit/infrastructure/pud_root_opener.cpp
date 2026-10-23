@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_root_opener.hpp"
+#include "value_objects/rule.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
@@ -13,10 +14,13 @@ using ::testing::Return;
 namespace {
 
 struct MockMakeRoot {
-    MOCK_METHOD(pud_node_id, make_root, (const expr*, const std::vector<const expr*>&, uint32_t));
+    MOCK_METHOD(pud_node_id, make_root, (const rule&));
 };
-struct MockAddAxiom {
-    MOCK_METHOD(void, push_back, (pud_node_id));
+struct MockStoreNodeAxiomGroup {
+    MOCK_METHOD(void, store_node_group, (pud_node_id, pud_axiom_group_id));
+};
+struct MockAddAxiomGroupMember {
+    MOCK_METHOD(void, add_member, (pud_axiom_group_id, pud_node_id));
 };
 struct MockActivateRoot {
     MOCK_METHOD(bool, activate_root, (pud_node_id));
@@ -37,19 +41,21 @@ struct MockCollectChange {
 };
 
 using test_root_opener_t = pud_root_opener<
-    NiceMock<MockMakeRoot>, NiceMock<MockAddAxiom>, NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>,
-    NiceMock<MockDeactivateNode>, NiceMock<MockGetQueryHolders>,
+    NiceMock<MockMakeRoot>, NiceMock<MockStoreNodeAxiomGroup>, NiceMock<MockAddAxiomGroupMember>,
+    NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>, NiceMock<MockDeactivateNode>, NiceMock<MockGetQueryHolders>,
     NiceMock<MockCollectChange>>;
 
 struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockMakeRoot> node_maker;
-    NiceMock<MockAddAxiom> axioms;
+    NiceMock<MockStoreNodeAxiomGroup> node_groups;
+    NiceMock<MockAddAxiomGroupMember> group_members;
     NiceMock<MockActivateRoot> activator;
     NiceMock<MockRefuteLeaf> refuter;
     NiceMock<MockDeactivateNode> deactivator;
     NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
-    test_root_opener_t opener{node_maker, axioms, activator, refuter, deactivator, holders, collector};
+    test_root_opener_t opener{node_maker, node_groups, group_members, activator, refuter, deactivator, holders, collector};
+    pud_axiom_group_id group{.value = 2};
     expr head{expr::functor{1, {}}};
     expr goal{expr::functor{2, {}}};
 
@@ -61,24 +67,19 @@ struct PudRootOpenerTest : public ::testing::Test {
 
 }
 
-TEST_F(PudRootOpenerTest, AnAxiomIsMadeAndListedButNotYetActivated) {
-    EXPECT_CALL(node_maker, make_root(&head, std::vector<const expr*>{&goal}, 3u)).WillOnce(Return(7));
-    EXPECT_CALL(axioms, push_back(7));
+TEST_F(PudRootOpenerTest, AnAxiomIsMadeRegisteredButNotYetActivated) {
+    EXPECT_CALL(node_maker, make_root(rule(&head, {&goal}, 3))).WillOnce(Return(7));
+    EXPECT_CALL(node_groups, store_node_group(7u, group));
+    EXPECT_CALL(group_members, add_member(group, 7u));
     EXPECT_CALL(activator, activate_root(_)).Times(0);
-    EXPECT_EQ(opener.add_axiom(rule(&head, {&goal}, 3)), 7u);
-}
-
-TEST_F(PudRootOpenerTest, AConjectureIsMadeButNeverListedAsAnAxiom) {
-    EXPECT_CALL(node_maker, make_root(&head, std::vector<const expr*>{&goal}, 1u)).WillOnce(Return(8));
-    EXPECT_CALL(axioms, push_back(_)).Times(0);
-    EXPECT_EQ(opener.add_conjecture(&head, {&goal}, 1), 8u);
+    EXPECT_EQ(opener.add_axiom(rule(&head, {&goal}, 3), group), 7u);
 }
 
 TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTheRefutedOnes) {
-    ON_CALL(node_maker, make_root(_, _, _)).WillByDefault(Return(7));
-    opener.add_axiom(rule(&head, {}, 0));
-    ON_CALL(node_maker, make_root(_, _, _)).WillByDefault(Return(8));
-    opener.add_conjecture(&head, {}, 0);
+    ON_CALL(node_maker, make_root(_)).WillByDefault(Return(7));
+    opener.add_axiom(rule(&head, {}, 0), group);
+    ON_CALL(node_maker, make_root(_)).WillByDefault(Return(8));
+    opener.add_axiom(rule(&head, {}, 0), group);
     InSequence in_order;
     EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(true));
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
@@ -92,8 +93,8 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTh
 }
 
 TEST_F(PudRootOpenerTest, ARootIsOpenedOnlyOnce) {
-    ON_CALL(node_maker, make_root(_, _, _)).WillByDefault(Return(7));
-    opener.add_axiom(rule(&head, {}, 0));
+    ON_CALL(node_maker, make_root(_)).WillByDefault(Return(7));
+    opener.add_axiom(rule(&head, {}, 0), group);
     opener.open();
     EXPECT_CALL(activator, activate_root(_)).Times(0);
     opener.open();

@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_manifest.hpp"
+#include "value_objects/rule.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
 using ::testing::ElementsAre;
@@ -25,7 +26,10 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
     const expr* atom(const char* name) { return functor(name, {}); }
 
     pud_node_id root(const expr* head, std::vector<const expr*> goals) {
-        return manifest.node_maker_.make_root(head, goals, 0);
+        const pud_node_id node = manifest.node_maker_.make_root(rule(head, std::move(goals), 0));
+        manifest.axiom_groups_.store_node_group(node, manifest.database_axiom_group_);
+        manifest.axiom_groups_.add_member(manifest.database_axiom_group_, node);
+        return node;
     }
 
     pud_node_id child(

@@ -116,7 +116,7 @@ void PUD_LEAF_QUERY_MAKER::admit_leaf(
     for (const pud_body_goal& goal : get_node_goals_.get(leaf).goals) {
         if (inherited.find(goal.id) != nullptr)
             continue;
-        const std::optional<pud_mhq_head_id> opened = open_query_.try_open(bindings, goal.goal, lvc);
+        const std::optional<pud_mhq_head_id> opened = open_query_.try_open(leaf, bindings, goal.goal, lvc);
         made.refuted = made.refuted || !opened.has_value();
         if (opened.has_value())
             made.heads = made.heads.set(goal.id, opened.value());

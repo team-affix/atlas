@@ -13,7 +13,7 @@ using ::testing::ReturnRef;
 namespace {
 
 struct MockOpenQuery {
-    MOCK_METHOD(std::optional<pud_mhq_head_id>, try_open, (const pud_ubs_state&, const expr*, uint32_t));
+    MOCK_METHOD(std::optional<pud_mhq_head_id>, try_open, (pud_node_id, const pud_ubs_state&, const expr*, uint32_t));
 };
 struct MockForkQuery {
     MOCK_METHOD(std::optional<pud_mhq_head_id>, try_fork, (pud_mhq_head_id, const pud_ubs_state&, const expr*, uint32_t));
@@ -53,29 +53,29 @@ struct PudLeafQueryMakerTest : public ::testing::Test {
         ON_CALL(goals, get(2)).WillByDefault(ReturnRef(child_goals));
         ON_CALL(goals, find(2, 2)).WillByDefault(Return(&goal_c));
         ON_CALL(lvcs, get(_)).WillByDefault(Return(6));
-        ON_CALL(open, try_open(_, &goal_a, _)).WillByDefault(Return(50));
-        ON_CALL(open, try_open(_, &goal_b, _)).WillByDefault(Return(51));
+        ON_CALL(open, try_open(_, _, &goal_a, _)).WillByDefault(Return(50));
+        ON_CALL(open, try_open(_, _, &goal_b, _)).WillByDefault(Return(51));
     }
 };
 
 }
 
 TEST_F(PudLeafQueryMakerTest, ARootOpensAQueryForEveryGoalAtItsLvcAndHoldsThem) {
-    EXPECT_CALL(open, try_open(_, &goal_a, 6u)).WillOnce(Return(50));
-    EXPECT_CALL(open, try_open(_, &goal_b, 6u)).WillOnce(Return(51));
+    EXPECT_CALL(open, try_open(1u, _, &goal_a, 6u)).WillOnce(Return(50));
+    EXPECT_CALL(open, try_open(1u, _, &goal_b, 6u)).WillOnce(Return(51));
     EXPECT_CALL(hold, hold(50u, 1u, 0u));
     EXPECT_CALL(hold, hold(51u, 1u, 1u));
     EXPECT_EQ(maker.make_root_queries(1, bindings), (pud_goal_queries{.heads = queries_t{}.set(0, 50).set(1, 51), .refuted = false}));
 }
 
 TEST_F(PudLeafQueryMakerTest, AGoalWithoutCandidatesRefutesTheLeafButTheOthersAreStillHeld) {
-    ON_CALL(open, try_open(_, &goal_a, _)).WillByDefault(Return(std::nullopt));
+    ON_CALL(open, try_open(_, _, &goal_a, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(hold, hold(51u, 1u, 1u));
     EXPECT_EQ(maker.make_root_queries(1, bindings), (pud_goal_queries{.heads = queries_t{}.set(1, 51), .refuted = true}));
 }
 
 TEST_F(PudLeafQueryMakerTest, AChildSharesTheParentsQueryForAnUnchangedGoalAndDropsTheCallSite) {
-    EXPECT_CALL(open, try_open(_, _, _)).Times(0);
+    EXPECT_CALL(open, try_open(_, _, _, _)).Times(0);
     EXPECT_CALL(fork, try_fork(_, _, _, _)).Times(0);
     EXPECT_CALL(hold, hold(41u, 2u, 1u));
     EXPECT_CALL(hold, hold(42u, 2u, 2u));
@@ -106,7 +106,7 @@ TEST_F(PudLeafQueryMakerTest, AForkWithoutCandidatesRefutesTheChild) {
 
 TEST_F(PudLeafQueryMakerTest, AGoalTheChildAddsGetsAQueryOfItsOwn) {
     const queries_t inherited = queries_t{}.set(0, 40).set(1, 41);
-    EXPECT_CALL(open, try_open(_, &goal_c, 6u)).WillOnce(Return(70));
+    EXPECT_CALL(open, try_open(2u, _, &goal_c, 6u)).WillOnce(Return(70));
     EXPECT_CALL(hold, hold(41u, 2u, 1u));
     EXPECT_CALL(hold, hold(70u, 2u, 2u));
     pud_goal_queries made = maker.make_child_queries(inherited, 0);

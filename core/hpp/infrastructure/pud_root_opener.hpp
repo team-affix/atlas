@@ -1,21 +1,21 @@
 #ifndef PUD_ROOT_OPENER_HPP
 #define PUD_ROOT_OPENER_HPP
 
-#include <cstdint>
 #include <set>
 #include <utility>
 #include <vector>
-#include "value_objects/expr.hpp"
+#include "value_objects/pud_axiom_group_id.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
-// Adds roots to the database: axioms, which queries search, and conjectures, which are only solved.
-// Roots are added first and opened together, so every query of a batch sees every axiom of it.
+// Adds rule roots to an axiom group and opens them together so every query in the batch sees the same
+// candidate index for that group.
 template<
     typename IMakeRoot,
-    typename IAddAxiom,
+    typename IStoreNodeAxiomGroup,
+    typename IAddAxiomGroupMember,
     typename IActivateRoot,
     typename IRefuteLeaf,
     typename IDeactivateNode,
@@ -24,18 +24,19 @@ template<
 struct pud_root_opener {
     pud_root_opener(
         IMakeRoot& make_root,
-        IAddAxiom& add_axiom,
+        IStoreNodeAxiomGroup& store_node_axiom_group,
+        IAddAxiomGroupMember& add_axiom_group_member,
         IActivateRoot& activate_root,
         IRefuteLeaf& refute_leaf,
         IDeactivateNode& deactivate_node,
         IGetQueryHolders& get_query_holders,
         ICollectChange& collect_change);
-    pud_node_id add_axiom(const rule& axiom);
-    pud_node_id add_conjecture(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count);
+    pud_node_id add_axiom(const rule& axiom, pud_axiom_group_id group);
     pud_frontier_change open();
 private:
     IMakeRoot& make_root_;
-    IAddAxiom& add_axiom_;
+    IStoreNodeAxiomGroup& store_node_axiom_group_;
+    IAddAxiomGroupMember& add_axiom_group_member_;
     IActivateRoot& activate_root_;
     IRefuteLeaf& refute_leaf_;
     IDeactivateNode& deactivate_node_;
@@ -45,23 +46,26 @@ private:
 };
 
 #define PUD_ROOT_OPENER_TEMPLATE                                                           \
-    template<typename IMakeRoot, typename IAddAxiom, typename IActivateRoot, typename IRefuteLeaf, \
-             typename IDeactivateNode, typename IGetQueryHolders, typename ICollectChange>
+    template<typename IMakeRoot, typename IStoreNodeAxiomGroup, typename IAddAxiomGroupMember, \
+             typename IActivateRoot, typename IRefuteLeaf, typename IDeactivateNode,         \
+             typename IGetQueryHolders, typename ICollectChange>
 #define PUD_ROOT_OPENER                                                                    \
-    pud_root_opener<IMakeRoot, IAddAxiom, IActivateRoot, IRefuteLeaf, IDeactivateNode,         \
-        IGetQueryHolders, ICollectChange>
+    pud_root_opener<IMakeRoot, IStoreNodeAxiomGroup, IAddAxiomGroupMember, IActivateRoot, IRefuteLeaf, \
+        IDeactivateNode, IGetQueryHolders, ICollectChange>
 
 PUD_ROOT_OPENER_TEMPLATE
 PUD_ROOT_OPENER::pud_root_opener(
     IMakeRoot& make_root,
-    IAddAxiom& add_axiom,
+    IStoreNodeAxiomGroup& store_node_axiom_group,
+    IAddAxiomGroupMember& add_axiom_group_member,
     IActivateRoot& activate_root,
     IRefuteLeaf& refute_leaf,
     IDeactivateNode& deactivate_node,
     IGetQueryHolders& get_query_holders,
     ICollectChange& collect_change)
     : make_root_(make_root)
-    , add_axiom_(add_axiom)
+    , store_node_axiom_group_(store_node_axiom_group)
+    , add_axiom_group_member_(add_axiom_group_member)
     , activate_root_(activate_root)
     , refute_leaf_(refute_leaf)
     , deactivate_node_(deactivate_node)
@@ -70,16 +74,10 @@ PUD_ROOT_OPENER::pud_root_opener(
     , pending_roots_() {}
 
 PUD_ROOT_OPENER_TEMPLATE
-pud_node_id PUD_ROOT_OPENER::add_axiom(const rule& axiom) {
-    const pud_node_id root = make_root_.make_root(axiom.head, axiom.body, axiom.var_count);
-    add_axiom_.push_back(root);
-    pending_roots_.push_back(root);
-    return root;
-}
-
-PUD_ROOT_OPENER_TEMPLATE
-pud_node_id PUD_ROOT_OPENER::add_conjecture(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count) {
-    const pud_node_id root = make_root_.make_root(head, goals, var_count);
+pud_node_id PUD_ROOT_OPENER::add_axiom(const rule& axiom, pud_axiom_group_id group) {
+    const pud_node_id root = make_root_.make_root(axiom);
+    store_node_axiom_group_.store_node_group(root, group);
+    add_axiom_group_member_.add_member(group, root);
     pending_roots_.push_back(root);
     return root;
 }

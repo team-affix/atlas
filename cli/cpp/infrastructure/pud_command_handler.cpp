@@ -20,7 +20,7 @@ void load_axioms(db& database, pud_manifest& manifest) {
         if (!rules.has_yield())
             break;
         const rule_id rule = rules.consume_yield();
-        manifest.root_opener_.add_axiom(*database.get_rule(rule));
+        manifest.root_opener_.add_axiom(*database.get_rule(rule), manifest.database_axiom_group_);
     }
     manifest.root_opener_.open();
 }
