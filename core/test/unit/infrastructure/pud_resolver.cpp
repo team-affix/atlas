@@ -11,8 +11,8 @@ using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetLeafState {
-    MOCK_METHOD(const pud_leaf_state&, get, (pud_node_id));
+struct MockGetActiveState {
+    MOCK_METHOD(const pud_active_state&, get, (pud_node_id));
 };
 struct MockFindNodeGoal {
     MOCK_METHOD(const expr*, find, (pud_node_id, pud_body_goal_id));
@@ -31,11 +31,11 @@ struct MockAcceptCandidate {
 };
 
 using test_resolver_t = pud_resolver<
-    NiceMock<MockGetLeafState>, NiceMock<MockFindNodeGoal>, NiceMock<MockGetNodeLvc>, NiceMock<MockGetQueryCandidates>,
+    NiceMock<MockGetActiveState>, NiceMock<MockFindNodeGoal>, NiceMock<MockGetNodeLvc>, NiceMock<MockGetQueryCandidates>,
     NiceMock<MockGetCandidatePath>, NiceMock<MockAcceptCandidate>>;
 
 struct PudResolverTest : public ::testing::Test {
-    NiceMock<MockGetLeafState> states;
+    NiceMock<MockGetActiveState> states;
     NiceMock<MockFindNodeGoal> goals;
     NiceMock<MockGetNodeLvc> lvcs;
     NiceMock<MockGetQueryCandidates> candidates;
@@ -43,7 +43,7 @@ struct PudResolverTest : public ::testing::Test {
     NiceMock<MockAcceptCandidate> acceptor;
     test_resolver_t resolver{states, goals, lvcs, candidates, paths, acceptor};
     expr goal{expr::functor{1, {}}};
-    pud_leaf_state state{.bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
+    pud_active_state state{.bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
     std::vector<pud_node_id> first_path{0, 3};
     std::vector<pud_node_id> second_path{1};
     pud_child_delta first_delta{.substitutions = {}, .body_goals = {}, .var_count = 1};

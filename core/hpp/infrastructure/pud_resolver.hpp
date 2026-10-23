@@ -6,14 +6,14 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_child_delta.hpp"
-#include "value_objects/pud_leaf_state.hpp"
+#include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
 
 // Resolves a leaf's goal against every candidate of the goal's query, in axiom order: one child delta
 // per candidate.
 template<
-    typename IGetLeafState,
+    typename IGetActiveState,
     typename IFindNodeGoal,
     typename IGetNodeLvc,
     typename IGetQueryCandidates,
@@ -21,7 +21,7 @@ template<
     typename IAcceptCandidate>
 struct pud_resolver {
     pud_resolver(
-        IGetLeafState& get_leaf_state,
+        IGetActiveState& get_active_state,
         IFindNodeGoal& find_node_goal,
         IGetNodeLvc& get_node_lvc,
         IGetQueryCandidates& get_query_candidates,
@@ -29,7 +29,7 @@ struct pud_resolver {
         IAcceptCandidate& accept_candidate);
     std::vector<pud_child_delta> resolve(pud_node_id leaf, pud_body_goal_id goal);
 private:
-    IGetLeafState& get_leaf_state_;
+    IGetActiveState& get_active_state_;
     IFindNodeGoal& find_node_goal_;
     IGetNodeLvc& get_node_lvc_;
     IGetQueryCandidates& get_query_candidates_;
@@ -38,21 +38,21 @@ private:
 };
 
 #define PUD_RESOLVER_TEMPLATE                                                              \
-    template<typename IGetLeafState, typename IFindNodeGoal, typename IGetNodeLvc,         \
+    template<typename IGetActiveState, typename IFindNodeGoal, typename IGetNodeLvc,       \
              typename IGetQueryCandidates, typename IGetCandidatePath, typename IAcceptCandidate>
 #define PUD_RESOLVER                                                                       \
-    pud_resolver<IGetLeafState, IFindNodeGoal, IGetNodeLvc, IGetQueryCandidates,           \
+    pud_resolver<IGetActiveState, IFindNodeGoal, IGetNodeLvc, IGetQueryCandidates,         \
         IGetCandidatePath, IAcceptCandidate>
 
 PUD_RESOLVER_TEMPLATE
 PUD_RESOLVER::pud_resolver(
-    IGetLeafState& get_leaf_state,
+    IGetActiveState& get_active_state,
     IFindNodeGoal& find_node_goal,
     IGetNodeLvc& get_node_lvc,
     IGetQueryCandidates& get_query_candidates,
     IGetCandidatePath& get_candidate_path,
     IAcceptCandidate& accept_candidate)
-    : get_leaf_state_(get_leaf_state)
+    : get_active_state_(get_active_state)
     , find_node_goal_(find_node_goal)
     , get_node_lvc_(get_node_lvc)
     , get_query_candidates_(get_query_candidates)
@@ -61,7 +61,7 @@ PUD_RESOLVER::pud_resolver(
 
 PUD_RESOLVER_TEMPLATE
 std::vector<pud_child_delta> PUD_RESOLVER::resolve(pud_node_id leaf, pud_body_goal_id goal) {
-    const pud_leaf_state& state = get_leaf_state_.get(leaf);
+    const pud_active_state& state = get_active_state_.get(leaf);
     const expr* goal_expr = find_node_goal_.find(leaf, goal);
     const uint32_t lvc = get_node_lvc_.get(leaf);
     std::vector<pud_child_delta> deltas;

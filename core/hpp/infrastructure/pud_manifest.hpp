@@ -17,7 +17,7 @@
 #include "infrastructure/pud_leaf_activator.hpp"
 #include "infrastructure/pud_leaf_query_maker.hpp"
 #include "infrastructure/pud_leaf_releaser.hpp"
-#include "infrastructure/pud_leaf_states.hpp"
+#include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -72,14 +72,14 @@ struct pud_manifest {
     using structure_watcher_t = pud_structure_watcher<term_factory_t, node_substitutions_t>;
     using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, node_lvcs_t>;
     using leaf_activator_t = pud_leaf_activator<
-        pud_leaf_states, pud_leaf_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
-    using leaf_releaser_t = pud_leaf_releaser<pud_leaf_states, pud_leaf_states, pud_query_holders, mhq_t>;
+        pud_active_states, pud_active_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
+    using leaf_releaser_t = pud_leaf_releaser<pud_active_states, pud_active_states, pud_query_holders, mhq_t>;
     using leaf_refuter_t = pud_leaf_refuter<pud_refuted_leaves, refutation_propagator_t>;
     using leaf_deactivator_t = pud_leaf_deactivator<leaf_releaser_t, mhq_t>;
     using change_collector_t = pud_frontier_change_collector<refuted_node_checker_t>;
 
     using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
-    using resolver_t = pud_resolver<pud_leaf_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
+    using resolver_t = pud_resolver<pud_active_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
     using unfolder_t =
         pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
     using expander_t = pud_expander<
@@ -116,7 +116,7 @@ struct pud_manifest {
     mhcs_t                     mhcs_;
     mhq_t                      mhq_;
 
-    pud_leaf_states            leaf_states_;
+    pud_active_states          active_states_;
     pud_query_holders          query_holders_;
     binder_t                   binder_;
     structure_watcher_t        structure_watcher_;

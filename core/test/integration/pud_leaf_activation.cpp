@@ -18,7 +18,7 @@
 #include "infrastructure/pud_refuted_leaves.hpp"
 #include "infrastructure/pud_refuted_node_checker.hpp"
 #include "infrastructure/pud_node_table.hpp"
-#include "infrastructure/pud_leaf_states.hpp"
+#include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
@@ -51,8 +51,8 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
     using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, lvcs_t>;
     using leaf_activator_t = pud_leaf_activator<
-        pud_leaf_states, pud_leaf_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
-    using leaf_releaser_t = pud_leaf_releaser<pud_leaf_states, pud_leaf_states, pud_query_holders, mhq_t>;
+        pud_active_states, pud_active_states, binder_t, watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
+    using leaf_releaser_t = pud_leaf_releaser<pud_active_states, pud_active_states, pud_query_holders, mhq_t>;
 
     test_functors functors;
     expr_pool exprs;
@@ -69,7 +69,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     pud_node_goals node_goals;
     axioms_t axioms;
     unit_queries_t unit_queries;
-    pud_leaf_states leaf_states;
+    pud_active_states active_states;
     pud_query_holders query_holders;
     refuted_node_checker_t refuted_node_checker{leaf_nodes, refuted_leaves, live_child_counts};
     replayer_t replayer{root_heads, substitutions, exprs, terms, terms, terms};
@@ -80,8 +80,8 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     watcher_t structure_watcher{terms, substitutions};
     leaf_query_maker_t leaf_query_maker{mhq, mhq, query_holders, node_goals, lvcs};
     leaf_activator_t leaf_activator{
-        leaf_states, leaf_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker};
-    leaf_releaser_t leaf_releaser{leaf_states, leaf_states, query_holders, mhq};
+        active_states, active_states, binder, structure_watcher, node_goals, call_sites, leaf_query_maker};
+    leaf_releaser_t leaf_releaser{active_states, active_states, query_holders, mhq};
 
     pud_node_id next_axiom = 8;
     pud_node_id root = 0;
@@ -158,7 +158,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     }
 
     pud_mhq_head_id query_on(pud_node_id leaf, pud_body_goal_id goal) {
-        return leaf_states.get(leaf).queries.at(goal);
+        return active_states.get(leaf).queries.at(goal);
     }
 
     void SetUp() override {
@@ -193,7 +193,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
 TEST_F(PudLeafActivationIntegrationTest, RootAdmitsAQueryPerOpenGoal) {
     activate(root);
-    const immer::map<pud_body_goal_id, pud_mhq_head_id>& queries = leaf_states.get(root).queries;
+    const immer::map<pud_body_goal_id, pud_mhq_head_id>& queries = active_states.get(root).queries;
     EXPECT_NE(queries.find(0), nullptr);
     EXPECT_NE(queries.find(1), nullptr);
     EXPECT_EQ(queries.size(), 2u);
@@ -204,14 +204,14 @@ TEST_F(PudLeafActivationIntegrationTest, RootAdmitsAQueryPerOpenGoal) {
 TEST_F(PudLeafActivationIntegrationTest, ChildAdmitsAQueryForEachNewGoal) {
     activate(root);
     activate(child);
-    EXPECT_TRUE(leaf_states.get(child).queries.find(2) != nullptr);
+    EXPECT_TRUE(active_states.get(child).queries.find(2) != nullptr);
     EXPECT_EQ(query_holders.get_holders(query_on(child, 2)).front(), child);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, FactChildWithNoGoalsOpensNothingNew) {
     activate(root);
     activate(sibling);
-    EXPECT_EQ(leaf_states.get(sibling).queries.find(2), nullptr);
+    EXPECT_EQ(active_states.get(sibling).queries.find(2), nullptr);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, BindingTheClosedGoalDoesNotForkItsQuery) {
@@ -276,7 +276,7 @@ TEST_F(PudLeafActivationIntegrationTest, UnitForkSurfacesInTheUnitQueue) {
 TEST_F(PudLeafActivationIntegrationTest, ReleasingALeafRemovesQueriesOnlyItHeld) {
     activate(root);
     activate(child);
-    ASSERT_NE(leaf_states.get(child).queries.find(2), nullptr);
+    ASSERT_NE(active_states.get(child).queries.find(2), nullptr);
     const pud_mhq_head_id child_only = query_on(child, 2);
     const pud_mhq_head_id shared = query_on(child, 1);
     release(child);

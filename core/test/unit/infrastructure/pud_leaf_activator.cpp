@@ -13,11 +13,11 @@ namespace {
 
 using queries_t = immer::map<pud_body_goal_id, pud_mhq_head_id>;
 
-struct MockGetLeafState {
-    MOCK_METHOD(const pud_leaf_state&, get, (pud_node_id));
+struct MockGetActiveState {
+    MOCK_METHOD(const pud_active_state&, get, (pud_node_id));
 };
-struct MockStoreLeafState {
-    MOCK_METHOD(void, store, (pud_node_id, pud_leaf_state));
+struct MockStoreActiveState {
+    MOCK_METHOD(void, store, (pud_node_id, pud_active_state));
 };
 struct MockBind {
     MOCK_METHOD(pud_ubs_state, bind, (const pud_ubs_state&, pud_node_id));
@@ -40,12 +40,12 @@ struct MockMakeQueries {
 };
 
 using test_activator_t = pud_leaf_activator<
-    NiceMock<MockGetLeafState>, NiceMock<MockStoreLeafState>, NiceMock<MockBind>, NiceMock<MockWatch>,
+    NiceMock<MockGetActiveState>, NiceMock<MockStoreActiveState>, NiceMock<MockBind>, NiceMock<MockWatch>,
     NiceMock<MockGetNodeGoals>, NiceMock<MockGetCallSite>, NiceMock<MockMakeQueries>>;
 
 struct PudLeafActivatorTest : public ::testing::Test {
-    NiceMock<MockGetLeafState> get_states;
-    NiceMock<MockStoreLeafState> store_states;
+    NiceMock<MockGetActiveState> get_states;
+    NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockBind> binder;
     NiceMock<MockWatch> watcher;
     NiceMock<MockGetNodeGoals> goals;
@@ -57,14 +57,14 @@ struct PudLeafActivatorTest : public ::testing::Test {
     pud_structure_watch parent_watch;
     pud_structure_watch child_watch;
     pud_ubs_state child_bindings;
-    pud_leaf_state parent_state;
+    pud_active_state parent_state;
 
     void SetUp() override {
         root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
         parent_watch.goal_to_reps = parent_watch.goal_to_reps.set(1, {});
         child_watch.goal_to_reps = child_watch.goal_to_reps.set(2, {});
         child_bindings.parents = child_bindings.parents.set(5, 1);
-        parent_state = pud_leaf_state{.bindings = {}, .watch = parent_watch, .queries = queries_t{}.set(1, 41)};
+        parent_state = pud_active_state{.bindings = {}, .watch = parent_watch, .queries = queries_t{}.set(1, 41)};
         ON_CALL(goals, get(_)).WillByDefault(ReturnRef(node_goals));
         ON_CALL(get_states, get(3)).WillByDefault(ReturnRef(parent_state));
         ON_CALL(call_sites, get(3)).WillByDefault(Return(0));
@@ -79,7 +79,7 @@ struct PudLeafActivatorTest : public ::testing::Test {
 TEST_F(PudLeafActivatorTest, ARootStartsFromEmptyBindingsAndStoresItsState) {
     ON_CALL(query_maker, make_root_queries(2, pud_ubs_state{}))
         .WillByDefault(Return(pud_goal_queries{.heads = queries_t{}.set(0, 50), .refuted = false}));
-    EXPECT_CALL(store_states, store(2, pud_leaf_state{.bindings = {}, .watch = root_watch, .queries = queries_t{}.set(0, 50)}));
+    EXPECT_CALL(store_states, store(2, pud_active_state{.bindings = {}, .watch = root_watch, .queries = queries_t{}.set(0, 50)}));
     EXPECT_FALSE(activator.activate_root(2));
 }
 
@@ -87,7 +87,7 @@ TEST_F(PudLeafActivatorTest, AChildContinuesItsParentsBindingsWatchAndQueries) {
     EXPECT_CALL(watcher, descend(parent_watch, child_bindings, 4u, 0u, _));
     EXPECT_CALL(query_maker, make_child_queries(parent_state.queries, 4u, child_bindings, 0u, std::vector<pud_body_goal_id>{1}))
         .WillOnce(Return(pud_goal_queries{.heads = queries_t{}.set(1, 60), .refuted = false}));
-    EXPECT_CALL(store_states, store(4, pud_leaf_state{.bindings = child_bindings, .watch = child_watch, .queries = queries_t{}.set(1, 60)}));
+    EXPECT_CALL(store_states, store(4, pud_active_state{.bindings = child_bindings, .watch = child_watch, .queries = queries_t{}.set(1, 60)}));
     EXPECT_FALSE(activator.activate_child(3, 4));
 }
 

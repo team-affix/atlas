@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_leaf_releaser.hpp"
-#include "value_objects/pud_leaf_state.hpp"
+#include "value_objects/pud_active_state.hpp"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -10,10 +10,10 @@ using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetLeafState {
-    MOCK_METHOD(const pud_leaf_state&, get, (pud_node_id));
+struct MockGetActiveState {
+    MOCK_METHOD(const pud_active_state&, get, (pud_node_id));
 };
-struct MockEraseLeafState {
+struct MockEraseActiveState {
     MOCK_METHOD(void, erase, (pud_node_id));
 };
 struct MockReleaseQuery {
@@ -24,13 +24,13 @@ struct MockRemoveQuery {
 };
 
 struct PudLeafReleaserTest : public ::testing::Test {
-    NiceMock<MockGetLeafState> states;
-    NiceMock<MockEraseLeafState> erase_states;
+    NiceMock<MockGetActiveState> states;
+    NiceMock<MockEraseActiveState> erase_states;
     NiceMock<MockReleaseQuery> holders;
     NiceMock<MockRemoveQuery> queries;
-    pud_leaf_releaser<NiceMock<MockGetLeafState>, NiceMock<MockEraseLeafState>, NiceMock<MockReleaseQuery>, NiceMock<MockRemoveQuery>>
+    pud_leaf_releaser<NiceMock<MockGetActiveState>, NiceMock<MockEraseActiveState>, NiceMock<MockReleaseQuery>, NiceMock<MockRemoveQuery>>
         releaser{states, erase_states, holders, queries};
-    pud_leaf_state state{
+    pud_active_state state{
         .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(0, 30).set(1, 31)};
 
     void SetUp() override {

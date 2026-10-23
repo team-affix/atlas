@@ -119,7 +119,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | T3 | Resolved | Integration slices (manifest, search stack, leaf activation, bind maps, …). |
 | T4 | Resolved | Hand-rolled fakes removed; GMock + `pud_search_tree` / harness helpers. |
 | T5 | Resolved | No tests asserting ubs map internals; public bind/unify outcomes only. |
-| T6 | Justified | `EXPECT_THROW` on `pud_node_table::get` / `pud_leaf_states::get` documents public contract for invalid ids (not production paths). |
+| T6 | Justified | `EXPECT_THROW` on `pud_node_table::get` / `pud_active_states::get` documents public contract for invalid ids (not production paths). |
 | T7 | Resolved | `pud_manifest_harness` uses production binder/materializer for reads. |
 | T8 | Partial | Shared harness reduces duplication; some scenario overlap remains acceptable for readability. |
 | T9 | Resolved | Leak loop test removed; holder-based invariants instead. |
