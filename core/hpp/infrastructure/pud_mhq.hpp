@@ -1,160 +1,180 @@
 #ifndef PUD_MHQ_HPP
 #define PUD_MHQ_HPP
 
+#include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
-#include "value_objects/pud_forced_query_propagation.hpp"
-#include "value_objects/pud_forced_unfold_reason.hpp"
+#include "value_objects/expr.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
-#include "value_objects/pud_mhq_head_admission.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_query_resume_context.hpp"
-#include "debug_assert.hpp"
+#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_replay.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
+// The multi-headed query. Each head is a goal's query: at most one candidate under each axiom, kept
+// in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
+// to one. A head whose last candidate is refuted is reported as refuted; it stays until removed.
 template<
-    typename ReplayDescent,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveCandidateHead>
+    typename IEnterReplay,
+    typename IAxioms,
+    typename ITryAddCandidate,
+    typename ITryForkCandidate,
+    typename IRemoveCandidate,
+    typename IInvalidateCandidateLeaves,
+    typename IPushUnitQuery>
 struct pud_mhq {
-    pud_mhq(IMakeHead& make_head, IForkHead& fork_head, IRemoveCandidateHead& remove_candidate_head);
-    pud_mhq_head_admission try_add_head(const std::vector<ReplayDescent>& root_descents);
-    void remove_head(pud_mhq_head_id head_id);
-    std::optional<pud_forced_query_propagation> candidate_specialization_refuted(pud_mhcs_head_id candidate_head_id);
-    pud_mhq_head_admission try_fork_head(pud_mhq_head_id head_id, const std::vector<ReplayDescent>& root_descents);
-    bool check_head(pud_mhq_head_id head_id) const;
-    const std::unordered_set<pud_mhcs_head_id>& get_candidates(pud_mhq_head_id head_id) const;
-private:
-    pud_mhq_head_admission try_keep_head(
+    pud_mhq(
+        IEnterReplay& enter_replay,
+        IAxioms& axioms,
+        ITryAddCandidate& try_add_candidate,
+        ITryForkCandidate& try_fork_candidate,
+        IRemoveCandidate& remove_candidate,
+        IInvalidateCandidateLeaves& invalidate_candidate_leaves,
+        IPushUnitQuery& push_unit_query);
+    std::optional<pud_mhq_head_id> try_open(const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset);
+    std::optional<pud_mhq_head_id> try_fork(
         pud_mhq_head_id head_id,
-        const pud_query_resume_context& context);
-    void link(pud_mhq_head_id head_id, const std::vector<pud_mhcs_head_id>& candidate_ids);
-    std::unordered_set<pud_mhcs_head_id> unlink_head(pud_mhq_head_id head_id);
+        const pud_ubs_state& caller_ubs_state,
+        const expr* goal,
+        uint32_t frame_offset);
+    void remove(pud_mhq_head_id head_id);
+    std::vector<pud_mhq_head_id> invalidate_leaves(const std::vector<pud_node_id>& leaves);
+    std::vector<pud_mhcs_head_id> candidates(pud_mhq_head_id head_id) const;
+private:
+    struct candidacy {
+        pud_node_id axiom;
+        pud_mhcs_head_id candidate;
+    };
 
-    IMakeHead& make_head_;
-    IForkHead& fork_head_;
-    IRemoveCandidateHead& remove_candidate_head_;
+    std::optional<pud_mhq_head_id> try_admit(std::vector<candidacy> candidacies);
+
+    IEnterReplay& enter_replay_;
+    IAxioms& axioms_;
+    ITryAddCandidate& try_add_candidate_;
+    ITryForkCandidate& try_fork_candidate_;
+    IRemoveCandidate& remove_candidate_;
+    IInvalidateCandidateLeaves& invalidate_candidate_leaves_;
+    IPushUnitQuery& push_unit_query_;
 
     pud_mhq_head_id next_head_id_;
-    std::unordered_map<pud_mhq_head_id, Head> heads_;
-    std::unordered_map<pud_mhq_head_id, std::unordered_set<pud_mhcs_head_id>> head_to_candidates_;
+    std::unordered_map<pud_mhq_head_id, std::vector<candidacy>> queries_;
     std::unordered_map<pud_mhcs_head_id, pud_mhq_head_id> candidate_to_head_;
 };
 
 #define PUD_MHQ_TEMPLATE                                                                   \
-    template<typename ReplayDescent, typename Head, typename IMakeHead, typename IForkHead,  \
-             typename IRemoveCandidateHead>
-#define PUD_MHQ pud_mhq<ReplayDescent, Head, IMakeHead, IForkHead, IRemoveCandidateHead>
+    template<typename IEnterReplay, typename IAxioms, typename ITryAddCandidate,        \
+             typename ITryForkCandidate, typename IRemoveCandidate,                        \
+             typename IInvalidateCandidateLeaves, typename IPushUnitQuery>
+#define PUD_MHQ                                                                            \
+    pud_mhq<IEnterReplay, IAxioms, ITryAddCandidate, ITryForkCandidate, IRemoveCandidate, \
+        IInvalidateCandidateLeaves, IPushUnitQuery>
 
 PUD_MHQ_TEMPLATE
-PUD_MHQ::pud_mhq(IMakeHead& make_head, IForkHead& fork_head, IRemoveCandidateHead& remove_candidate_head)
-    : make_head_(make_head)
-    , fork_head_(fork_head)
-    , remove_candidate_head_(remove_candidate_head)
-    , next_head_id_(0) {}
+PUD_MHQ::pud_mhq(
+    IEnterReplay& enter_replay,
+    IAxioms& axioms,
+    ITryAddCandidate& try_add_candidate,
+    ITryForkCandidate& try_fork_candidate,
+    IRemoveCandidate& remove_candidate,
+    IInvalidateCandidateLeaves& invalidate_candidate_leaves,
+    IPushUnitQuery& push_unit_query)
+    : enter_replay_(enter_replay)
+    , axioms_(axioms)
+    , try_add_candidate_(try_add_candidate)
+    , try_fork_candidate_(try_fork_candidate)
+    , remove_candidate_(remove_candidate)
+    , invalidate_candidate_leaves_(invalidate_candidate_leaves)
+    , push_unit_query_(push_unit_query)
+    , next_head_id_(0)
+    , queries_()
+    , candidate_to_head_() {}
 
 PUD_MHQ_TEMPLATE
-pud_mhq_head_admission PUD_MHQ::try_add_head(
-    const std::vector<ReplayDescent>& root_descents) {
+std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
+    const pud_ubs_state& caller_ubs_state, const expr* goal, uint32_t frame_offset) {
+    std::vector<candidacy> candidacies;
+    for (pud_node_id axiom : axioms_) {
+        std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom);
+        if (!axiom_root.has_value())
+            continue;
+        const std::optional<pud_mhcs_head_id> candidate = try_add_candidate_.try_add(std::move(axiom_root.value()));
+        if (!candidate.has_value())
+            continue;
+        candidacies.push_back(candidacy{.axiom = axiom, .candidate = candidate.value()});
+    }
+    return try_admit(std::move(candidacies));
+}
+
+// A fork only looks under the axioms the forked head still has a candidate under: a specialization
+// never reaches a node the general query could not.
+PUD_MHQ_TEMPLATE
+std::optional<pud_mhq_head_id> PUD_MHQ::try_fork(
+    pud_mhq_head_id head_id,
+    const pud_ubs_state& caller_ubs_state,
+    const expr* goal,
+    uint32_t frame_offset) {
+    std::vector<candidacy> candidacies;
+    for (const candidacy& other : queries_.at(head_id)) {
+        std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, other.axiom);
+        if (!axiom_root.has_value())
+            continue;
+        const std::optional<pud_mhcs_head_id> candidate =
+            try_fork_candidate_.try_fork(other.candidate, std::move(axiom_root.value()));
+        if (!candidate.has_value())
+            continue;
+        candidacies.push_back(candidacy{.axiom = other.axiom, .candidate = candidate.value()});
+    }
+    return try_admit(std::move(candidacies));
+}
+
+PUD_MHQ_TEMPLATE
+void PUD_MHQ::remove(pud_mhq_head_id head_id) {
+    for (const candidacy& removed : queries_.at(head_id)) {
+        candidate_to_head_.erase(removed.candidate);
+        remove_candidate_.remove(removed.candidate);
+    }
+    queries_.erase(head_id);
+}
+
+PUD_MHQ_TEMPLATE
+std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaves(const std::vector<pud_node_id>& leaves) {
+    std::vector<pud_mhq_head_id> refuted;
+    for (pud_mhcs_head_id candidate : invalidate_candidate_leaves_.invalidate_leaves(leaves)) {
+        auto owner = candidate_to_head_.extract(candidate);
+        std::vector<candidacy>& candidacies = queries_.at(owner.mapped());
+        candidacies.erase(std::ranges::find(candidacies, candidate, &candidacy::candidate));
+        if (candidacies.empty()) {
+            refuted.push_back(owner.mapped());
+            continue;
+        }
+        if (candidacies.size() == 1)
+            push_unit_query_.push_back(owner.mapped());
+    }
+    return refuted;
+}
+
+PUD_MHQ_TEMPLATE
+std::vector<pud_mhcs_head_id> PUD_MHQ::candidates(pud_mhq_head_id head_id) const {
+    std::vector<pud_mhcs_head_id> candidate_ids;
+    for (const candidacy& held : queries_.at(head_id))
+        candidate_ids.push_back(held.candidate);
+    return candidate_ids;
+}
+
+PUD_MHQ_TEMPLATE
+std::optional<pud_mhq_head_id> PUD_MHQ::try_admit(std::vector<candidacy> candidacies) {
+    if (candidacies.empty())
+        return std::nullopt;
     const pud_mhq_head_id head_id = next_head_id_++;
-    auto [head_it, head_inserted] = heads_.emplace(head_id, make_head_.make(root_descents));
-    DEBUG_ASSERT(head_inserted);
-    return try_keep_head(head_id, head_it->second.resume());
-}
-
-PUD_MHQ_TEMPLATE
-void PUD_MHQ::remove_head(pud_mhq_head_id head_id) {
-    if (!heads_.contains(head_id))
-        return;
-    const std::unordered_set<pud_mhcs_head_id> candidate_ids = unlink_head(head_id);
-    heads_.erase(head_id);
-    for (pud_mhcs_head_id candidate_id : candidate_ids)
-        remove_candidate_head_.remove_head(candidate_id);
-}
-
-PUD_MHQ_TEMPLATE
-std::optional<pud_forced_query_propagation> PUD_MHQ::candidate_specialization_refuted(
-    pud_mhcs_head_id candidate_head_id) {
-    auto candidate_it = candidate_to_head_.find(candidate_head_id);
-    if (candidate_it == candidate_to_head_.end())
-        return std::nullopt;
-
-    const pud_mhq_head_id head_id = candidate_it->second;
-    candidate_to_head_.erase(candidate_it);
-    head_to_candidates_.at(head_id).erase(candidate_head_id);
-
-    std::optional<pud_forced_unfold_reason> reason = heads_.at(head_id).candidate_refuted(candidate_head_id);
-    if (!reason.has_value())
-        return std::nullopt;
-
-    const bool refuted = reason.value() == pud_forced_unfold_reason::refuted;
-    if (refuted) {
-        unlink_head(head_id);
-        heads_.erase(head_id);
-        return pud_refuted_query{.head_id = head_id};
-    }
-    return pud_unit_query{.head_id = head_id};
-}
-
-PUD_MHQ_TEMPLATE
-pud_mhq_head_admission PUD_MHQ::try_fork_head(
-    pud_mhq_head_id head_id,
-    const std::vector<ReplayDescent>& root_descents) {
-    const Head& old_head = heads_.at(head_id);
-    const pud_mhq_head_id new_head_id = next_head_id_++;
-    auto [new_head_it, new_head_inserted] = heads_.emplace(
-        new_head_id,
-        fork_head_.fork(old_head, root_descents));
-    DEBUG_ASSERT(new_head_inserted);
-    return try_keep_head(new_head_id, new_head_it->second.resume());
-}
-
-PUD_MHQ_TEMPLATE
-pud_mhq_head_admission PUD_MHQ::try_keep_head(
-    pud_mhq_head_id head_id,
-    const pud_query_resume_context& context) {
-    const bool refuted = context.forced_unfold_reason == pud_forced_unfold_reason::refuted;
-    if (refuted) {
-        heads_.erase(head_id);
-        return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = pud_refuted_query{.head_id = head_id}};
-    }
-    link(head_id, context.candidate_ids);
-    if (!context.forced_unfold_reason.has_value())
-        return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = std::nullopt};
-    return pud_mhq_head_admission{.head_id = head_id, .forced_propagation = pud_unit_query{.head_id = head_id}};
-}
-
-PUD_MHQ_TEMPLATE
-void PUD_MHQ::link(pud_mhq_head_id head_id, const std::vector<pud_mhcs_head_id>& candidate_ids) {
-    std::unordered_set<pud_mhcs_head_id>& head_candidates = head_to_candidates_[head_id];
-    for (pud_mhcs_head_id candidate_id : candidate_ids) {
-        head_candidates.insert(candidate_id);
-        const bool inserted = candidate_to_head_.emplace(candidate_id, head_id).second;
-        DEBUG_ASSERT(inserted);
-    }
-}
-
-PUD_MHQ_TEMPLATE
-std::unordered_set<pud_mhcs_head_id> PUD_MHQ::unlink_head(pud_mhq_head_id head_id) {
-    auto extracted = head_to_candidates_.extract(head_id);
-    if (extracted.empty())
-        return {};
-    for (pud_mhcs_head_id candidate_id : extracted.mapped())
-        candidate_to_head_.erase(candidate_id);
-    return std::move(extracted.mapped());
-}
-
-PUD_MHQ_TEMPLATE
-bool PUD_MHQ::check_head(pud_mhq_head_id head_id) const {
-    return heads_.contains(head_id);
-}
-
-PUD_MHQ_TEMPLATE
-const std::unordered_set<pud_mhcs_head_id>& PUD_MHQ::get_candidates(pud_mhq_head_id head_id) const {
-    return head_to_candidates_.at(head_id);
+    for (const candidacy& admitted : candidacies)
+        candidate_to_head_.emplace(admitted.candidate, head_id);
+    if (candidacies.size() == 1)
+        push_unit_query_.push_back(head_id);
+    queries_.emplace(head_id, std::move(candidacies));
+    return head_id;
 }
 
 #undef PUD_MHQ

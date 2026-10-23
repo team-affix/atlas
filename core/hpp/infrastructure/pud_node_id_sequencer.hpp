@@ -6,7 +6,6 @@
 struct pud_node_id_sequencer {
     pud_node_id_sequencer();
     pud_node_id next();
-    pud_node_id peek() const;
 private:
     pud_node_id next_;
 };

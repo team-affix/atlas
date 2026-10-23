@@ -3,149 +3,196 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_mhws.hpp"
+#include "pud_search_tree.hpp"
 
 using ::testing::_;
-using ::testing::Return;
+using ::testing::AnyNumber;
+using ::testing::ElementsAre;
+using ::testing::Field;
+using ::testing::IsEmpty;
+using ::testing::NiceMock;
 
 namespace {
 
-struct HeadOps {
-    MOCK_METHOD((std::optional<pud_node_id>), resume, ());
-    MOCK_METHOD((std::optional<pud_witness_advance_result<int, int>>), advance, ());
-};
-
-struct MockHead {
-    static HeadOps* ops;
-    std::optional<pud_node_id> resume() const { return ops->resume(); }
-    std::optional<pud_witness_advance_result<int, int>> advance() { return ops->advance(); }
-};
-
-HeadOps* MockHead::ops = nullptr;
-
-struct MockMakeHead {
-    MOCK_METHOD(MockHead, make, (int));
-};
-
-struct MockForkHead {
-    MOCK_METHOD(MockHead, fork, (const MockHead&, int));
-};
-
-using test_mhws_t = pud_mhws<int, int, MockHead, MockMakeHead, MockForkHead>;
+using test_mhws_t = pud_mhws<
+    NiceMock<MockDescendReplay>, NiceMock<MockCheckNodeLeaf>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockGetChildren>>;
 
 struct PudMhwsTest : public ::testing::Test {
-    HeadOps ops;
-    MockMakeHead make_head;
-    MockForkHead fork_head;
-    test_mhws_t mhws{make_head, fork_head};
-    pud_node_id leaf_a = 1;
-    pud_node_id leaf_b = 2;
+    pud_search_tree tree;
+    test_mhws_t mhws{tree.descend, tree.leaves, tree.refuted, tree.children};
 
-    void SetUp() override {
-        MockHead::ops = &ops;
-        ON_CALL(make_head, make(_)).WillByDefault(Return(MockHead{}));
-        ON_CALL(fork_head, fork(_, _)).WillByDefault(Return(MockHead{}));
+    // Refutes the leaf and reports which searches it exhausts; a search standing elsewhere is untouched.
+    std::vector<pud_mhws_head_id> refute_and_invalidate(pud_node_id leaf) {
+        tree.refute(leaf);
+        return mhws.invalidate_leaves({leaf});
     }
 };
 
-TEST_F(PudMhwsTest, AddThatFindsNoLeafIsNotRemembered) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    EXPECT_FALSE(mhws.try_add_head(1).has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
 }
 
-TEST_F(PudMhwsTest, RemoveOfUnknownIdLeavesALiveSearch) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    mhws.remove_head(*id + 100);
-    auto gone = mhws.invalidate_leaf(leaf_a);
-    ASSERT_EQ(gone.size(), 1u);
-    EXPECT_EQ(gone[0], *id);
+TEST_F(PudMhwsTest, ALeafSearchRootIsItsOwnWitness) {
+    tree.leaf(1);
+    const std::optional<pud_mhws_head_id> head = mhws.try_add(pud_replay_at(1, 0));
+    ASSERT_TRUE(head.has_value());
+    EXPECT_THAT(refute_and_invalidate(1), ElementsAre(head.value()));
 }
 
-TEST_F(PudMhwsTest, InvalidateOfUnoccupiedLeafIsEmpty) {
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
+TEST_F(PudMhwsTest, ASearchThatReachesNoLeafIsNotAdmitted) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {});
+    tree.leaf(2);
+    tree.block(2);
+    EXPECT_FALSE(mhws.try_add(pud_replay_at(0, 0)).has_value());
 }
 
-TEST_F(PudMhwsTest, ForkThatFindsNoLeafIsNotRemembered) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    EXPECT_FALSE(mhws.try_fork_head(*id, 2).has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_b).empty());
+TEST_F(PudMhwsTest, ARefutedSearchRootIsNotAdmitted) {
+    tree.leaf(1);
+    tree.refute(1);
+    EXPECT_FALSE(mhws.try_add(pud_replay_at(1, 0)).has_value());
 }
 
-TEST_F(PudMhwsTest, InvalidateMovesSearchOntoTheNewLeaf) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(leaf_a))
-        .WillOnce(Return(leaf_b))
-        .WillOnce(Return(std::nullopt));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
-    auto found = mhws.invalidate_leaf(leaf_b);
-    ASSERT_EQ(found.size(), 1u);
-    EXPECT_EQ(found[0], *id);
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
+TEST_F(PudMhwsTest, TheWitnessIsTheFirstLeafDepthFirstInChildOrder) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3});
+    tree.leaf(3);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    EXPECT_THAT(mhws.invalidate_leaves({2}), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(3), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(2), ElementsAre(head));
 }
 
-TEST_F(PudMhwsTest, InvalidateOfALeafWithNoNewLeafReturnsThatId) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    auto gone = mhws.invalidate_leaf(leaf_a);
-    ASSERT_EQ(gone.size(), 1u);
-    EXPECT_EQ(gone[0], *id);
+TEST_F(PudMhwsTest, BlockedAndRefutedChildrenAreSkipped) {
+    tree.branch(0, {1, 2, 3});
+    tree.leaf(1);
+    tree.block(1);
+    tree.leaf(2);
+    tree.refute(2);
+    tree.leaf(3);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    EXPECT_THAT(refute_and_invalidate(3), ElementsAre(head));
 }
 
-TEST_F(PudMhwsTest, AdvanceWithResultLeavesHeadLinked) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-
-    pud_witness_advance_result<int, int> peel{.root_descent = 2, .root_next_sibling_it = 0, .root_end_sibling_it = 0};
-    EXPECT_CALL(ops, advance()).WillOnce(Return(std::optional<pud_witness_advance_result<int, int>>{peel}));
-    auto result = mhws.advance_head(*id);
-    ASSERT_TRUE(result.has_value());
-
-    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt));
-    auto gone = mhws.invalidate_leaf(leaf_a);
-    ASSERT_EQ(gone.size(), 1u);
-    EXPECT_EQ(gone[0], *id);
+TEST_F(PudMhwsTest, ARefutedInteriorNodeHidesItsLeaves) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3});
+    tree.leaf(3);
+    tree.refute(1);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    EXPECT_THAT(refute_and_invalidate(2), ElementsAre(head));
 }
 
-TEST_F(PudMhwsTest, AdvanceWithNulloptRemovesHead) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a));
-    auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-
-    EXPECT_CALL(ops, advance()).WillOnce(Return(std::nullopt));
-    auto result = mhws.advance_head(*id);
-    EXPECT_FALSE(result.has_value());
-
-    EXPECT_TRUE(mhws.invalidate_leaf(leaf_a).empty());
+TEST_F(PudMhwsTest, AnExpandedWitnessIsSearchedBelow) {
+    tree.branch(0, {1});
+    tree.leaf(1);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    tree.branch(1, {4});
+    tree.leaf(4);
+    EXPECT_THAT(mhws.invalidate_leaves({1}), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(4), ElementsAre(head));
 }
 
-} // namespace
-
-// ── check_head ───────────────────────────────────────────────────────────────
-
-TEST_F(PudMhwsTest, CheckHeadFollowsAHeadsLife) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(leaf_a)).WillOnce(Return(std::nullopt));
-    const auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    EXPECT_TRUE(mhws.check_head(*id));
-    EXPECT_FALSE(mhws.check_head(*id + 1));
-    mhws.invalidate_leaf(leaf_a);
-    EXPECT_FALSE(mhws.check_head(*id));
+TEST_F(PudMhwsTest, ADeadSubtreeIsLeftForTheParentsNextChild) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3, 4});
+    tree.leaf(3);
+    tree.leaf(4);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    tree.refute(4);
+    EXPECT_THAT(refute_and_invalidate(3), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(2), ElementsAre(head));
 }
 
-TEST_F(PudMhwsTest, CheckHeadIsFalseOnceRemovedOrNeverAdmitted) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(std::nullopt)).WillOnce(Return(leaf_a));
-    EXPECT_FALSE(mhws.try_add_head(1).has_value());
-    EXPECT_FALSE(mhws.check_head(0));
-    const auto id = mhws.try_add_head(1);
-    ASSERT_TRUE(id.has_value());
-    mhws.remove_head(*id);
-    EXPECT_FALSE(mhws.check_head(*id));
+TEST_F(PudMhwsTest, AnExhaustedSearchIsReportedOnceAndDropped) {
+    tree.leaf(1);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(1, 0)).value();
+    EXPECT_THAT(refute_and_invalidate(1), ElementsAre(head));
+    EXPECT_THAT(mhws.invalidate_leaves({1}), IsEmpty());
+}
+
+TEST_F(PudMhwsTest, InvalidatingAnUnwitnessedLeafChangesNothing) {
+    tree.leaf(1);
+    tree.leaf(2);
+    mhws.try_add(pud_replay_at(1, 0));
+    EXPECT_THAT(refute_and_invalidate(2), IsEmpty());
+}
+
+TEST_F(PudMhwsTest, EverySearchOnAnInvalidatedLeafResumes) {
+    tree.branch(0, {1, 2});
+    tree.leaf(1);
+    tree.leaf(2);
+    const pud_mhws_head_id first = mhws.try_add(pud_replay_at(0, 0)).value();
+    const pud_mhws_head_id second = mhws.try_add(pud_replay_at(1, 0)).value();
+    EXPECT_THAT(refute_and_invalidate(1), ElementsAre(second));
+    EXPECT_THAT(refute_and_invalidate(2), ElementsAre(first));
+}
+
+TEST_F(PudMhwsTest, ARemovedSearchIsNeverResumed) {
+    tree.leaf(1);
+    mhws.remove(mhws.try_add(pud_replay_at(1, 0)).value());
+    EXPECT_THAT(refute_and_invalidate(1), IsEmpty());
+}
+
+TEST_F(PudMhwsTest, AdvanceStepsTheSearchRootOntoThePathAndReportsTheNextSibling) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3});
+    tree.leaf(3);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    EXPECT_EQ(mhws.advance(head), (pud_witness_advance{.search_root = pud_replay_at(1, 0), .next_sibling = 1}));
+    EXPECT_EQ(mhws.advance(head), (pud_witness_advance{.search_root = pud_replay_at(3, 0), .next_sibling = 1}));
+}
+
+TEST_F(PudMhwsTest, AdvanceKeepsTheSearchResumableBelowItsNewRoot) {
+    tree.branch(0, {1});
+    tree.branch(1, {3, 4});
+    tree.leaf(3);
+    tree.leaf(4);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    mhws.advance(head);
+    EXPECT_THAT(refute_and_invalidate(3), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(4), ElementsAre(head));
+}
+
+TEST_F(PudMhwsTest, AdvancingASearchStandingOnItsRootDropsIt) {
+    tree.leaf(1);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(1, 0)).value();
+    EXPECT_FALSE(mhws.advance(head).has_value());
+    EXPECT_THAT(refute_and_invalidate(1), IsEmpty());
+}
+
+TEST_F(PudMhwsTest, AForkReplaysTheSearchPathFromItsNewRoot) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3});
+    tree.leaf(3);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    EXPECT_CALL(tree.descend, descend(_, _)).Times(AnyNumber());
+    EXPECT_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), 1u));
+    EXPECT_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), 3u));
+    const pud_mhws_head_id fork = mhws.try_fork(head, pud_replay_at(0, 9)).value();
+    EXPECT_THAT(refute_and_invalidate(3), IsEmpty());
+    EXPECT_THAT(refute_and_invalidate(2), ::testing::UnorderedElementsAre(head, fork));
+}
+
+TEST_F(PudMhwsTest, AForkThatCannotReplayItsPathMovesOnToLaterSiblings) {
+    tree.branch(0, {1, 2});
+    tree.branch(1, {3});
+    tree.leaf(3);
+    tree.leaf(2);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    ON_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), 1u)).WillByDefault(::testing::Return(std::nullopt));
+    const pud_mhws_head_id fork = mhws.try_fork(head, pud_replay_at(0, 9)).value();
+    EXPECT_THAT(refute_and_invalidate(2), ElementsAre(fork));
+    EXPECT_THAT(refute_and_invalidate(3), ElementsAre(head));
+}
+
+TEST_F(PudMhwsTest, AForkThatReachesNoLeafIsNotAdmitted) {
+    tree.branch(0, {1});
+    tree.leaf(1);
+    const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();
+    ON_CALL(tree.descend, descend(Field(&pud_replay::frame_offset, 9u), _)).WillByDefault(::testing::Return(std::nullopt));
+    EXPECT_FALSE(mhws.try_fork(head, pud_replay_at(0, 9)).has_value());
 }

@@ -1,70 +1,31 @@
+#include <set>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
-#include "infrastructure/expr_pool.hpp"
-#include "infrastructure/globalizer.hpp"
-#include "infrastructure/pud_acceptor.hpp"
-#include "infrastructure/pud_call_sites.hpp"
-#include "infrastructure/pud_node_added_body_goals.hpp"
-#include "infrastructure/pud_node_added_substitutions.hpp"
-#include "infrastructure/pud_node_heads.hpp"
-#include "infrastructure/pud_node_parents.hpp"
-#include "infrastructure/pud_cycle_detector_factory.hpp"
-#include "infrastructure/pud_normalizer_factory.hpp"
-#include "infrastructure/pud_open_body_goal_finder.hpp"
-#include "infrastructure/pud_root_nodes.hpp"
-#include "infrastructure/pud_transient_ubs_state.hpp"
-#include "infrastructure/pud_exporter.hpp"
-#include "infrastructure/pud_unifier.hpp"
-#include "infrastructure/pud_touched_var_logger.hpp"
+#include "infrastructure/pud_manifest.hpp"
+#include "infrastructure/ubs_bind_map.hpp"
 
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 
+// The acceptor over real node stores and the real replayer and term machinery. Nodes are written
+// straight into the stores, so a test states exactly what each node adds.
 struct PudAcceptorIntegrationTest : public ::testing::Test {
-    using bind_map_t = ubs_bind_map<
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, bind_map_t>;
-    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
-    using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
-    using unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
-    using exporter_t = pud_exporter<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t, bind_map_t>;
-    using open_goal_finder_t = pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites>;
-    using acceptor_t = pud_acceptor<
-        bind_map_t, cycle_detector_t, unifier_t, logger_t, exporter_t,
-        open_goal_finder_t, pud_node_heads, pud_node_added_substitutions, globalizer, expr_pool,
-        expr_pool, cycle_detector_factory_t>;
-
     test_functors functors;
-    expr_pool exprs;
-    globalizer globalize;
-    pud_root_nodes roots;
-    pud_node_parents parents;
-    pud_node_heads heads;
-    pud_node_added_body_goals body_goals;
-    pud_node_added_substitutions substitutions;
-    pud_call_sites call_sites;
-    cycle_detector_factory_t cycle_detector_factory{globalize};
-    open_goal_finder_t open_goal_finder{body_goals, call_sites};
-    acceptor_t acceptor{
-        open_goal_finder, heads, substitutions, globalize, exprs, exprs, cycle_detector_factory};
+    pud_manifest manifest{0};
+    pud_manifest::acceptor_t& acceptor = manifest.acceptor_;
     pud_ubs_state empty_state;
-    pud_node_id next_node = 1;
+    std::set<pud_node_id> expanded;
 
-    const expr* var(uint32_t index) { return exprs.make_var(index); }
+    const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
     const expr* functor(const char* name, std::vector<const expr*> args) {
-        return exprs.make_functor(functors.id(name), args);
+        return manifest.expr_pool_.make_functor(functors.id(name), args);
     }
     const expr* atom(const char* name) { return functor(name, {}); }
 
     pud_node_id root(const expr* head, std::vector<const expr*> goals) {
-        const pud_node_id node = next_node++;
-        roots.mark_root(node);
-        heads.store(node, head);
-        body_goals.store(node, std::move(goals));
-        return node;
+        return manifest.node_maker_.make_root(head, goals, 0);
     }
 
     pud_node_id child(
@@ -72,19 +33,16 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
         size_t parent_call_site,
         std::vector<pud_substitution> child_substitutions,
         std::vector<const expr*> goals) {
-        const pud_node_id node = next_node++;
-        parents.store(node, parent);
-        call_sites.store(parent, parent_call_site);
-        substitutions.store(node, std::move(child_substitutions));
-        body_goals.store(node, std::move(goals));
-        return node;
+        if (expanded.insert(parent).second)
+            manifest.call_sites_.store(parent, parent_call_site);
+        return manifest.node_maker_.make_child(
+            parent, parent_call_site, pud_child_delta{.substitutions = child_substitutions, .body_goals = goals, .var_count = 0});
     }
 
     pud_ubs_state bound(uint32_t index, const expr* value) {
-        pud_transient_ubs_state transient_ubs_state{empty_state};
-        auto bind_map = transient_ubs_state.make_bind_map();
-        bind_map.instantiate(index, framed_expr{value, 0});
-        return transient_ubs_state.to_persistent_state();
+        ubs_bind_map bind_map{empty_state};
+        bind_map.instantiate(bind_map.find(index), framed_expr{value, 0});
+        return std::move(bind_map).persist();
     }
 };
 

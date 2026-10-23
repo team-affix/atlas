@@ -1,81 +1,98 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <immer/map.hpp>
 #include "infrastructure/pud_leaf_activator.hpp"
-#include "value_objects/pud_body_goal_id.hpp"
-#include "value_objects/expr.hpp"
+#include "value_objects/pud_goal_list.hpp"
 
 using ::testing::_;
-using ::testing::Field;
-using ::testing::InSequence;
-using ::testing::StrictMock;
+using ::testing::NiceMock;
+using ::testing::Return;
+using ::testing::ReturnRef;
 
 namespace {
-using body_goal_exprs_t = immer::map<pud_body_goal_id, const expr*>;
 
-struct MockDescent {
-    struct expr_view {
-        const body_goal_exprs_t* goals;
-        const body_goal_exprs_t& body_goal_exprs() const { return *goals; }
-    };
-    struct pq_view {
-        const std::vector<pud_body_goal_id>* refuted;
-        const std::vector<pud_body_goal_id>& refuted_goals() const { return *refuted; }
-    };
-    int tag;
-    const body_goal_exprs_t* goals;
-    const std::vector<pud_body_goal_id>* refuted;
-    expr_view body_goal_expr() const { return {goals}; }
-    pq_view body_goal_pq() const { return {refuted}; }
-};
+using queries_t = immer::map<pud_body_goal_id, pud_mhq_head_id>;
 
-struct MockStoreNodeDescent {
-    MOCK_METHOD(void, store, (pud_node_id, MockDescent));
+struct MockGetLeafState {
+    MOCK_METHOD(const pud_leaf_state&, get, (pud_node_id));
 };
-struct MockMarkLeafOpen {
-    MOCK_METHOD(void, mark_leaf_open, (pud_node_id));
+struct MockStoreLeafState {
+    MOCK_METHOD(void, store, (pud_node_id, pud_leaf_state));
 };
-struct MockRefuteNode {
-    MOCK_METHOD(void, refute, (pud_node_id));
+struct MockBind {
+    MOCK_METHOD(pud_ubs_state, bind, (const pud_ubs_state&, pud_node_id));
+};
+struct MockWatch {
+    MOCK_METHOD(pud_structure_watch, watch_root, (const pud_ubs_state&, const pud_goal_list&));
+    MOCK_METHOD(pud_structure_watch_change, descend,
+        (const pud_structure_watch&, const pud_ubs_state&, pud_node_id, pud_body_goal_id, const pud_goal_list&));
+};
+struct MockGetNodeGoals {
+    MOCK_METHOD(const pud_goal_list&, get, (pud_node_id));
+};
+struct MockGetCallSite {
+    MOCK_METHOD(pud_body_goal_id, get, (pud_node_id));
+};
+struct MockMakeQueries {
+    MOCK_METHOD(pud_goal_queries, make_root_queries, (pud_node_id, const pud_ubs_state&));
+    MOCK_METHOD(pud_goal_queries, make_child_queries,
+        (const queries_t&, pud_node_id, const pud_ubs_state&, pud_body_goal_id, const std::vector<pud_body_goal_id>&));
 };
 
 using test_activator_t = pud_leaf_activator<
-    MockDescent, StrictMock<MockStoreNodeDescent>, StrictMock<MockMarkLeafOpen>, StrictMock<MockRefuteNode>>;
-
-const expr* expr_at(uintptr_t address) {
-    return reinterpret_cast<const expr*>(address);
-}
+    NiceMock<MockGetLeafState>, NiceMock<MockStoreLeafState>, NiceMock<MockBind>, NiceMock<MockWatch>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetCallSite>, NiceMock<MockMakeQueries>>;
 
 struct PudLeafActivatorTest : public ::testing::Test {
-    StrictMock<MockStoreNodeDescent> descents;
-    StrictMock<MockMarkLeafOpen> open_leaves;
-    StrictMock<MockRefuteNode> refuter;
-    test_activator_t activator{descents, open_leaves, refuter};
-    pud_node_id leaf = 7;
-    body_goal_exprs_t no_goals;
-    body_goal_exprs_t two_goals = body_goal_exprs_t{}.set(0, expr_at(0x10)).set(1, expr_at(0x20));
-    std::vector<pud_body_goal_id> no_refuted_goals;
-    std::vector<pud_body_goal_id> one_refuted_goal{1};
+    NiceMock<MockGetLeafState> get_states;
+    NiceMock<MockStoreLeafState> store_states;
+    NiceMock<MockBind> binder;
+    NiceMock<MockWatch> watcher;
+    NiceMock<MockGetNodeGoals> goals;
+    NiceMock<MockGetCallSite> call_sites;
+    NiceMock<MockMakeQueries> query_maker;
+    test_activator_t activator{get_states, store_states, binder, watcher, goals, call_sites, query_maker};
+    pud_goal_list node_goals{.goals = {}, .next_id = 0};
+    pud_structure_watch root_watch;
+    pud_structure_watch parent_watch;
+    pud_structure_watch child_watch;
+    pud_ubs_state child_bindings;
+    pud_leaf_state parent_state;
+
+    void SetUp() override {
+        root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
+        parent_watch.goal_to_reps = parent_watch.goal_to_reps.set(1, {});
+        child_watch.goal_to_reps = child_watch.goal_to_reps.set(2, {});
+        child_bindings.parents = child_bindings.parents.set(5, 1);
+        parent_state = pud_leaf_state{.bindings = {}, .watch = parent_watch, .queries = queries_t{}.set(1, 41)};
+        ON_CALL(goals, get(_)).WillByDefault(ReturnRef(node_goals));
+        ON_CALL(get_states, get(3)).WillByDefault(ReturnRef(parent_state));
+        ON_CALL(call_sites, get(3)).WillByDefault(Return(0));
+        ON_CALL(binder, bind(_, 4)).WillByDefault(Return(child_bindings));
+        ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
+        ON_CALL(watcher, watch_root(_, _)).WillByDefault(Return(root_watch));
+    }
 };
 
 }
 
-TEST_F(PudLeafActivatorTest, LeafWithOpenGoalsIsStoredThenOpened) {
-    InSequence in_order;
-    EXPECT_CALL(descents, store(leaf, Field(&MockDescent::tag, 3)));
-    EXPECT_CALL(open_leaves, mark_leaf_open(leaf));
-    activator.activate(leaf, MockDescent{3, &two_goals, &no_refuted_goals});
+TEST_F(PudLeafActivatorTest, ARootStartsFromEmptyBindingsAndStoresItsState) {
+    ON_CALL(query_maker, make_root_queries(2, pud_ubs_state{}))
+        .WillByDefault(Return(pud_goal_queries{.heads = queries_t{}.set(0, 50), .refuted = false}));
+    EXPECT_CALL(store_states, store(2, pud_leaf_state{.bindings = {}, .watch = root_watch, .queries = queries_t{}.set(0, 50)}));
+    EXPECT_FALSE(activator.activate_root(2));
 }
 
-TEST_F(PudLeafActivatorTest, LeafWithoutGoalsIsStoredButNotOpened) {
-    EXPECT_CALL(descents, store(leaf, _));
-    activator.activate(leaf, MockDescent{3, &no_goals, &no_refuted_goals});
+TEST_F(PudLeafActivatorTest, AChildContinuesItsParentsBindingsWatchAndQueries) {
+    EXPECT_CALL(watcher, descend(parent_watch, child_bindings, 4u, 0u, _));
+    EXPECT_CALL(query_maker, make_child_queries(parent_state.queries, 4u, child_bindings, 0u, std::vector<pud_body_goal_id>{1}))
+        .WillOnce(Return(pud_goal_queries{.heads = queries_t{}.set(1, 60), .refuted = false}));
+    EXPECT_CALL(store_states, store(4, pud_leaf_state{.bindings = child_bindings, .watch = child_watch, .queries = queries_t{}.set(1, 60)}));
+    EXPECT_FALSE(activator.activate_child(3, 4));
 }
 
-TEST_F(PudLeafActivatorTest, LeafWithARefutedGoalIsStoredThenRefutedAndNeverOpened) {
-    InSequence in_order;
-    EXPECT_CALL(descents, store(leaf, _));
-    EXPECT_CALL(refuter, refute(leaf));
-    activator.activate(leaf, MockDescent{3, &two_goals, &one_refuted_goal});
+TEST_F(PudLeafActivatorTest, ALeafWithAGoalWithoutCandidatesIsStoredAndReportedRefuted) {
+    ON_CALL(query_maker, make_child_queries(_, _, _, _, _)).WillByDefault(Return(pud_goal_queries{.heads = {}, .refuted = true}));
+    EXPECT_CALL(store_states, store(4, _));
+    EXPECT_TRUE(activator.activate_child(3, 4));
 }

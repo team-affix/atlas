@@ -4,93 +4,93 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
+#include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/ubs_class.hpp"
 
-template<
-    typename IGlobalize,
-    typename IFind,
-    typename IFindValue,
-    typename IEquate,
-    typename IInstantiate,
-    typename IDetectCycle>
+// Unifies two framed terms in place. Terms are hash-consed DAGs, so each functor pair is unified at
+// most once per call; cycles are looked for once, after every pair has been unified.
+template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle>
 struct pud_unifier {
     pud_unifier(
         IGlobalize& globalize,
         IFind& find,
-        IFindValue& find_value,
         IEquate& equate,
         IInstantiate& instantiate,
         IDetectCycle& detect_cycle);
     bool unify(framed_expr lhs, framed_expr rhs);
 private:
-    uint32_t find_root(framed_expr var);
+    using pair_t = std::pair<framed_expr, framed_expr>;
+    struct pair_hash {
+        size_t operator()(const pair_t& pair) const noexcept;
+    };
+
+    ubs_class find_class(framed_expr var);
 
     IGlobalize& globalize_;
     IFind& find_;
-    IFindValue& find_value_;
     IEquate& equate_;
     IInstantiate& instantiate_;
     IDetectCycle& detect_cycle_;
 };
 
 #define PUD_UNIFIER_TEMPLATE                                                                     \
-    template<typename IGlobalize, typename IFind, typename IFindValue, typename IEquate,        \
-             typename IInstantiate, typename IDetectCycle>
-#define PUD_UNIFIER pud_unifier<IGlobalize, IFind, IFindValue, IEquate, IInstantiate, IDetectCycle>
+    template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate,      \
+             typename IDetectCycle>
+#define PUD_UNIFIER pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle>
 
 PUD_UNIFIER_TEMPLATE
 PUD_UNIFIER::pud_unifier(
     IGlobalize& globalize,
     IFind& find,
-    IFindValue& find_value,
     IEquate& equate,
     IInstantiate& instantiate,
     IDetectCycle& detect_cycle)
     : globalize_(globalize)
     , find_(find)
-    , find_value_(find_value)
     , equate_(equate)
     , instantiate_(instantiate)
     , detect_cycle_(detect_cycle) {}
 
 PUD_UNIFIER_TEMPLATE
 bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
-    std::vector<std::pair<framed_expr, framed_expr>> pending{{lhs, rhs}};
+    std::vector<pair_t> pending{{lhs, rhs}};
+    std::unordered_set<pair_t, pair_hash> unified_functors;
     std::vector<uint32_t> touched;
     while (!pending.empty()) {
         const auto [left, right] = pending.back();
         pending.pop_back();
+        if (left == right)
+            continue;
         const bool left_is_var = std::holds_alternative<expr::var>(left.skeleton->content);
         const bool right_is_var = std::holds_alternative<expr::var>(right.skeleton->content);
 
         if (left_is_var && right_is_var) {
-            const uint32_t left_root = find_root(left);
-            const uint32_t right_root = find_root(right);
-            if (left_root == right_root)
+            const ubs_class left_class = find_class(left);
+            const ubs_class right_class = find_class(right);
+            if (left_class.root == right_class.root)
                 continue;
-            const std::optional<framed_expr> left_value = find_value_.find_value(left_root);
-            const std::optional<framed_expr> right_value = find_value_.find_value(right_root);
-            equate_.equate(left_root, right_root);
-            touched.push_back(left_root);
-            if (left_value.has_value() && right_value.has_value())
-                pending.emplace_back(left_value.value(), right_value.value());
+            const std::optional<framed_expr> displaced = equate_.equate(left_class, right_class);
+            touched.push_back(left_class.root);
+            if (displaced.has_value())
+                pending.emplace_back(left, displaced.value());
             continue;
         }
 
         if (left_is_var || right_is_var) {
-            const framed_expr var = left_is_var ? left : right;
             const framed_expr term = left_is_var ? right : left;
-            const uint32_t root = find_root(var);
-            if (const std::optional<framed_expr> value = find_value_.find_value(root)) {
-                pending.emplace_back(value.value(), term);
+            const ubs_class var_class = find_class(left_is_var ? left : right);
+            if (var_class.value.has_value()) {
+                pending.emplace_back(var_class.value.value(), term);
                 continue;
             }
-            instantiate_.instantiate(root, term);
-            touched.push_back(root);
+            instantiate_.instantiate(var_class, term);
+            touched.push_back(var_class.root);
             continue;
         }
 
@@ -98,6 +98,8 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
         const expr::functor& right_functor = std::get<expr::functor>(right.skeleton->content);
         if (left_functor.id != right_functor.id || left_functor.args.size() != right_functor.args.size())
             return false;
+        if (left_functor.args.empty() || !unified_functors.insert({left, right}).second)
+            continue;
         for (size_t arg = left_functor.args.size(); arg-- > 0;)
             pending.emplace_back(
                 framed_expr{left_functor.args[arg], left.frame_offset},
@@ -107,7 +109,13 @@ bool PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
 }
 
 PUD_UNIFIER_TEMPLATE
-uint32_t PUD_UNIFIER::find_root(framed_expr var) {
+size_t PUD_UNIFIER::pair_hash::operator()(const pair_t& pair) const noexcept {
+    const size_t left_hash = framed_expr_hash{}(pair.first);
+    return left_hash ^ (framed_expr_hash{}(pair.second) + 0x9e3779b97f4a7c15ull + (left_hash << 6) + (left_hash >> 2));
+}
+
+PUD_UNIFIER_TEMPLATE
+ubs_class PUD_UNIFIER::find_class(framed_expr var) {
     const uint32_t index = std::get<expr::var>(var.skeleton->content).index;
     return find_.find(globalize_.globalize(var.frame_offset, index));
 }

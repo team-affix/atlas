@@ -2,54 +2,47 @@
 #define PUD_MANIFEST_HARNESS_HPP
 
 #include <algorithm>
-#include <map>
 #include <cstdint>
+#include <deque>
+#include <map>
 #include <optional>
-#include <random>
 #include <set>
-#include <sstream>
-#include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/pud_manifest.hpp"
-#include "infrastructure/pud_random_rule_chooser.hpp"
-#include "infrastructure/pud_random_subgoal_chooser.hpp"
-#include "infrastructure/pud_random_unit_solver_manifest.hpp"
+#include "infrastructure/ubs_bind_map.hpp"
+#include "value_objects/pud_frontier_change.hpp"
+#include "value_objects/pud_solution.hpp"
 #include "value_objects/pud_unfold.hpp"
 #include "value_objects/rule.hpp"
 
+// Which leaves the harness drives: every open leaf of the database, or only conjecture leaves, which
+// the production solver drives.
 enum struct pud_harness_scope { every_open_leaf, conjecture_leaves };
 
-template<typename Manifest>
+// Builds databases on a real manifest and drives it: conjectures through the solver, a bare
+// database by expanding its open leaves, forced unfolds first. The checks recompute what the
+// manifest derives from what it stores, with the production pieces, and compare.
 struct pud_manifest_harness {
     pud_manifest_harness(uint32_t random_seed, pud_harness_scope scope)
-        : manifest(make_manifest(random_seed))
+        : manifest(random_seed)
         , scope(scope)
-        , rng(random_seed)
-        , rule_chooser(rng)
-        , subgoal_chooser(manifest.node_descents_, rng) {}
+        , functors()
+        , roots()
+        , database_frontier()
+        , solving()
+        , waiting_solutions() {}
 
-    static Manifest make_manifest(uint32_t random_seed) {
-        if constexpr (std::is_constructible_v<Manifest, uint32_t>)
-            return Manifest(random_seed);
-        else
-            return Manifest();
-    }
-
-    Manifest manifest;
+    pud_manifest manifest;
     pud_harness_scope scope;
-    std::mt19937 rng;
-    pud_random_rule_chooser rule_chooser;
-    pud_random_subgoal_chooser<typename Manifest::node_descents_t> subgoal_chooser;
     test_functors functors;
-    std::vector<pud_node_id> started_roots;
-    std::map<pud_node_id, const expr*> answer_templates;
-    std::optional<coroutine<pud_unfold, void>> unfolding;
-    std::map<pud_node_id, std::set<pud_node_id>> reported_solutions;
+    std::vector<pud_node_id> roots;
+    std::set<pud_node_id> database_frontier;
+    std::optional<coroutine<pud_solver_step, void>> solving;
+    std::map<pud_node_id, std::deque<pud_solution>> waiting_solutions;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -76,24 +69,8 @@ struct pud_manifest_harness {
     const expr* peano(uint32_t count) { return peano_on(count, "z"); }
 
     pud_node_id axiom(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        const pud_node_id root = manifest.axiom_initializer_.initialize_axiom(rule(head, std::move(body), var_count));
-        answer_templates.emplace(root, head);
-        return root;
-    }
-
-    void run_base_descent() {
-        for (pud_node_id root_node : manifest.root_nodes_.get()) {
-            if (std::find(started_roots.begin(), started_roots.end(), root_node) != started_roots.end())
-                continue;
-            manifest.base_descent_runner_.run(root_node);
-            started_roots.push_back(root_node);
-        }
-    }
-
-    pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
-        const pud_node_id root = manifest.conjecture_initializer_.initialize_conjecture(answer_template, goals, var_count);
-        answer_templates.emplace(root, answer_template);
-        run_base_descent();
+        const pud_node_id root = manifest.root_opener_.add_axiom(rule(head, std::move(body), var_count));
+        roots.push_back(root);
         return root;
     }
 
@@ -139,74 +116,96 @@ struct pud_manifest_harness {
             3);
     }
 
-    pud_node_id grow_along_open_goals(pud_node_id root, uint32_t depth) {
-        pud_node_id frontier = root;
-        for (uint32_t level = 0; level < depth; ++level) {
-            manifest.expander_.expand(frontier, first_open_goal(frontier));
-            std::optional<pud_node_id> next;
-            for (pud_node_id child : children_of(frontier)) {
-                if (refuted(child) || open_goals(child).empty())
-                    continue;
-                next = child;
-            }
-            if (!next.has_value())
-                return frontier;
-            frontier = next.value();
-        }
-        return frontier;
+    pud_frontier_change open_axioms() {
+        const pud_frontier_change change = manifest.root_opener_.open();
+        track(change);
+        return change;
     }
 
-    coroutine<pud_unfold, void>& unfold_loop() {
-        run_base_descent();
-        const bool ended = !unfolding.has_value() || unfolding->done();
-        if (ended)
-            unfolding.emplace(manifest.unfold_loop_.drive_unfold_loop());
-        return unfolding.value();
+    // A conjecture is solved by the solver, or, when the harness drives every open leaf, opened as a
+    // plain root of the database.
+    pud_node_id start_conjecture(const expr* answer_template, std::vector<const expr*> goals, uint32_t var_count) {
+        open_axioms();
+        if (scope == pud_harness_scope::conjecture_leaves) {
+            const pud_node_id conjecture = manifest.solver_.add_conjecture(answer_template, goals, var_count);
+            roots.push_back(conjecture);
+            return conjecture;
+        }
+        const pud_node_id conjecture = manifest.root_opener_.add_conjecture(answer_template, goals, var_count);
+        roots.push_back(conjecture);
+        open_axioms();
+        return conjecture;
     }
 
-    std::set<pud_node_id> drivable_leaves() {
-        if (scope == pud_harness_scope::every_open_leaf)
-            return manifest.open_leaves_.get();
-        std::set<pud_node_id> leaves;
-        for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
-            if (!manifest.axioms_.check_axiom(root_of(leaf_node)))
-                leaves.insert(leaf_node);
-        }
-        return leaves;
+    void track(const pud_frontier_change& change) {
+        database_frontier.insert(change.opened.begin(), change.opened.end());
+        for (pud_node_id leaf : change.refuted)
+            database_frontier.erase(leaf);
+    }
+
+    pud_frontier_change expand(pud_node_id leaf, pud_body_goal_id goal) {
+        database_frontier.erase(leaf);
+        const pud_frontier_change change = manifest.expander_.expand(leaf, goal);
+        track(change);
+        return change;
     }
 
     std::optional<pud_unfold> next_unfold() {
-        if constexpr (requires (Manifest& any) { any.unfold_loop_; }) {
-            coroutine<pud_unfold, void>& running = unfold_loop();
-            running.resume();
-            if (!running.has_yield())
-                return std::nullopt;
-            return running.consume_yield();
-        } else {
-            run_base_descent();
-            const std::set<pud_node_id> leaves = drivable_leaves();
-            if (leaves.empty())
-                return std::nullopt;
-            const pud_node_id leaf_node = rule_chooser.choose_rule(leaves);
-            const pud_body_goal_id goal = subgoal_chooser.choose_subgoal(leaf_node);
-            manifest.expander_.expand(leaf_node, goal);
-            return pud_unfold{.leaf = leaf_node, .goal = goal};
-        }
+        std::optional<pud_unfold> unfold = manifest.unit_unfold_finder_.find_unit_unfold();
+        if (!unfold.has_value() && database_frontier.empty())
+            return std::nullopt;
+        if (!unfold.has_value())
+            unfold = manifest.expansion_chooser_.choose_expansion(database_frontier);
+        expand(unfold->leaf, unfold->goal);
+        return unfold;
     }
 
-    bool advance_unfold_loop() { return next_unfold().has_value(); }
+    bool advance_database() { return next_unfold().has_value(); }
 
-    bool unfold_once(pud_node_id root) {
-        run_base_descent();
-        if (!manifest.axioms_.check_axiom(root))
-            return advance_unfold_loop();
-        for (pud_node_id leaf_node : manifest.open_leaves_.get()) {
-            if (root_of(leaf_node) != root)
+    // Refutes every live leaf under the node, and whatever follows from that.
+    void refute(pud_node_id node) {
+        std::vector<pud_node_id> leaves;
+        for (pud_node_id descendant : all_nodes()) {
+            if (!live_leaf(descendant))
                 continue;
-            manifest.expander_.expand(leaf_node, first_open_goal(leaf_node));
-            return true;
+            const std::vector<pud_node_id> path = path_to(descendant);
+            if (std::find(path.begin(), path.end(), node) != path.end())
+                leaves.push_back(descendant);
         }
-        return false;
+        for (pud_node_id refuted_leaf : manifest.frontier_retirer_.retire({}, leaves))
+            database_frontier.erase(refuted_leaf);
+    }
+
+    // Drives the database, then reads the conjecture's head at each of its proven leaves.
+    std::vector<const expr*> proven_answers(pud_node_id conjecture, size_t max_unfolds) {
+        unfold_until_closed(max_unfolds);
+        std::vector<const expr*> answers;
+        for (pud_node_id leaf_node : live_leaves()) {
+            if (root_of(leaf_node) != conjecture || !open_goals(leaf_node).empty())
+                continue;
+            answers.push_back(manifest.leaf_materializer_.materialize(leaf_node, manifest.root_heads_.get(conjecture)));
+        }
+        return answers;
+    }
+
+    std::optional<pud_solver_step> next_solver_step() {
+        if (!solving.has_value() || solving->done())
+            solving.emplace(manifest.solver_.solve());
+        solving->resume();
+        if (!solving->has_yield())
+            return std::nullopt;
+        const pud_solver_step step = solving->consume_yield();
+        if (const pud_solution* solution = std::get_if<pud_solution>(&step))
+            waiting_solutions[solution->conjecture].push_back(*solution);
+        return step;
+    }
+
+    bool advance_solver() { return next_solver_step().has_value(); }
+
+    bool advance_unfold_loop() {
+        if (scope == pud_harness_scope::conjecture_leaves)
+            return advance_solver();
+        return advance_database();
     }
 
     size_t unfold_until_closed(size_t max_unfolds) {
@@ -223,204 +222,169 @@ struct pud_manifest_harness {
         return unfolds;
     }
 
-    size_t most_open_goals() {
-        size_t most = 0;
-        for (pud_node_id leaf_node : manifest.open_leaves_.get())
-            most = std::max(most, open_goals(leaf_node).size());
-        return most;
-    }
-
-    std::set<const expr*> proven_heads() {
-        std::set<const expr*> proven;
-        for (pud_node_id axiom_root : manifest.axioms_.get()) {
-            if (!started(axiom_root))
-                continue;
-            for (pud_node_id leaf_node : manifest.live_leaf_finder_.find_live_leaves(axiom_root)) {
-                if (manifest.open_leaves_.check_leaf_open(leaf_node) || !has_descent(leaf_node))
+    pud_node_id grow_along_open_goals(pud_node_id root, uint32_t depth) {
+        pud_node_id frontier = root;
+        for (uint32_t level = 0; level < depth; ++level) {
+            expand(frontier, first_open_goal(frontier));
+            std::optional<pud_node_id> next;
+            for (pud_node_id child : children_of(frontier)) {
+                if (refuted(child) || open_goals(child).empty())
                     continue;
-                proven.insert(normalize_in(env_at_leaf(leaf_node), manifest.node_heads_.get(axiom_root)));
+                next = child;
             }
+            if (!next.has_value())
+                return frontier;
+            frontier = next.value();
         }
-        return proven;
+        return frontier;
     }
 
-    std::optional<pud_node_id> find_unreported_solution(pud_node_id root) {
-        const std::set<pud_node_id>& reported = reported_solutions[root];
-        std::optional<pud_node_id> found;
-        for (pud_node_id leaf_node : manifest.live_leaf_finder_.find_live_leaves(root)) {
-            if (manifest.open_leaves_.check_leaf_open(leaf_node) || reported.contains(leaf_node))
-                continue;
-            if (!found.has_value() || leaf_node < found.value())
-                found = leaf_node;
-        }
-        return found;
-    }
-
-    std::optional<pud_node_id> next_solution(pud_node_id root, size_t max_steps) {
-        for (size_t resumed = 0;; ++resumed) {
-            const std::optional<pud_node_id> solution = find_unreported_solution(root);
-            if (solution.has_value()) {
-                reported_solutions[root].insert(solution.value());
-                return solution;
-            }
-            if (resumed == max_steps || !unfold_once(root))
+    std::optional<pud_solution> next_solution(pud_node_id conjecture, size_t max_steps) {
+        for (size_t steps = 0; waiting_solutions[conjecture].empty(); ++steps) {
+            if (steps == max_steps || !advance_solver())
                 return std::nullopt;
         }
+        const pud_solution solution = waiting_solutions[conjecture].front();
+        waiting_solutions[conjecture].pop_front();
+        return solution;
     }
 
-    bool exhausted(pud_node_id root) {
-        const std::set<pud_node_id>& reported = reported_solutions[root];
-        for (pud_node_id leaf_node : manifest.live_leaf_finder_.find_live_leaves(root)) {
-            if (manifest.open_leaves_.check_leaf_open(leaf_node) || !reported.contains(leaf_node))
-                return false;
-        }
-        return true;
-    }
-
-    const expr* answer(pud_node_id root, pud_node_id solution) {
-        return normalize_in(env_at_leaf(solution), answer_templates.at(root));
-    }
-
-    std::vector<const expr*> enumerate(pud_node_id root, size_t max_answers, size_t max_steps) {
+    std::vector<const expr*> enumerate(pud_node_id conjecture, size_t max_answers, size_t max_steps) {
         std::vector<const expr*> answers;
         while (answers.size() < max_answers) {
-            const std::optional<pud_node_id> solution = next_solution(root, max_steps);
+            const std::optional<pud_solution> solution = next_solution(conjecture, max_steps);
             if (!solution.has_value())
                 break;
-            answers.push_back(answer(root, solution.value()));
+            answers.push_back(solution->answer);
         }
         return answers;
     }
 
-    bool step(pud_node_id root, std::vector<const expr*>& answers) {
-        const std::optional<pud_node_id> solution = find_unreported_solution(root);
-        if (solution.has_value()) {
-            reported_solutions[root].insert(solution.value());
-            answers.push_back(answer(root, solution.value()));
+    bool step(pud_node_id conjecture, std::vector<const expr*>& answers) {
+        if (!waiting_solutions[conjecture].empty()) {
+            answers.push_back(waiting_solutions[conjecture].front().answer);
+            waiting_solutions[conjecture].pop_front();
             return true;
         }
-        if (exhausted(root))
+        if (manifest.solver_.exhausted(conjecture))
             return false;
-        return unfold_once(root);
+        return advance_solver();
     }
 
-    bool refuted(pud_node_id node) { return manifest.refuted_node_checker_.check_refuted(node); }
+    bool exhausted(pud_node_id conjecture) {
+        return waiting_solutions[conjecture].empty() && manifest.solver_.exhausted(conjecture);
+    }
 
-    bool leaf(pud_node_id node) { return manifest.leaf_nodes_.check_leaf(node); }
+    bool refuted(pud_node_id node) { return manifest.node_status_.check_refuted(node); }
 
-    bool root(pud_node_id node) { return manifest.root_nodes_.check_root(node); }
+    bool leaf(pud_node_id node) { return manifest.node_status_.check_leaf(node); }
 
-    bool alive(pud_mhq_head_id head) { return manifest.mhq_.check_head(head); }
+    bool root(pud_node_id node) { return !manifest.node_parents_.get(node).has_value(); }
 
-    bool expanded(pud_node_id node) { return manifest.call_sites_.check_call_site(node); }
+    bool live_leaf(pud_node_id node) { return leaf(node) && !refuted(node); }
 
-    bool has_descent(pud_node_id node) { return manifest.node_descents_.check_descent(node); }
+    bool expanded(pud_node_id node) { return !leaf(node); }
+
+    bool open(pud_node_id node) { return live_leaf(node) && !open_goals(node).empty(); }
+
+    std::vector<pud_node_id> open_leaves() {
+        std::vector<pud_node_id> leaves;
+        for (pud_node_id node : all_nodes()) {
+            if (open(node))
+                leaves.push_back(node);
+        }
+        return leaves;
+    }
+
+    bool axiom_root(pud_node_id node) {
+        return std::find(manifest.axioms_.begin(), manifest.axioms_.end(), node) != manifest.axioms_.end();
+    }
+
+    std::vector<pud_node_id> children_of(pud_node_id node) {
+        if (leaf(node))
+            return {};
+        return manifest.children_.get(node);
+    }
+
+    std::vector<pud_body_goal> open_goals(pud_node_id node) {
+        const auto& goals = manifest.node_goals_.get(node).goals;
+        return std::vector<pud_body_goal>(goals.begin(), goals.end());
+    }
+
+    pud_body_goal_id first_open_goal(pud_node_id node) { return open_goals(node).front().id; }
 
     std::optional<pud_mhq_head_id> query_of(pud_node_id leaf_node, pud_body_goal_id goal) {
-        return manifest.node_descents_.get(leaf_node).body_goal_pq().find_query_head(goal);
+        const pud_mhq_head_id* head = manifest.leaf_states_.get(leaf_node).queries.find(goal);
+        if (!head)
+            return std::nullopt;
+        return *head;
     }
 
-    std::vector<pud_node_id> children_of(pud_node_id node) { return manifest.children_.get(node); }
+    bool alive(pud_mhq_head_id head) { return manifest.query_holders_.find_holder(head).has_value(); }
 
-    std::vector<std::pair<pud_body_goal_id, const expr*>> open_goals(pud_node_id leaf_node) {
-        std::vector<std::pair<pud_body_goal_id, const expr*>> goals;
-        for (const auto& [goal, goal_expr] : manifest.node_descents_.get(leaf_node).body_goal_expr().body_goal_exprs())
-            goals.emplace_back(goal, goal_expr);
-        std::sort(goals.begin(), goals.end());
-        return goals;
-    }
+    std::vector<pud_node_id> holders_of(pud_mhq_head_id head) { return manifest.query_holders_.get_holders(head); }
 
-    pud_body_goal_id first_open_goal(pud_node_id leaf_node) { return open_goals(leaf_node).front().first; }
-
+    // Every node, found by walking down from the roots.
     std::vector<pud_node_id> all_nodes() {
         std::vector<pud_node_id> nodes;
-        for (pud_node_id node = 0; node < manifest.node_id_sequencer_.peek(); ++node)
+        std::vector<pud_node_id> pending(roots.rbegin(), roots.rend());
+        while (!pending.empty()) {
+            const pud_node_id node = pending.back();
+            pending.pop_back();
             nodes.push_back(node);
+            const std::vector<pud_node_id> children = children_of(node);
+            pending.insert(pending.end(), children.rbegin(), children.rend());
+        }
+        std::sort(nodes.begin(), nodes.end());
         return nodes;
+    }
+
+    std::vector<pud_node_id> live_leaves() {
+        std::vector<pud_node_id> leaves;
+        for (pud_node_id node : all_nodes()) {
+            if (live_leaf(node))
+                leaves.push_back(node);
+        }
+        return leaves;
     }
 
     std::vector<pud_node_id> path_to(pud_node_id node) {
         std::vector<pud_node_id> path{node};
-        while (!root(path.back()))
-            path.push_back(manifest.node_parents_.get(path.back()));
+        while (const std::optional<pud_node_id> parent = manifest.node_parents_.get(path.back()))
+            path.push_back(parent.value());
         std::reverse(path.begin(), path.end());
         return path;
     }
 
     pud_node_id root_of(pud_node_id node) { return path_to(node).front(); }
 
-    bool started(pud_node_id node) {
-        return std::find(started_roots.begin(), started_roots.end(), root_of(node)) != started_roots.end();
+    size_t most_open_goals() {
+        size_t most = 0;
+        for (pud_node_id leaf_node : live_leaves())
+            most = std::max(most, open_goals(leaf_node).size());
+        return most;
     }
 
-    std::vector<pud_node_id> live_leaves_with_descents() {
-        std::vector<pud_node_id> leaves;
-        for (pud_node_id node : all_nodes()) {
-            if (has_descent(node))
-                leaves.push_back(node);
+    std::set<const expr*> proven_heads() {
+        std::set<const expr*> proven;
+        for (pud_node_id leaf_node : live_leaves()) {
+            const pud_node_id tree = root_of(leaf_node);
+            if (!axiom_root(tree) || !open_goals(leaf_node).empty())
+                continue;
+            proven.insert(manifest.leaf_materializer_.materialize(leaf_node, manifest.root_heads_.get(tree)));
         }
-        return leaves;
-    }
-
-    std::vector<pud_mhq_head_id> heads_held_by_leaves() {
-        std::vector<pud_mhq_head_id> heads;
-        for (pud_node_id leaf_node : live_leaves_with_descents()) {
-            for (const auto& [goal, goal_expr] : open_goals(leaf_node)) {
-                const std::optional<pud_mhq_head_id> head = query_of(leaf_node, goal);
-                if (head.has_value())
-                    heads.push_back(head.value());
-            }
-        }
-        std::sort(heads.begin(), heads.end());
-        heads.erase(std::unique(heads.begin(), heads.end()), heads.end());
-        return heads;
-    }
-
-    uint32_t lvc_of(pud_node_id node) {
-        uint32_t lvc = 0;
-        for (pud_node_id on_path : path_to(node))
-            lvc += manifest.node_added_var_count_.get(on_path);
-        return lvc;
+        return proven;
     }
 
     pud_ubs_state env_of(pud_node_id node) {
         const std::vector<pud_node_id> path = path_to(node);
-        typename Manifest::binding_descent_t binding{manifest.node_added_substitutions_};
+        pud_ubs_state env{};
         for (size_t index = 1; index < path.size(); ++index)
-            binding = binding.descend(path.at(index));
-        return binding.ubs_state();
+            env = manifest.binder_.bind(env, path.at(index));
+        return env;
     }
 
-    pud_ubs_state env_at_leaf(pud_node_id leaf_node) {
-        return manifest.node_descents_.get(leaf_node).binding().ubs_state();
-    }
-
-    const expr* resolve_in(const pud_ubs_state& env, uint32_t index) {
-        pud_transient_ubs_state transient_ubs_state{env};
-        auto bind_map = transient_ubs_state.make_bind_map();
-        if (const std::optional<framed_expr> value = bind_map.find_value(index))
-            return value->skeleton;
-        return var(bind_map.find_rep(index));
-    }
-
-    template<typename BindMap>
-    const expr* resolve_through(BindMap& bind_map, uint32_t index) {
-        if (const std::optional<framed_expr> value = bind_map.find_value(index))
-            return value->skeleton;
-        return var(bind_map.find_rep(index));
-    }
-
-    uint32_t rep_in(const pud_ubs_state& env, uint32_t index) {
-        pud_transient_ubs_state transient_ubs_state{env};
-        return transient_ubs_state.make_bind_map().find_rep(index);
-    }
-
-    const expr* normalize_in(const pud_ubs_state& env, const expr* skeleton) {
-        pud_transient_ubs_state transient_ubs_state{env};
-        auto bind_map = transient_ubs_state.make_bind_map();
-        auto normalizer = manifest.normalizer_factory_.make(bind_map);
-        return normalizer.normalize(framed_expr{skeleton, 0});
-    }
+    uint32_t rep_in(const pud_ubs_state& env, uint32_t index) { return ubs_bind_map{env}.find(index).rep; }
 
     static std::vector<uint32_t> vars_in(const expr* skeleton) {
         std::vector<uint32_t> vars;
@@ -438,50 +402,13 @@ struct pud_manifest_harness {
         return vars;
     }
 
-    void check_live_leaves_are_exactly_the_stored_descents() {
-        for (pud_node_id node : all_nodes()) {
-            const bool should_have_descent = started(node) && leaf(node) && !refuted(node);
-            EXPECT_EQ(has_descent(node), should_have_descent) << "node " << node;
-        }
-    }
-
-    void check_open_leaves_are_exactly_the_live_leaves_with_open_goals() {
-        for (pud_node_id node : all_nodes()) {
-            const bool should_be_open = has_descent(node) && !open_goals(node).empty();
-            EXPECT_EQ(manifest.open_leaves_.check_leaf_open(node), should_be_open) << "node " << node;
-        }
-    }
-
-    void check_open_conjecture_leaves_are_the_open_leaves_under_conjectures() {
-        for (pud_node_id node : all_nodes()) {
-            const bool under_conjecture = !manifest.axioms_.check_axiom(root_of(node));
-            const bool should_be_listed = manifest.open_leaves_.check_leaf_open(node) && under_conjecture;
-            EXPECT_EQ(manifest.open_conjecture_leaves_.get().contains(node), should_be_listed) << "node " << node;
-        }
-    }
-
-    void check_leaf_flag_matches_having_children() {
-        for (pud_node_id node : all_nodes()) {
-            EXPECT_EQ(leaf(node), !expanded(node)) << "node " << node;
-            if (leaf(node)) {
-                EXPECT_TRUE(children_of(node).empty()) << "leaf " << node << " has children";
-                continue;
-            }
-            const bool childless = children_of(node).empty();
-            if (childless)
-                EXPECT_EQ(manifest.node_live_child_counts_.get(node), 0u) << "childless interior " << node;
-        }
-    }
-
     void check_parents_and_children_agree() {
         for (pud_node_id node : all_nodes()) {
             for (pud_node_id child : children_of(node))
                 EXPECT_EQ(manifest.node_parents_.get(child), node) << "child " << child;
-            if (root(node)) {
-                EXPECT_THROW(manifest.node_parents_.get(node), std::out_of_range) << "root " << node;
+            if (root(node))
                 continue;
-            }
-            const std::vector<pud_node_id> siblings = children_of(manifest.node_parents_.get(node));
+            const std::vector<pud_node_id> siblings = children_of(manifest.node_parents_.get(node).value());
             EXPECT_NE(std::find(siblings.begin(), siblings.end(), node), siblings.end()) << "orphan " << node;
         }
     }
@@ -493,46 +420,42 @@ struct pud_manifest_harness {
             size_t live_children = 0;
             for (pud_node_id child : children_of(node))
                 live_children += refuted(child) ? 0 : 1;
-            EXPECT_EQ(manifest.node_live_child_counts_.get(node), live_children) << "node " << node;
+            EXPECT_EQ(manifest.live_child_counts_.get(node), live_children) << "node " << node;
         }
     }
 
-    void check_refutation_is_closed_upward() {
+    void check_goal_ids_ascend_and_extend_the_parents() {
         for (pud_node_id node : all_nodes()) {
-            if (leaf(node))
+            const std::vector<pud_body_goal> goals = open_goals(node);
+            for (size_t index = 1; index < goals.size(); ++index)
+                EXPECT_LT(goals.at(index - 1).id, goals.at(index).id) << "node " << node;
+            if (root(node))
                 continue;
-            bool every_child_refuted = true;
-            for (pud_node_id child : children_of(node))
-                every_child_refuted = every_child_refuted && refuted(child);
-            EXPECT_EQ(refuted(node), every_child_refuted) << "node " << node;
+            const pud_node_id parent = manifest.node_parents_.get(node).value();
+            const pud_body_goal_id call_site = manifest.call_sites_.get(parent);
+            for (const pud_body_goal& goal : open_goals(parent)) {
+                const bool inherited = std::find(goals.begin(), goals.end(), goal) != goals.end();
+                EXPECT_EQ(inherited, goal.id != call_site) << "node " << node << " goal " << goal.id;
+            }
         }
-    }
-
-    void check_refutation_is_closed_downward() {
-        for (pud_node_id node : all_nodes()) {
-            if (!refuted(node))
-                continue;
-            for (pud_node_id child : children_of(node))
-                EXPECT_TRUE(refuted(child)) << "live child " << child << " of refuted " << node;
-        }
-    }
-
-    void check_leaf_lvc_is_the_sum_of_var_counts_on_its_path() {
-        for (pud_node_id node : live_leaves_with_descents())
-            EXPECT_EQ(manifest.node_descents_.get(node).lvc().lvc(), lvc_of(node)) << "leaf " << node;
     }
 
     void check_leaf_binding_matches_its_replayed_substitutions() {
-        for (pud_node_id node : live_leaves_with_descents())
-            EXPECT_EQ(env_at_leaf(node), env_of(node)) << "leaf " << node;
+        for (pud_node_id node : live_leaves())
+            EXPECT_EQ(manifest.leaf_states_.get(node).bindings, env_of(node)) << "leaf " << node;
     }
 
+    // A goal is written in the representatives of the node that adds it; inherited goals keep the
+    // writing of the ancestor that added them.
     void check_stored_goals_use_their_nodes_representatives() {
         for (pud_node_id node : all_nodes()) {
             const pud_ubs_state env = env_of(node);
-            const uint32_t lvc = lvc_of(node);
-            for (const expr* goal : manifest.node_added_body_goals_.get(node)) {
-                for (uint32_t index : vars_in(goal)) {
+            const uint32_t lvc = manifest.node_lvcs_.get(node);
+            const pud_body_goal_id first_added = root(node) ? 0 : manifest.node_goals_.get(manifest.node_parents_.get(node).value()).next_id;
+            for (const pud_body_goal& goal : open_goals(node)) {
+                if (goal.id < first_added)
+                    continue;
+                for (uint32_t index : vars_in(goal.goal)) {
                     EXPECT_LT(index, lvc) << "node " << node;
                     EXPECT_EQ(rep_in(env, index), index) << "node " << node << " var " << index;
                 }
@@ -544,25 +467,25 @@ struct pud_manifest_harness {
         for (pud_node_id node : all_nodes()) {
             if (root(node))
                 continue;
-            const pud_node_id parent = manifest.node_parents_.get(node);
-            const uint32_t parent_lvc = lvc_of(parent);
-            const uint32_t node_lvc = lvc_of(node);
-            pud_transient_ubs_state transient_ubs_state{env_of(parent)};
-            auto bind_map = transient_ubs_state.make_bind_map();
-            for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {
+            const pud_node_id parent = manifest.node_parents_.get(node).value();
+            const uint32_t parent_lvc = manifest.node_lvcs_.get(parent);
+            const uint32_t node_lvc = manifest.node_lvcs_.get(node);
+            ubs_bind_map bind_map{env_of(parent)};
+            for (const pud_substitution& substitution : manifest.node_substitutions_.get(node)) {
                 EXPECT_LT(substitution.var_idx, parent_lvc) << "node " << node;
-                EXPECT_EQ(resolve_through(bind_map, substitution.var_idx), var(substitution.var_idx))
-                    << "node " << node << " substitutes non-representative " << substitution.var_idx;
+                const ubs_class target = bind_map.find(substitution.var_idx);
+                EXPECT_EQ(target.rep, substitution.var_idx) << "node " << node << " substitutes non-representative";
+                EXPECT_FALSE(target.value.has_value()) << "node " << node << " substitutes a bound class";
                 if (const expr::var* surviving = std::get_if<expr::var>(&substitution.value->content)) {
                     EXPECT_LT(surviving->index, substitution.var_idx) << "node " << node;
-                    EXPECT_EQ(bind_map.find_rep(surviving->index), surviving->index) << "node " << node;
-                    bind_map.equate(substitution.var_idx, surviving->index);
+                    EXPECT_EQ(bind_map.find(surviving->index).rep, surviving->index) << "node " << node;
+                    bind_map.equate(target, bind_map.find(surviving->index));
                     continue;
                 }
-                bind_map.instantiate(substitution.var_idx, framed_expr{substitution.value, 0});
+                bind_map.instantiate(target, framed_expr{substitution.value, 0});
             }
             const pud_ubs_state env = env_of(node);
-            for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {
+            for (const pud_substitution& substitution : manifest.node_substitutions_.get(node)) {
                 for (uint32_t index : vars_in(substitution.value)) {
                     EXPECT_LT(index, node_lvc) << "node " << node;
                     EXPECT_EQ(rep_in(env, index), index) << "node " << node << " var " << index;
@@ -575,108 +498,84 @@ struct pud_manifest_harness {
         for (pud_node_id node : all_nodes()) {
             if (root(node))
                 continue;
-            const uint32_t parent_lvc = lvc_of(manifest.node_parents_.get(node));
-            const uint32_t added = manifest.node_added_var_count_.get(node);
+            const pud_node_id parent = manifest.node_parents_.get(node).value();
+            const uint32_t parent_lvc = manifest.node_lvcs_.get(parent);
+            const pud_body_goal_id first_added = manifest.node_goals_.get(parent).next_id;
             std::set<uint32_t> fresh;
-            for (const pud_substitution& substitution : manifest.node_added_substitutions_.get(node)) {
-                for (uint32_t index : vars_in(substitution.value)) {
-                    if (index >= parent_lvc)
-                        fresh.insert(index);
-                }
+            std::vector<const expr*> added_terms;
+            for (const pud_substitution& substitution : manifest.node_substitutions_.get(node))
+                added_terms.push_back(substitution.value);
+            for (const pud_body_goal& goal : open_goals(node)) {
+                if (goal.id >= first_added)
+                    added_terms.push_back(goal.goal);
             }
-            for (const expr* goal : manifest.node_added_body_goals_.get(node)) {
-                for (uint32_t index : vars_in(goal)) {
+            for (const expr* term : added_terms) {
+                for (uint32_t index : vars_in(term)) {
                     if (index >= parent_lvc)
                         fresh.insert(index);
                 }
             }
             std::set<uint32_t> expected;
-            for (uint32_t index = parent_lvc; index < parent_lvc + added; ++index)
+            for (uint32_t index = parent_lvc; index < manifest.node_lvcs_.get(node); ++index)
                 expected.insert(index);
             EXPECT_EQ(fresh, expected) << "node " << node;
         }
     }
 
-    void check_every_open_goal_has_a_live_query() {
-        for (pud_node_id node : live_leaves_with_descents()) {
-            for (const auto& [goal, goal_expr] : open_goals(node)) {
-                const std::optional<pud_mhq_head_id> head = query_of(node, goal);
-                EXPECT_TRUE(head.has_value()) << "leaf " << node << " goal " << goal;
-                if (head.has_value())
-                    EXPECT_TRUE(alive(head.value())) << "leaf " << node << " goal " << goal;
-            }
-        }
-    }
-
-    void check_query_head_node_is_an_ancestor_of_every_leaf_holding_it() {
-        for (pud_node_id node : live_leaves_with_descents()) {
-            const std::vector<pud_node_id> path = path_to(node);
-            for (const auto& [goal, goal_expr] : open_goals(node)) {
-                const std::optional<pud_mhq_head_id> head = query_of(node, goal);
-                if (!head.has_value())
-                    continue;
-                const pud_node_id opener = manifest.query_head_nodes_.get(head.value());
-                EXPECT_NE(std::find(path.begin(), path.end(), opener), path.end())
-                    << "leaf " << node << " holds a query opened at " << opener;
+    void check_every_open_goal_has_a_query_its_leaf_holds() {
+        for (pud_node_id node : live_leaves()) {
+            for (const pud_body_goal& goal : open_goals(node)) {
+                const std::optional<pud_mhq_head_id> head = query_of(node, goal.id);
+                ASSERT_TRUE(head.has_value()) << "leaf " << node << " goal " << goal.id;
+                const std::vector<pud_node_id> holders = holders_of(head.value());
+                EXPECT_NE(std::find(holders.begin(), holders.end(), node), holders.end())
+                    << "leaf " << node << " goal " << goal.id;
+                EXPECT_FALSE(manifest.mhq_.candidates(head.value()).empty()) << "leaf " << node << " goal " << goal.id;
             }
         }
     }
 
     void check_every_candidate_path_is_a_real_root_first_chain() {
-        for (pud_mhq_head_id head : heads_held_by_leaves()) {
-            if (!alive(head))
-                continue;
-            for (pud_mhcs_head_id candidate : manifest.mhq_.get_candidates(head)) {
-                const std::vector<pud_node_id> path = manifest.mhcs_.get_path(candidate);
-                ASSERT_FALSE(path.empty());
-                EXPECT_TRUE(root(path.front())) << "candidate " << candidate;
-                for (size_t index = 1; index < path.size(); ++index)
-                    EXPECT_EQ(manifest.node_parents_.get(path.at(index)), path.at(index - 1)) << "candidate " << candidate;
-                for (pud_node_id on_path : path)
-                    EXPECT_FALSE(refuted(on_path)) << "candidate " << candidate << " passes refuted " << on_path;
+        for (pud_node_id node : live_leaves()) {
+            for (const pud_body_goal& goal : open_goals(node)) {
+                for (pud_mhcs_head_id candidate : manifest.mhq_.candidates(query_of(node, goal.id).value())) {
+                    const std::vector<pud_node_id>& path = manifest.mhcs_.path(candidate);
+                    ASSERT_FALSE(path.empty());
+                    EXPECT_TRUE(axiom_root(path.front())) << "candidate " << candidate;
+                    for (size_t index = 1; index < path.size(); ++index)
+                        EXPECT_EQ(manifest.node_parents_.get(path.at(index)), path.at(index - 1)) << "candidate " << candidate;
+                    for (pud_node_id on_path : path)
+                        EXPECT_FALSE(refuted(on_path)) << "candidate " << candidate << " passes refuted " << on_path;
+                }
             }
         }
     }
 
     void check_every_candidate_is_acceptable_at_every_leaf_holding_the_query() {
-        for (pud_node_id node : live_leaves_with_descents()) {
-            const auto& descent = manifest.node_descents_.get(node);
-            for (const auto& [goal, goal_expr] : open_goals(node)) {
-                const std::optional<pud_mhq_head_id> head = query_of(node, goal);
-                if (!head.has_value() || !alive(head.value()))
-                    continue;
-                for (pud_mhcs_head_id candidate : manifest.mhq_.get_candidates(head.value())) {
-                    const std::vector<pud_node_id> path = manifest.mhcs_.get_path(candidate);
-                    EXPECT_NO_THROW(manifest.acceptor_.accept(
-                        descent.binding().ubs_state(), descent.lvc().lvc(), goal_expr, path))
-                        << "leaf " << node << " goal " << goal << " candidate ending at " << path.back();
+        for (pud_node_id node : live_leaves()) {
+            const pud_leaf_state& state = manifest.leaf_states_.get(node);
+            for (const pud_body_goal& goal : open_goals(node)) {
+                for (pud_mhcs_head_id candidate : manifest.mhq_.candidates(query_of(node, goal.id).value())) {
+                    const std::vector<pud_node_id>& path = manifest.mhcs_.path(candidate);
+                    EXPECT_NO_THROW(manifest.acceptor_.accept(state.bindings, manifest.node_lvcs_.get(node), goal.goal, path))
+                        << "leaf " << node << " goal " << goal.id << " candidate ending at " << path.back();
                 }
             }
         }
     }
 
     void check_all() {
-        check_live_leaves_are_exactly_the_stored_descents();
-        check_open_leaves_are_exactly_the_live_leaves_with_open_goals();
-        if constexpr (requires (Manifest& any) { any.open_conjecture_leaves_; })
-            check_open_conjecture_leaves_are_the_open_leaves_under_conjectures();
-        check_leaf_flag_matches_having_children();
         check_parents_and_children_agree();
         check_live_child_counts_match_unrefuted_children();
-        check_refutation_is_closed_upward();
-        check_refutation_is_closed_downward();
-        check_leaf_lvc_is_the_sum_of_var_counts_on_its_path();
+        check_goal_ids_ascend_and_extend_the_parents();
         check_leaf_binding_matches_its_replayed_substitutions();
         check_stored_goals_use_their_nodes_representatives();
         check_substitutions_meet_the_watchers_preconditions();
         check_fresh_variables_are_dense_from_the_parents_lvc();
-        check_every_open_goal_has_a_live_query();
-        check_query_head_node_is_an_ancestor_of_every_leaf_holding_it();
+        check_every_open_goal_has_a_query_its_leaf_holds();
         check_every_candidate_path_is_a_real_root_first_chain();
         check_every_candidate_is_acceptable_at_every_leaf_holding_the_query();
     }
 };
-
-using pud_random_unit_solver_manifest_harness = pud_manifest_harness<pud_random_unit_solver_manifest>;
 
 #endif

@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <optional>
-#include "pud_unifier_bind_map_stack.hpp"
+#include "pud_term_stack.hpp"
 #include "value_objects/expr.hpp"
 
 inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
@@ -17,14 +17,14 @@ inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
     return false;
 }
 
-inline framed_expr reference_pud_deref(pud_unifier_bind_map_stack& stack, uint32_t global) {
-    if (const std::optional<framed_expr> value = stack.bind_map.find_value(global))
+inline framed_expr reference_pud_deref(pud_term_stack& stack, uint32_t global) {
+    if (const std::optional<framed_expr> value = stack.bind_map.find(global).value)
         return value.value();
-    return framed_expr{stack.bind_backing.pool.make_var(stack.bind_map.find_rep(global)), 0u};
+    return framed_expr{stack.pool.make_var(stack.bind_map.find(global).rep), 0u};
 }
 
 inline bool reference_pud_unify_terms(
-    pud_unifier_bind_map_stack& stack,
+    pud_term_stack& stack,
     framed_expr lhs,
     framed_expr rhs) {
     if (const expr::var* var = std::get_if<expr::var>(&lhs.skeleton->content))
@@ -44,21 +44,21 @@ inline bool reference_pud_unify_terms(
         return true;
 
     if (lhs_var && rhs_var) {
-        stack.bind_map.equate(lhs_var->index, rhs_var->index);
+        stack.equate(lhs_var->index, rhs_var->index);
         return true;
     }
     if (lhs_var) {
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(lhs_var->index, framed_expr{value, 0u});
+        stack.instantiate(lhs_var->index, framed_expr{value, 0u});
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(rhs_var->index, framed_expr{value, 0u});
+        stack.instantiate(rhs_var->index, framed_expr{value, 0u});
         return true;
     }
 

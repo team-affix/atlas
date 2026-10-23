@@ -4,77 +4,70 @@
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_child_delta.hpp"
-#include "value_objects/expr.hpp"
 #include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_node_state.hpp"
 
+// Unfolds a leaf on a goal into one child per delta. The leaf becomes interior; with no children it
+// is dead, and so is every ancestor it leaves without a live child.
 template<
-    typename IGetNodeDescent,
-    typename IAcceptCandidate,
-    typename IMakeChild,
     typename IStoreCallSite,
+    typename IMakeChild,
     typename IStoreChildren,
-    typename IUnsetLeaf>
+    typename IMarkNodeState,
+    typename IStoreLiveChildCount,
+    typename IPropagateRefutation>
 struct pud_unfolder {
     pud_unfolder(
-        IGetNodeDescent& get_node_descent,
-        IAcceptCandidate& accept_candidate,
-        IMakeChild& make_child,
         IStoreCallSite& store_call_site,
+        IMakeChild& make_child,
         IStoreChildren& store_children,
-        IUnsetLeaf& unset_leaf);
-    std::vector<pud_node_id> unfold(
-        pud_node_id leaf,
-        pud_body_goal_id goal,
-        const std::vector<std::vector<pud_node_id>>& callees);
+        IMarkNodeState& mark_node_state,
+        IStoreLiveChildCount& store_live_child_count,
+        IPropagateRefutation& propagate_refutation);
+    std::vector<pud_node_id> unfold(pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_child_delta>& deltas);
 private:
-    IGetNodeDescent& get_node_descent_;
-    IAcceptCandidate& accept_candidate_;
-    IMakeChild& make_child_;
     IStoreCallSite& store_call_site_;
+    IMakeChild& make_child_;
     IStoreChildren& store_children_;
-    IUnsetLeaf& unset_leaf_;
+    IMarkNodeState& mark_node_state_;
+    IStoreLiveChildCount& store_live_child_count_;
+    IPropagateRefutation& propagate_refutation_;
 };
 
-#define PUD_UNFOLDER_TEMPLATE                                                                 \
-    template<typename IGetNodeDescent, typename IAcceptCandidate, typename IMakeChild,       \
-             typename IStoreCallSite, typename IStoreChildren, typename IUnsetLeaf>
-#define PUD_UNFOLDER                                                                          \
-    pud_unfolder<IGetNodeDescent, IAcceptCandidate, IMakeChild, IStoreCallSite, IStoreChildren, IUnsetLeaf>
+#define PUD_UNFOLDER_TEMPLATE                                                              \
+    template<typename IStoreCallSite, typename IMakeChild, typename IStoreChildren,        \
+             typename IMarkNodeState, typename IStoreLiveChildCount, typename IPropagateRefutation>
+#define PUD_UNFOLDER                                                                       \
+    pud_unfolder<IStoreCallSite, IMakeChild, IStoreChildren, IMarkNodeState,               \
+        IStoreLiveChildCount, IPropagateRefutation>
 
 PUD_UNFOLDER_TEMPLATE
 PUD_UNFOLDER::pud_unfolder(
-    IGetNodeDescent& get_node_descent,
-    IAcceptCandidate& accept_candidate,
-    IMakeChild& make_child,
     IStoreCallSite& store_call_site,
+    IMakeChild& make_child,
     IStoreChildren& store_children,
-    IUnsetLeaf& unset_leaf)
-    : get_node_descent_(get_node_descent)
-    , accept_candidate_(accept_candidate)
+    IMarkNodeState& mark_node_state,
+    IStoreLiveChildCount& store_live_child_count,
+    IPropagateRefutation& propagate_refutation)
+    : store_call_site_(store_call_site)
     , make_child_(make_child)
-    , store_call_site_(store_call_site)
     , store_children_(store_children)
-    , unset_leaf_(unset_leaf) {}
+    , mark_node_state_(mark_node_state)
+    , store_live_child_count_(store_live_child_count)
+    , propagate_refutation_(propagate_refutation) {}
 
 PUD_UNFOLDER_TEMPLATE
 std::vector<pud_node_id> PUD_UNFOLDER::unfold(
-    pud_node_id leaf,
-    pud_body_goal_id goal,
-    const std::vector<std::vector<pud_node_id>>& callees) {
-    const auto& leaf_descent = get_node_descent_.get(leaf);
-    const expr* goal_expr = leaf_descent.body_goal_expr().body_goal_exprs().at(goal);
-    std::vector<pud_node_id> children;
-    for (const std::vector<pud_node_id>& callee : callees) {
-        const pud_child_delta delta = accept_candidate_.accept(
-            leaf_descent.binding().ubs_state(),
-            leaf_descent.lvc().lvc(),
-            goal_expr,
-            callee);
-        children.push_back(make_child_.make(leaf, delta));
-    }
+    pud_node_id leaf, pud_body_goal_id goal, const std::vector<pud_child_delta>& deltas) {
     store_call_site_.store(leaf, goal);
+    std::vector<pud_node_id> children;
+    for (const pud_child_delta& delta : deltas)
+        children.push_back(make_child_.make_child(leaf, goal, delta));
     store_children_.store(leaf, children);
-    unset_leaf_.unset_leaf(leaf);
+    mark_node_state_.mark(leaf, pud_node_state::expanded);
+    store_live_child_count_.store(leaf, children.size());
+    if (children.empty())
+        propagate_refutation_.refute(leaf);
     return children;
 }
 

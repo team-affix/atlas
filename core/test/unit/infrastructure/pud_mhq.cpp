@@ -3,513 +3,203 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_mhq.hpp"
-#include "value_objects/pud_node_id.hpp"
-#include "value_objects/pud_query_resume_context.hpp"
+#include "value_objects/expr.hpp"
 
 using ::testing::_;
+using ::testing::AllOf;
+using ::testing::AnyNumber;
+using ::testing::ElementsAre;
+using ::testing::Field;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
 
 namespace {
 
-struct descent_t {
-    pud_node_id node;
-    bool operator==(const descent_t&) const = default;
+struct MockEnterReplay {
+    MOCK_METHOD(std::optional<pud_replay>, enter, (const pud_ubs_state&, const expr*, uint32_t, pud_node_id));
+};
+struct MockTryAddCandidate {
+    MOCK_METHOD(std::optional<pud_mhcs_head_id>, try_add, (pud_replay));
+};
+struct MockTryForkCandidate {
+    MOCK_METHOD(std::optional<pud_mhcs_head_id>, try_fork, (pud_mhcs_head_id, pud_replay));
+};
+struct MockRemoveCandidate {
+    MOCK_METHOD(void, remove, (pud_mhcs_head_id));
+};
+struct MockInvalidateCandidateLeaves {
+    MOCK_METHOD(std::vector<pud_mhcs_head_id>, invalidate_leaves, (const std::vector<pud_node_id>&));
+};
+struct MockPushUnitQuery {
+    MOCK_METHOD(void, push_back, (pud_mhq_head_id));
 };
 
-struct HeadOps {
-    MOCK_METHOD(pud_query_resume_context, resume, ());
-    MOCK_METHOD((std::optional<pud_forced_unfold_reason>), candidate_refuted, (pud_mhcs_head_id));
-};
+pud_replay replay_at(pud_node_id node, uint32_t frame_offset) {
+    return pud_replay{.node = node, .frame_offset = frame_offset, .ubs_state = {}};
+}
 
-struct MockHead {
-    static HeadOps* ops;
-    pud_query_resume_context resume() { return ops->resume(); }
-    std::optional<pud_forced_unfold_reason> candidate_refuted(pud_mhcs_head_id candidate_id) {
-        return ops->candidate_refuted(candidate_id);
-    }
-};
-
-HeadOps* MockHead::ops = nullptr;
-
-struct MockMakeHead {
-    MOCK_METHOD(MockHead, make, (const std::vector<descent_t>&));
-};
-
-struct MockForkHead {
-    MOCK_METHOD(MockHead, fork, (const MockHead&, const std::vector<descent_t>&));
-};
-
-struct MockRemoveCandidateHead {
-    MOCK_METHOD(void, remove_head, (pud_mhcs_head_id));
-};
-
-using test_mhq_t = pud_mhq<descent_t, MockHead, MockMakeHead, MockForkHead, NiceMock<MockRemoveCandidateHead>>;
-
-using propagation_t = std::optional<pud_forced_query_propagation>;
+using test_mhq_t = pud_mhq<
+    NiceMock<MockEnterReplay>, std::vector<pud_node_id>, NiceMock<MockTryAddCandidate>, NiceMock<MockTryForkCandidate>,
+    NiceMock<MockRemoveCandidate>, NiceMock<MockInvalidateCandidateLeaves>, NiceMock<MockPushUnitQuery>>;
 
 struct PudMhqTest : public ::testing::Test {
-    HeadOps ops;
-    NiceMock<MockMakeHead> make_head;
-    NiceMock<MockForkHead> fork_head;
-    NiceMock<MockRemoveCandidateHead> remove_candidate_head;
-    test_mhq_t mhq{make_head, fork_head, remove_candidate_head};
-    descent_t axiom_a{1};
-    descent_t axiom_b{2};
-    std::vector<descent_t> two_axioms{axiom_a, axiom_b};
-    pud_mhcs_head_id candidate_a = 10;
-    pud_mhcs_head_id candidate_b = 20;
-    pud_mhcs_head_id candidate_c = 30;
-    pud_mhcs_head_id candidate_d = 40;
-    pud_mhq_head_id first_id = 0;
-    pud_mhq_head_id second_id = 1;
-    pud_mhq_head_id third_id = 2;
+    NiceMock<MockEnterReplay> enter;
+    NiceMock<MockTryAddCandidate> add_candidate;
+    NiceMock<MockTryForkCandidate> fork_candidate;
+    NiceMock<MockRemoveCandidate> remove_candidate;
+    NiceMock<MockInvalidateCandidateLeaves> invalidate_candidates;
+    NiceMock<MockPushUnitQuery> unit_queries;
+    std::vector<pud_node_id> axioms{0, 1, 2};
+    test_mhq_t mhq{enter, axioms, add_candidate, fork_candidate, remove_candidate, invalidate_candidates, unit_queries};
+    expr goal{expr::functor{3, {}}};
+    expr specialized_goal{expr::functor{4, {}}};
 
-    void SetUp() override {
-        MockHead::ops = &ops;
-        ON_CALL(make_head, make(_)).WillByDefault(Return(MockHead{}));
-        ON_CALL(fork_head, fork(_, _)).WillByDefault(Return(MockHead{}));
+    // The goal enters every axiom at frame 7 and the specialized goal at frame 9.
+    void enterable(pud_node_id axiom) {
+        ON_CALL(enter, enter(_, &goal, 7u, axiom)).WillByDefault(Return(replay_at(axiom, 7)));
+        ON_CALL(enter, enter(_, &specialized_goal, 9u, axiom)).WillByDefault(Return(replay_at(axiom, 9)));
     }
 
-    static pud_query_resume_context live(const std::vector<pud_mhcs_head_id>& candidate_ids) {
-        return {.candidate_ids = candidate_ids, .forced_unfold_reason = std::nullopt};
+    void candidate_under(pud_node_id axiom, pud_mhcs_head_id candidate) {
+        enterable(axiom);
+        ON_CALL(add_candidate, try_add(Field(&pud_replay::node, axiom))).WillByDefault(Return(candidate));
     }
 
-    static pud_query_resume_context unit(pud_mhcs_head_id candidate_id) {
-        return {.candidate_ids = {candidate_id}, .forced_unfold_reason = pud_forced_unfold_reason::unit};
+    std::optional<pud_mhq_head_id> open() {
+        return mhq.try_open(pud_ubs_state{}, &goal, 7);
     }
 
-    static pud_query_resume_context refuted() {
-        return {.candidate_ids = {}, .forced_unfold_reason = pud_forced_unfold_reason::refuted};
+    std::optional<pud_mhq_head_id> fork(pud_mhq_head_id head) {
+        return mhq.try_fork(head, pud_ubs_state{}, &specialized_goal, 9);
     }
 
-    static propagation_t unit_query(pud_mhq_head_id head_id) {
-        return pud_unit_query{.head_id = head_id};
-    }
-
-    static propagation_t refuted_query(pud_mhq_head_id head_id) {
-        return pud_refuted_query{.head_id = head_id};
-    }
-
-    void add_two_live() {
-        EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-        EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, std::nullopt);
+    void refute_candidates(const std::vector<pud_mhcs_head_id>& candidates) {
+        ON_CALL(invalidate_candidates, invalidate_leaves(_)).WillByDefault(Return(candidates));
     }
 };
 
-// ── try_add_head ─────────────────────────────────────────────────────────────
-
-TEST_F(PudMhqTest, AddWithTwoLiveCandidatesHasNoForcedPropagation) {
-    EXPECT_CALL(make_head, make(two_axioms)).WillOnce(Return(MockHead{}));
-    add_two_live();
 }
 
-TEST_F(PudMhqTest, LiveAddStillReturnsItsHeadId) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({candidate_a, candidate_b})))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    EXPECT_EQ(mhq.try_add_head(two_axioms).head_id, first_id);
-    EXPECT_EQ(mhq.try_add_head(two_axioms).head_id, second_id);
+TEST_F(PudMhqTest, AQueryIsOpenedWithACandidateUnderEveryAxiomItEntersInAxiomOrder) {
+    candidate_under(0, 30);
+    candidate_under(2, 20);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_THAT(mhq.candidates(head), ElementsAre(30u, 20u));
 }
 
-TEST_F(PudMhqTest, ResultHeadIdMatchesTheForcedPropagationHeadId) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(refuted()))
-        .WillOnce(Return(unit(candidate_a)));
-    EXPECT_EQ(mhq.try_add_head(two_axioms).head_id, first_id);
-    EXPECT_EQ(mhq.try_add_head({axiom_a}).head_id, second_id);
+TEST_F(PudMhqTest, AnAxiomWhoseHeadDoesNotUnifyIsNotSearched) {
+    candidate_under(0, 30);
+    candidate_under(2, 20);
+    EXPECT_CALL(add_candidate, try_add(_)).Times(AnyNumber());
+    EXPECT_CALL(add_candidate, try_add(Field(&pud_replay::node, 1u))).Times(0);
+    open();
 }
 
-TEST_F(PudMhqTest, LiveForkReturnsTheNewHeadId) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    EXPECT_EQ(mhq.try_fork_head(first_id, two_axioms).head_id, second_id);
+TEST_F(PudMhqTest, AnAxiomWithoutACandidateIsLeftOut) {
+    candidate_under(0, 30);
+    enterable(1);
+    candidate_under(2, 20);
+    EXPECT_THAT(mhq.candidates(open().value()), ElementsAre(30u, 20u));
 }
 
-TEST_F(PudMhqTest, LiveHeadIdCanBeForkedAndRemoved) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    const pud_mhq_head_id head_id = mhq.try_add_head(two_axioms).head_id;
-    EXPECT_CALL(ops, resume()).WillOnce(Return(unit(110)));
-    EXPECT_EQ(mhq.try_fork_head(head_id, two_axioms).forced_propagation, unit_query(second_id));
-    mhq.remove_head(head_id);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
+TEST_F(PudMhqTest, AQueryWithoutCandidatesIsNotOpened) {
+    enterable(0);
+    EXPECT_CALL(unit_queries, push_back(_)).Times(0);
+    EXPECT_FALSE(open().has_value());
 }
 
-TEST_F(PudMhqTest, AddResumesTheNewHeadExactlyOnce) {
-    EXPECT_CALL(ops, resume()).Times(1).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
+TEST_F(PudMhqTest, AQueryOpenedWithOneCandidateIsUnit) {
+    candidate_under(1, 30);
+    EXPECT_CALL(unit_queries, push_back(_));
+    open();
 }
 
-TEST_F(PudMhqTest, AddThatIsImmediatelyUnitIsRemembered) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(unit(candidate_a)));
-    EXPECT_EQ(mhq.try_add_head({axiom_a}).forced_propagation, unit_query(first_id));
-
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), refuted_query(first_id));
+TEST_F(PudMhqTest, AQueryOpenedWithTwoCandidatesIsNotUnit) {
+    candidate_under(0, 30);
+    candidate_under(1, 31);
+    EXPECT_CALL(unit_queries, push_back(_)).Times(0);
+    open();
 }
 
-TEST_F(PudMhqTest, AddThatIsImmediatelyRefutedIsForgotten) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
-    EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, refuted_query(first_id));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
+TEST_F(PudMhqTest, EveryLeafIsPassedOnToTheCandidates) {
+    EXPECT_CALL(invalidate_candidates, invalidate_leaves(ElementsAre(5u, 6u)));
+    mhq.invalidate_leaves({5, 6});
 }
 
-TEST_F(PudMhqTest, AddsGetSequentialHeadIds) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(unit(candidate_a)))
-        .WillOnce(Return(unit(candidate_b)));
-    EXPECT_EQ(mhq.try_add_head({axiom_a}).forced_propagation, unit_query(first_id));
-    EXPECT_EQ(mhq.try_add_head({axiom_b}).forced_propagation, unit_query(second_id));
+TEST_F(PudMhqTest, LosingAllButOneCandidateMakesTheQueryUnit) {
+    candidate_under(0, 30);
+    candidate_under(1, 31);
+    const pud_mhq_head_id head = open().value();
+    refute_candidates({30});
+    EXPECT_CALL(unit_queries, push_back(head));
+    EXPECT_THAT(mhq.invalidate_leaves({5}), IsEmpty());
+    EXPECT_THAT(mhq.candidates(head), ElementsAre(31u));
 }
 
-TEST_F(PudMhqTest, ImmediatelyRefutedAddStillConsumesAnId) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(refuted()))
-        .WillOnce(Return(unit(candidate_a)));
-    EXPECT_EQ(mhq.try_add_head(two_axioms).forced_propagation, refuted_query(first_id));
-    EXPECT_EQ(mhq.try_add_head({axiom_a}).forced_propagation, unit_query(second_id));
+TEST_F(PudMhqTest, LosingTheLastCandidateRefutesTheQueryUntilItIsRemoved) {
+    candidate_under(0, 30);
+    const pud_mhq_head_id head = open().value();
+    refute_candidates({30});
+    EXPECT_THAT(mhq.invalidate_leaves({5}), ElementsAre(head));
+    EXPECT_THAT(mhq.candidates(head), IsEmpty());
+    EXPECT_CALL(remove_candidate, remove(_)).Times(0);
+    mhq.remove(head);
 }
 
-// ── candidate_specialization_refuted ─────────────────────────────────────────
-
-TEST_F(PudMhqTest, UnknownCandidateRefutationIsIgnored) {
-    EXPECT_EQ(mhq.candidate_specialization_refuted(99), std::nullopt);
+TEST_F(PudMhqTest, RefutedCandidatesReachOnlyTheirOwnQuery) {
+    candidate_under(0, 30);
+    const pud_mhq_head_id first = open().value();
+    candidate_under(0, 40);
+    candidate_under(1, 41);
+    const pud_mhq_head_id second = open().value();
+    refute_candidates({30, 40});
+    EXPECT_THAT(mhq.invalidate_leaves({5}), ElementsAre(first));
+    EXPECT_THAT(mhq.candidates(second), ElementsAre(41u));
 }
 
-TEST_F(PudMhqTest, UnknownCandidateRefutationDoesNotTouchHeads) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(_)).Times(0);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(99), std::nullopt);
+TEST_F(PudMhqTest, RemovingAQueryRemovesItsCandidates) {
+    candidate_under(0, 30);
+    candidate_under(2, 32);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_CALL(remove_candidate, remove(30u));
+    EXPECT_CALL(remove_candidate, remove(32u));
+    mhq.remove(head);
 }
 
-TEST_F(PudMhqTest, RefutationIsForwardedToTheHead) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_b)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    mhq.candidate_specialization_refuted(candidate_b);
+TEST_F(PudMhqTest, AForkForksEachCandidateOntoItsAxiomInTheNewEnvironment) {
+    candidate_under(0, 30);
+    candidate_under(2, 32);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_CALL(fork_candidate, try_fork(30u, AllOf(Field(&pud_replay::node, 0u), Field(&pud_replay::frame_offset, 9u))))
+        .WillOnce(Return(50u));
+    EXPECT_CALL(fork_candidate, try_fork(32u, AllOf(Field(&pud_replay::node, 2u), Field(&pud_replay::frame_offset, 9u))))
+        .WillOnce(Return(52u));
+    EXPECT_THAT(mhq.candidates(fork(head).value()), ElementsAre(50u, 52u));
 }
 
-TEST_F(PudMhqTest, RefutationWithNoForcedUnfoldIsNullopt) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b, candidate_c})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(std::nullopt));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
+TEST_F(PudMhqTest, AForkOnlyEntersTheAxiomsTheForkedQueryStillHasCandidatesUnder) {
+    candidate_under(0, 30);
+    candidate_under(2, 32);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_CALL(enter, enter(_, _, _, _)).Times(AnyNumber());
+    EXPECT_CALL(enter, enter(_, &specialized_goal, 9u, 1u)).Times(0);
+    fork(head);
 }
 
-TEST_F(PudMhqTest, RefutingOneOfTwoLiveCandidatesIsUnit) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
+TEST_F(PudMhqTest, AForkWithoutCandidatesIsNotOpenedAndLeavesTheForkedQuery) {
+    candidate_under(0, 30);
+    candidate_under(2, 32);
+    const pud_mhq_head_id head = open().value();
+    EXPECT_FALSE(fork(head).has_value());
+    EXPECT_THAT(mhq.candidates(head), ElementsAre(30u, 32u));
 }
 
-TEST_F(PudMhqTest, RefutingLastLiveCandidateIsRefuted) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-
-    EXPECT_CALL(ops, candidate_refuted(candidate_b)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), refuted_query(first_id));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), std::nullopt);
-}
-
-TEST_F(PudMhqTest, SameCandidateRefutedTwiceIsIgnoredTheSecondTime) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).Times(1).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
-}
-
-TEST_F(PudMhqTest, UnitHeadStillRoutesItsRemainingCandidate) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    mhq.candidate_specialization_refuted(candidate_a);
-    EXPECT_CALL(ops, candidate_refuted(candidate_b)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), refuted_query(first_id));
-}
-
-TEST_F(PudMhqTest, RefutationsRouteToTheOwningHead) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({candidate_a, candidate_b})))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head(two_axioms);
-    mhq.try_add_head(two_axioms);
-
-    EXPECT_CALL(ops, candidate_refuted(candidate_c)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_c), unit_query(second_id));
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-}
-
-TEST_F(PudMhqTest, RefutingOneHeadLeavesTheOtherRouted) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(unit(candidate_a)))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head({axiom_a});
-    mhq.try_add_head(two_axioms);
-
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), refuted_query(first_id));
-    EXPECT_CALL(ops, candidate_refuted(candidate_d)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_d), unit_query(second_id));
-}
-
-// ── remove_head ──────────────────────────────────────────────────────────────
-
-TEST_F(PudMhqTest, RemoveUnlinksCandidates) {
-    add_two_live();
-    mhq.remove_head(first_id);
-    EXPECT_CALL(ops, candidate_refuted(_)).Times(0);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), std::nullopt);
-}
-
-TEST_F(PudMhqTest, RemoveOfUnknownIdIsNoop) {
-    add_two_live();
-    mhq.remove_head(first_id + 100);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-}
-
-TEST_F(PudMhqTest, RemoveTwiceIsNoop) {
-    add_two_live();
-    mhq.remove_head(first_id);
-    mhq.remove_head(first_id);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
-}
-
-TEST_F(PudMhqTest, RemoveOfUnitHeadUnlinksItsRemainingCandidate) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    mhq.candidate_specialization_refuted(candidate_a);
-    mhq.remove_head(first_id);
-    EXPECT_CALL(ops, candidate_refuted(_)).Times(0);
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), std::nullopt);
-}
-
-TEST_F(PudMhqTest, RemoveOfRefutedHeadIsNoop) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(refuted()))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head(two_axioms);
-    mhq.try_add_head(two_axioms);
-    mhq.remove_head(first_id);
-    EXPECT_CALL(ops, candidate_refuted(candidate_c)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_c), unit_query(second_id));
-}
-
-TEST_F(PudMhqTest, RemoveOneHeadLeavesOthersRouted) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({candidate_a, candidate_b})))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head(two_axioms);
-    mhq.try_add_head(two_axioms);
-    mhq.remove_head(first_id);
-
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
-    EXPECT_CALL(ops, candidate_refuted(candidate_c)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_c), unit_query(second_id));
-}
-
-// ── try_fork_head ────────────────────────────────────────────────────────────
-
-TEST_F(PudMhqTest, ForkWithTwoLiveCandidatesHasNoForcedPropagation) {
-    add_two_live();
-    EXPECT_CALL(fork_head, fork(_, two_axioms)).WillOnce(Return(MockHead{}));
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    EXPECT_EQ(mhq.try_fork_head(first_id, two_axioms).forced_propagation, std::nullopt);
-}
-
-TEST_F(PudMhqTest, ForkResumesTheNewHeadExactlyOnce) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).Times(1).WillOnce(Return(live({110, 120})));
-    mhq.try_fork_head(first_id, two_axioms);
-}
-
-TEST_F(PudMhqTest, ForkDoesNotMakeANewHead) {
-    add_two_live();
-    EXPECT_CALL(make_head, make(_)).Times(0);
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    mhq.try_fork_head(first_id, two_axioms);
-}
-
-TEST_F(PudMhqTest, ForkThatIsImmediatelyUnitIsRemembered) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(unit(110)));
-    EXPECT_EQ(mhq.try_fork_head(first_id, two_axioms).forced_propagation, unit_query(second_id));
-
-    EXPECT_CALL(ops, candidate_refuted(110)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(110), refuted_query(second_id));
-}
-
-TEST_F(PudMhqTest, ForkThatIsImmediatelyRefutedIsForgotten) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
-    EXPECT_EQ(mhq.try_fork_head(first_id, two_axioms).forced_propagation, refuted_query(second_id));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(110), std::nullopt);
-}
-
-TEST_F(PudMhqTest, ImmediatelyRefutedForkLeavesParentRouted) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
-    mhq.try_fork_head(first_id, two_axioms);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-}
-
-TEST_F(PudMhqTest, ForkedCandidatesRouteToTheChild) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    mhq.try_fork_head(first_id, two_axioms);
-
-    EXPECT_CALL(ops, candidate_refuted(120)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(120), unit_query(second_id));
-    EXPECT_CALL(ops, candidate_refuted(candidate_b)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_b), unit_query(first_id));
-}
-
-TEST_F(PudMhqTest, RemoveParentLeavesForkedChildRouted) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    mhq.try_fork_head(first_id, two_axioms);
-    mhq.remove_head(first_id);
-
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), std::nullopt);
-    EXPECT_CALL(ops, candidate_refuted(110)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(110), unit_query(second_id));
-}
-
-TEST_F(PudMhqTest, RemoveChildLeavesParentRouted) {
-    add_two_live();
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({110, 120})));
-    mhq.try_fork_head(first_id, two_axioms);
-    mhq.remove_head(second_id);
-
-    EXPECT_EQ(mhq.candidate_specialization_refuted(110), std::nullopt);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    EXPECT_EQ(mhq.candidate_specialization_refuted(candidate_a), unit_query(first_id));
-}
-
-TEST_F(PudMhqTest, ForkOfForkGetsTheNextId) {
-    add_two_live();
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({110, 120})))
-        .WillOnce(Return(unit(210)));
-    mhq.try_fork_head(first_id, two_axioms);
-    EXPECT_EQ(mhq.try_fork_head(second_id, two_axioms).forced_propagation, unit_query(third_id));
-}
-
-TEST_F(PudMhqTest, ForkOfUnitHeadIsAllowed) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(unit(candidate_a)))
-        .WillOnce(Return(unit(110)));
-    mhq.try_add_head({axiom_a});
-    EXPECT_EQ(mhq.try_fork_head(first_id, {axiom_a}).forced_propagation, unit_query(second_id));
-}
-
-// ── removal releases candidates ───────────────────────────────────────────────
-
-TEST_F(PudMhqTest, RemovingALiveHeadRemovesEveryCandidateHead) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_a));
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_b));
-    mhq.remove_head(first_id);
-}
-
-TEST_F(PudMhqTest, RemovingAUnitHeadRemovesItsOnlyCandidateHead) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(unit(candidate_a)));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_a));
-    mhq.remove_head(first_id);
-}
-
-TEST_F(PudMhqTest, RemovingAnAlreadyRefutedHeadRemovesNoCandidates) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(remove_candidate_head, remove_head(_)).Times(0);
-    mhq.remove_head(first_id);
-}
-
-TEST_F(PudMhqTest, RemovingAHeadTwiceRemovesItsCandidatesOnce) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(remove_candidate_head, remove_head(_)).Times(2);
-    mhq.remove_head(first_id);
-    mhq.remove_head(first_id);
-}
-
-TEST_F(PudMhqTest, RefutedCandidateIsNotRemovedAgainWithItsHead) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    mhq.candidate_specialization_refuted(candidate_a);
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_b));
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_a)).Times(0);
-    mhq.remove_head(first_id);
-}
-
-TEST_F(PudMhqTest, RemovingOneHeadLeavesAnotherHeadsCandidates) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({candidate_a, candidate_b})))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head(two_axioms);
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(remove_candidate_head, remove_head(_)).Times(::testing::AnyNumber());
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_c)).Times(0);
-    EXPECT_CALL(remove_candidate_head, remove_head(candidate_d)).Times(0);
-    mhq.remove_head(first_id);
-}
-
-// ── get_candidates ────────────────────────────────────────────────────────────
-
-TEST_F(PudMhqTest, CandidatesOfALiveHeadAreItsLinkedCandidates) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_THAT(mhq.get_candidates(first_id), ::testing::UnorderedElementsAre(candidate_a, candidate_b));
-}
-
-TEST_F(PudMhqTest, RefutedCandidateLeavesTheCandidates) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(live({candidate_a, candidate_b})));
-    mhq.try_add_head(two_axioms);
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::unit));
-    mhq.candidate_specialization_refuted(candidate_a);
-    EXPECT_THAT(mhq.get_candidates(first_id), ::testing::UnorderedElementsAre(candidate_b));
-}
-
-TEST_F(PudMhqTest, ForkedHeadHasItsOwnCandidates) {
-    EXPECT_CALL(ops, resume())
-        .WillOnce(Return(live({candidate_a, candidate_b})))
-        .WillOnce(Return(live({candidate_c, candidate_d})));
-    mhq.try_add_head(two_axioms);
-    mhq.try_fork_head(first_id, two_axioms);
-    EXPECT_THAT(mhq.get_candidates(second_id), ::testing::UnorderedElementsAre(candidate_c, candidate_d));
-    EXPECT_THAT(mhq.get_candidates(first_id), ::testing::UnorderedElementsAre(candidate_a, candidate_b));
-}
-
-}  // namespace
-
-// ── check_head ───────────────────────────────────────────────────────────────
-
-TEST_F(PudMhqTest, CheckHeadIsTrueForAKeptHead) {
-    add_two_live();
-    EXPECT_TRUE(mhq.check_head(first_id));
-    EXPECT_FALSE(mhq.check_head(second_id));
-}
-
-TEST_F(PudMhqTest, CheckHeadIsFalseForAHeadRefutedOnAdmission) {
-    EXPECT_CALL(ops, resume()).WillOnce(Return(refuted()));
-    mhq.try_add_head(two_axioms);
-    EXPECT_FALSE(mhq.check_head(first_id));
-}
-
-TEST_F(PudMhqTest, CheckHeadIsFalseOnceRemoved) {
-    add_two_live();
-    mhq.remove_head(first_id);
-    EXPECT_FALSE(mhq.check_head(first_id));
-}
-
-TEST_F(PudMhqTest, CheckHeadIsFalseOnceItsLastCandidateIsRefuted) {
-    add_two_live();
-    EXPECT_CALL(ops, candidate_refuted(candidate_a)).WillOnce(Return(pud_forced_unfold_reason::refuted));
-    mhq.candidate_specialization_refuted(candidate_a);
-    EXPECT_FALSE(mhq.check_head(first_id));
+TEST_F(PudMhqTest, AForkKeepingOneCandidateIsUnit) {
+    candidate_under(0, 30);
+    candidate_under(2, 32);
+    const pud_mhq_head_id head = open().value();
+    ON_CALL(fork_candidate, try_fork(32u, _)).WillByDefault(Return(52u));
+    EXPECT_CALL(unit_queries, push_back(_));
+    fork(head);
 }

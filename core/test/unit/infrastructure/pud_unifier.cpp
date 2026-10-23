@@ -1,15 +1,18 @@
 #include <deque>
 #include <optional>
-#include <unordered_map>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_unifier.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/ubs_class.hpp"
 
 using ::testing::_;
+using ::testing::AnyNumber;
 using ::testing::ElementsAre;
+using ::testing::Field;
 using ::testing::InSequence;
+using ::testing::Invoke;
 using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -21,47 +24,47 @@ struct MockGlobalize {
     MOCK_METHOD(uint32_t, globalize, (uint32_t, uint32_t));
 };
 struct MockFind {
-    MOCK_METHOD(uint32_t, find, (uint32_t));
-};
-struct MockFindValue {
-    MOCK_METHOD(std::optional<framed_expr>, find_value, (uint32_t));
+    MOCK_METHOD(ubs_class, find, (uint32_t));
 };
 struct MockEquate {
-    MOCK_METHOD(void, equate, (uint32_t, uint32_t));
+    MOCK_METHOD(std::optional<framed_expr>, equate, (const ubs_class&, const ubs_class&));
 };
 struct MockInstantiate {
-    MOCK_METHOD(void, instantiate, (uint32_t, framed_expr));
+    MOCK_METHOD(void, instantiate, (const ubs_class&, framed_expr));
 };
 struct MockDetectCycle {
     MOCK_METHOD(bool, detect_cycle, ((const std::vector<uint32_t>&)));
 };
 
+uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
+    return frame_offset + index;
+}
+
+ubs_class singleton(uint32_t var) {
+    return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
+}
+
+ubs_class bound(uint32_t root, framed_expr value) {
+    return ubs_class{.root = root, .size = 1, .rep = root, .value = value};
+}
+
 using test_unifier_t = pud_unifier<
-    NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockFindValue>,
-    NiceMock<MockEquate>, NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>>;
+    NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockEquate>,
+    NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>>;
 
 struct PudUnifierTest : public ::testing::Test {
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockFind> find;
-    NiceMock<MockFindValue> find_value;
     NiceMock<MockEquate> equate;
     NiceMock<MockInstantiate> instantiate;
     NiceMock<MockDetectCycle> detect_cycle;
-    test_unifier_t unifier{globalize, find, find_value, equate, instantiate, detect_cycle};
+    test_unifier_t unifier{globalize, find, equate, instantiate, detect_cycle};
     std::deque<expr> owned;
-    std::unordered_map<uint32_t, uint32_t> roots;
-    std::unordered_map<uint32_t, framed_expr> values;
 
     void SetUp() override {
-        ON_CALL(globalize, globalize(_, _)).WillByDefault([](uint32_t offset, uint32_t index) { return offset + index; });
-        ON_CALL(find, find(_)).WillByDefault([this](uint32_t var) {
-            return roots.contains(var) ? roots.at(var) : var;
-        });
-        ON_CALL(find_value, find_value(_)).WillByDefault([this](uint32_t root) -> std::optional<framed_expr> {
-            if (!values.contains(root))
-                return std::nullopt;
-            return values.at(root);
-        });
+        ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
+        ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
+        ON_CALL(equate, equate(_, _)).WillByDefault(Return(std::nullopt));
         ON_CALL(detect_cycle, detect_cycle(_)).WillByDefault(Return(false));
     }
 
@@ -86,61 +89,74 @@ TEST_F(PudUnifierTest, EqualGroundTermsSucceedWithoutBinding) {
     EXPECT_TRUE(unifier.unify({term, 0}, {term, 5}));
 }
 
+TEST_F(PudUnifierTest, IdenticalFramedTermsAreNotLookedInto) {
+    EXPECT_CALL(find, find(_)).Times(0);
+    const expr* term = functor(1, {var(0), var(1)});
+    EXPECT_TRUE(unifier.unify({term, 3}, {term, 3}));
+}
+
 TEST_F(PudUnifierTest, VarsInTheSameClassAreNotEquated) {
-    roots[7] = 3;
+    ON_CALL(find, find(7)).WillByDefault(Return(ubs_class{.root = 3, .size = 2, .rep = 3, .value = std::nullopt}));
     EXPECT_CALL(equate, equate(_, _)).Times(0);
     EXPECT_TRUE(unifier.unify({var(3), 0}, {var(2), 5}));
 }
 
-TEST_F(PudUnifierTest, TwoUnboundVarsEquateTheirRoots) {
-    roots[4] = 1;
-    EXPECT_CALL(equate, equate(1u, 9u));
+TEST_F(PudUnifierTest, TwoUnboundVarsEquateTheirClasses) {
+    EXPECT_CALL(equate, equate(singleton(4), singleton(9)));
     EXPECT_TRUE(unifier.unify({var(4), 0}, {var(6), 3}));
 }
 
 TEST_F(PudUnifierTest, AnUnboundVarIsBoundToTheOtherSideAsIsWithItsFrame) {
     const expr* term = functor(1, {var(0)});
-    EXPECT_CALL(instantiate, instantiate(2u, (framed_expr{term, 8})));
+    EXPECT_CALL(instantiate, instantiate(singleton(2), (framed_expr{term, 8})));
     EXPECT_TRUE(unifier.unify({var(2), 0}, {term, 8}));
 }
 
 TEST_F(PudUnifierTest, VarOnEitherSideBindsTheSameWay) {
     const expr* term = functor(1, {});
-    EXPECT_CALL(instantiate, instantiate(2u, (framed_expr{term, 4})));
+    EXPECT_CALL(instantiate, instantiate(singleton(2), (framed_expr{term, 4})));
     EXPECT_TRUE(unifier.unify({term, 4}, {var(2), 0}));
 }
 
 TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
-    values[2] = framed_expr{functor(1, {var(0)}), 10};
+    ON_CALL(find, find(2)).WillByDefault(Return(bound(2, framed_expr{functor(1, {var(0)}), 10})));
     const expr* five = functor(5, {});
-    EXPECT_CALL(instantiate, instantiate(10u, (framed_expr{five, 0})));
-    EXPECT_CALL(instantiate, instantiate(2u, _)).Times(0);
+    EXPECT_CALL(instantiate, instantiate(singleton(10), (framed_expr{five, 0})));
+    EXPECT_CALL(instantiate, instantiate(Field(&ubs_class::root, 2u), _)).Times(0);
     EXPECT_TRUE(unifier.unify({var(2), 0}, {functor(1, {five}), 0}));
 }
 
-TEST_F(PudUnifierTest, TwoBoundVarsAreEquatedThenTheirValuesUnified) {
-    values[1] = framed_expr{functor(3, {var(0)}), 20};
-    values[2] = framed_expr{functor(3, {functor(9, {})}), 0};
+TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
+    const framed_expr kept{functor(3, {var(0)}), 20};
+    const framed_expr displaced{functor(3, {functor(9, {})}), 0};
+    const ubs_class merged = bound(1, kept);
+    EXPECT_CALL(find, find(_)).Times(AnyNumber());
+    EXPECT_CALL(find, find(1)).WillOnce(Return(bound(1, kept))).WillOnce(Return(merged));
+    EXPECT_CALL(find, find(2)).WillOnce(Return(bound(2, displaced)));
     InSequence in_order;
-    EXPECT_CALL(equate, equate(1u, 2u));
-    EXPECT_CALL(instantiate, instantiate(20u, _));
-    EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));
-}
-
-TEST_F(PudUnifierTest, ABoundAndAnUnboundVarAreOnlyEquated) {
-    values[1] = framed_expr{functor(3, {}), 0};
-    EXPECT_CALL(equate, equate(1u, 2u));
-    EXPECT_CALL(instantiate, instantiate(_, _)).Times(0);
+    EXPECT_CALL(equate, equate(bound(1, kept), bound(2, displaced))).WillOnce(Return(displaced));
+    EXPECT_CALL(instantiate, instantiate(singleton(20), _));
     EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));
 }
 
 TEST_F(PudUnifierTest, ArgumentsAreUnifiedFirstToLast) {
     InSequence in_order;
-    EXPECT_CALL(instantiate, instantiate(0u, _));
-    EXPECT_CALL(instantiate, instantiate(1u, _));
+    EXPECT_CALL(instantiate, instantiate(singleton(0), _));
+    EXPECT_CALL(instantiate, instantiate(singleton(1), _));
     EXPECT_TRUE(unifier.unify(
         {functor(1, {var(0), var(1)}), 0},
         {functor(1, {functor(2, {}), functor(3, {})}), 0}));
+}
+
+TEST_F(PudUnifierTest, ASharedPairOfSubtermsIsUnifiedOnce) {
+    const expr* left_shared = functor(2, {var(0)});
+    const expr* right_shared = functor(2, {var(1)});
+    EXPECT_CALL(find, find(_)).Times(AnyNumber());
+    EXPECT_CALL(find, find(0)).Times(1);
+    EXPECT_CALL(equate, equate(_, _)).Times(1);
+    EXPECT_TRUE(unifier.unify(
+        {functor(1, {left_shared, left_shared}), 0},
+        {functor(1, {right_shared, right_shared}), 0}));
 }
 
 TEST_F(PudUnifierTest, MismatchedFunctorIdsFail) {

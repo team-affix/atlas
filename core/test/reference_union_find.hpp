@@ -2,11 +2,9 @@
 #define REFERENCE_UNION_FIND_HPP
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 
 // Tracks variable classes for bind-map invariant checks (not a production type).
 struct reference_variable_classes {
@@ -60,40 +58,5 @@ struct reference_variable_classes {
         class_for(var);
     }
 };
-
-inline uint32_t reference_parent_chain_depth(
-    const std::unordered_map<uint32_t, uint32_t>& parents,
-    uint32_t var) {
-    uint32_t depth = 0;
-    while (parents.find(var) != parents.end()) {
-        var = parents.at(var);
-        ++depth;
-    }
-    return depth;
-}
-
-inline bool reference_parent_points_inside_class(
-    const std::unordered_map<uint32_t, uint32_t>& parents,
-    const reference_variable_classes& classes) {
-    for (const auto& edge : parents) {
-        const uint32_t child = edge.first;
-        const uint32_t parent = edge.second;
-        if (!classes.same_class(child, parent))
-            return false;
-    }
-    return true;
-}
-
-inline bool reference_height_within_log_bound(
-    const std::unordered_map<uint32_t, uint32_t>& parents,
-    const reference_variable_classes& classes,
-    uint32_t var) {
-    const size_t class_size = classes.class_size(var);
-    if (class_size <= 1u)
-        return true;
-    const uint32_t depth = reference_parent_chain_depth(parents, var);
-    const double log_bound = std::floor(std::log2(static_cast<double>(class_size)));
-    return depth <= static_cast<uint32_t>(log_bound);
-}
 
 #endif

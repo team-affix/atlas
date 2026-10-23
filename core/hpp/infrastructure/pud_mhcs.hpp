@@ -1,263 +1,330 @@
 #ifndef PUD_MHCS_HPP
 #define PUD_MHCS_HPP
 
+#include <cstddef>
 #include <optional>
-#include <utility>
-#include <variant>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
-#include "value_objects/pud_candidate_justification.hpp"
-#include "value_objects/pud_candidate_resume_context.hpp"
+#include <unordered_set>
+#include <utility>
+#include <vector>
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
-#include "debug_assert.hpp"
+#include "value_objects/pud_replay.hpp"
+#include "value_objects/pud_witness_advance.hpp"
 
+// The multi-headed candidate search. Each head specializes its query below one axiom as deep as its
+// witnesses allow: a head on a live leaf is its own witness; otherwise it holds two witness searches
+// under distinct children (a choice point), and when only one survives it steps down toward it.
+// Heads are reactive: invalidating leaves re-justifies every head that relied on them, and a head
+// that can no longer be justified is refuted and dropped.
 template<
-    typename Descent,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
+    typename IDescendReplay,
+    typename ITryAddWitnessSearch,
+    typename ITryForkWitnessSearch,
+    typename IAdvanceWitnessSearch,
+    typename IRemoveWitnessSearch,
+    typename IInvalidateWitnessLeaves,
+    typename ICheckNodeLeaf,
+    typename ICheckNodeRefuted,
+    typename IGetChildren>
 struct pud_mhcs {
-    pud_mhcs(IMakeHead& make_head, IForkHead& fork_head, IRemoveWitnessHead& remove_witness_head);
-    std::optional<pud_mhcs_head_id> try_add_head(Descent search_root_descent);
-    void remove_head(pud_mhcs_head_id head_id);
-    std::vector<pud_mhcs_head_id> invalidate_leaf(pud_node_id node);
-    std::vector<pud_mhcs_head_id> witnesses_refuted(const std::vector<pud_mhws_head_id>& witness_head_ids);
-    std::optional<pud_mhcs_head_id> try_fork_head(pud_mhcs_head_id head_id, Descent new_root_descent);
-    std::vector<pud_node_id> get_path(pud_mhcs_head_id head_id) const;
-    bool check_head(pud_mhcs_head_id head_id) const;
+    pud_mhcs(
+        IDescendReplay& descend_replay,
+        ITryAddWitnessSearch& try_add_witness_search,
+        ITryForkWitnessSearch& try_fork_witness_search,
+        IAdvanceWitnessSearch& advance_witness_search,
+        IRemoveWitnessSearch& remove_witness_search,
+        IInvalidateWitnessLeaves& invalidate_witness_leaves,
+        ICheckNodeLeaf& check_node_leaf,
+        ICheckNodeRefuted& check_node_refuted,
+        IGetChildren& get_children);
+    std::optional<pud_mhcs_head_id> try_add(pud_replay axiom_root);
+    std::optional<pud_mhcs_head_id> try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root);
+    void remove(pud_mhcs_head_id head_id);
+    std::vector<pud_mhcs_head_id> invalidate_leaves(const std::vector<pud_node_id>& leaves);
+    const std::vector<pud_node_id>& path(pud_mhcs_head_id head_id) const;
 private:
-    IMakeHead& make_head_;
-    IForkHead& fork_head_;
-    IRemoveWitnessHead& remove_witness_head_;
+    // A witness search and the child of the candidate it searches under.
+    struct witness {
+        pud_mhws_head_id id;
+        pud_replay search_root;
+    };
+    // The candidate's search for two witnesses among its node's children, the next child to try.
+    struct witness_pair {
+        std::optional<witness> a;
+        std::optional<witness> b;
+        size_t next_child;
+    };
+    // A candidate holding a witness pair is a choice point; one without is its own witness.
+    struct candidate {
+        std::vector<pud_node_id> path;
+        pud_replay current;
+        std::optional<witness_pair> witnesses;
+    };
 
-    bool try_justify(pud_mhcs_head_id head_id);
-    void link(pud_mhcs_head_id head_id, pud_candidate_justification justification);
-    pud_candidate_justification unlink_head(pud_mhcs_head_id head_id);
-    std::unordered_set<pud_mhcs_head_id> unlink_self_witnesses(pud_node_id node);
+    std::optional<pud_mhcs_head_id> try_admit(candidate admitted);
+    bool try_justify(candidate& justified);
+    std::optional<witness> try_add_witness(candidate& searching);
+    std::optional<witness> try_fork_witness(const candidate& forked, const std::optional<witness>& other);
+    void advance(candidate& advancing, witness& survivor);
+    void release_witnesses(candidate& released);
+    void link(pud_mhcs_head_id head_id, const candidate& linked);
+    void unlink(pud_mhcs_head_id head_id, const candidate& linked);
+
+    IDescendReplay& descend_replay_;
+    ITryAddWitnessSearch& try_add_witness_search_;
+    ITryForkWitnessSearch& try_fork_witness_search_;
+    IAdvanceWitnessSearch& advance_witness_search_;
+    IRemoveWitnessSearch& remove_witness_search_;
+    IInvalidateWitnessLeaves& invalidate_witness_leaves_;
+    ICheckNodeLeaf& check_node_leaf_;
+    ICheckNodeRefuted& check_node_refuted_;
+    IGetChildren& get_children_;
 
     pud_mhcs_head_id next_head_id_;
-    
-    std::unordered_map<pud_mhcs_head_id, Head> heads_;
-
-    std::unordered_map<pud_mhcs_head_id, pud_candidate_justification> head_to_justification_;
-    std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_head_to_head_;
+    std::unordered_map<pud_mhcs_head_id, candidate> candidates_;
+    std::unordered_map<pud_mhws_head_id, pud_mhcs_head_id> witness_to_head_;
     std::unordered_map<pud_node_id, std::unordered_set<pud_mhcs_head_id>> leaf_to_heads_;
 };
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::pud_mhcs(IMakeHead& make_head, IForkHead& fork_head, IRemoveWitnessHead& remove_witness_head)
-    : make_head_(make_head)
-    , fork_head_(fork_head)
-    , remove_witness_head_(remove_witness_head)
-    , next_head_id_(0) {}
+#define PUD_MHCS_TEMPLATE                                                                  \
+    template<typename IDescendReplay, typename ITryAddWitnessSearch,                       \
+             typename ITryForkWitnessSearch, typename IAdvanceWitnessSearch,               \
+             typename IRemoveWitnessSearch, typename IInvalidateWitnessLeaves,             \
+             typename ICheckNodeLeaf, typename ICheckNodeRefuted, typename IGetChildren>
+#define PUD_MHCS                                                                           \
+    pud_mhcs<IDescendReplay, ITryAddWitnessSearch, ITryForkWitnessSearch,                  \
+        IAdvanceWitnessSearch, IRemoveWitnessSearch, IInvalidateWitnessLeaves,             \
+        ICheckNodeLeaf, ICheckNodeRefuted, IGetChildren>
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_add_head(D search_root_descent) {
-    const bool head_inserted = heads_.emplace(next_head_id_, make_head_.make(std::move(search_root_descent))).second;
-    DEBUG_ASSERT(head_inserted);
-    if (!try_justify(next_head_id_))
-        return std::nullopt;
-    return next_head_id_++;
+PUD_MHCS_TEMPLATE
+PUD_MHCS::pud_mhcs(
+    IDescendReplay& descend_replay,
+    ITryAddWitnessSearch& try_add_witness_search,
+    ITryForkWitnessSearch& try_fork_witness_search,
+    IAdvanceWitnessSearch& advance_witness_search,
+    IRemoveWitnessSearch& remove_witness_search,
+    IInvalidateWitnessLeaves& invalidate_witness_leaves,
+    ICheckNodeLeaf& check_node_leaf,
+    ICheckNodeRefuted& check_node_refuted,
+    IGetChildren& get_children)
+    : descend_replay_(descend_replay)
+    , try_add_witness_search_(try_add_witness_search)
+    , try_fork_witness_search_(try_fork_witness_search)
+    , advance_witness_search_(advance_witness_search)
+    , remove_witness_search_(remove_witness_search)
+    , invalidate_witness_leaves_(invalidate_witness_leaves)
+    , check_node_leaf_(check_node_leaf)
+    , check_node_refuted_(check_node_refuted)
+    , get_children_(get_children)
+    , next_head_id_(0)
+    , candidates_()
+    , witness_to_head_()
+    , leaf_to_heads_() {}
+
+PUD_MHCS_TEMPLATE
+std::optional<pud_mhcs_head_id> PUD_MHCS::try_add(pud_replay axiom_root) {
+    std::vector<pud_node_id> path{axiom_root.node};
+    return try_admit(candidate{.path = std::move(path), .current = std::move(axiom_root), .witnesses = std::nullopt});
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-void pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::remove_head(pud_mhcs_head_id head_id) {
-    if (!heads_.contains(head_id))
-        return;
-
-    heads_.erase(head_id);
-    const pud_candidate_justification justification = unlink_head(head_id);
-    const pud_candidate_choice_point* choice_point = std::get_if<pud_candidate_choice_point>(&justification);
-    if (!choice_point)
-        return;
-    remove_witness_head_.remove_head(choice_point->witness_a);
-    remove_witness_head_.remove_head(choice_point->witness_b);
-}
-
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::invalidate_leaf(pud_node_id node) {
-    std::vector<pud_mhcs_head_id> refuted;
-    for (pud_mhcs_head_id head_id : unlink_self_witnesses(node)) {
-        if (try_justify(head_id))
-            continue;
-        refuted.push_back(head_id);
+// Replays the other head's path from the new axiom root; a path that no longer replays refutes the
+// fork. A replayed choice point forks both of its witness searches onto the new environment.
+PUD_MHCS_TEMPLATE
+std::optional<pud_mhcs_head_id> PUD_MHCS::try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root) {
+    const candidate& other = candidates_.at(head_id);
+    candidate forked{.path = {axiom_root.node}, .current = std::move(axiom_root), .witnesses = std::nullopt};
+    for (size_t path_index = 1; path_index < other.path.size(); ++path_index) {
+        std::optional<pud_replay> next = descend_replay_.descend(forked.current, other.path.at(path_index));
+        if (!next.has_value())
+            return std::nullopt;
+        forked.path.push_back(next->node);
+        forked.current = std::move(next.value());
     }
-    return refuted;
+    if (other.witnesses.has_value()) {
+        forked.witnesses = witness_pair{
+            .a = try_fork_witness(forked, other.witnesses->a),
+            .b = try_fork_witness(forked, other.witnesses->b),
+            .next_child = other.witnesses->next_child,
+        };
+    }
+    return try_admit(std::move(forked));
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::vector<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::witnesses_refuted(
-    const std::vector<pud_mhws_head_id>& witness_head_ids) {
-    std::vector<std::pair<pud_mhcs_head_id, pud_mhws_head_id>> refutations;
-    for (pud_mhws_head_id witness_head_id : witness_head_ids) {
-        auto witness_it = witness_head_to_head_.find(witness_head_id);
-        if (witness_it == witness_head_to_head_.end())
-            continue;
-        refutations.emplace_back(witness_it->second, witness_head_id);
-    }
+PUD_MHCS_TEMPLATE
+void PUD_MHCS::remove(pud_mhcs_head_id head_id) {
+    candidate& removed = candidates_.at(head_id);
+    unlink(head_id, removed);
+    release_witnesses(removed);
+    candidates_.erase(head_id);
+}
 
-    std::vector<pud_mhcs_head_id> affected;
-    for (const auto& [head_id, witness_head_id] : refutations) {
-        if (head_to_justification_.contains(head_id)) {
-            unlink_head(head_id);
-            affected.push_back(head_id);
+// Every witness search moves before any candidate learns which of its witnesses are exhausted, so
+// no candidate reaches for a witness that is gone but not yet reported.
+PUD_MHCS_TEMPLATE
+std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaves(const std::vector<pud_node_id>& leaves) {
+    const std::vector<pud_mhws_head_id> exhausted = invalidate_witness_leaves_.invalidate_leaves(leaves);
+    std::vector<pud_mhcs_head_id> unjustified;
+    for (pud_node_id leaf : leaves) {
+        auto self_witnessed = leaf_to_heads_.extract(leaf);
+        if (self_witnessed.empty())
+            continue;
+        unjustified.insert(unjustified.end(), self_witnessed.mapped().begin(), self_witnessed.mapped().end());
+    }
+    std::vector<std::pair<pud_mhcs_head_id, pud_mhws_head_id>> lost_witnesses;
+    for (pud_mhws_head_id witness_id : exhausted)
+        lost_witnesses.emplace_back(witness_to_head_.at(witness_id), witness_id);
+    std::unordered_set<pud_mhcs_head_id> choice_points_unlinked;
+    for (const auto& [head_id, witness_id] : lost_witnesses) {
+        candidate& lost = candidates_.at(head_id);
+        if (choice_points_unlinked.insert(head_id).second) {
+            unlink(head_id, lost);
+            unjustified.push_back(head_id);
         }
-        heads_.at(head_id).witness_refuted(witness_head_id);
+        std::optional<witness>& slot = lost.witnesses->a.has_value() && lost.witnesses->a->id == witness_id
+            ? lost.witnesses->a
+            : lost.witnesses->b;
+        slot = std::nullopt;
     }
-
     std::vector<pud_mhcs_head_id> refuted;
-    for (pud_mhcs_head_id head_id : affected) {
-        if (try_justify(head_id))
+    for (pud_mhcs_head_id head_id : unjustified) {
+        candidate& rejustified = candidates_.at(head_id);
+        if (try_justify(rejustified)) {
+            link(head_id, rejustified);
             continue;
+        }
+        candidates_.erase(head_id);
         refuted.push_back(head_id);
     }
     return refuted;
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::optional<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_fork_head(pud_mhcs_head_id head_id, D new_root_descent) {
-    const bool head_inserted = heads_.emplace(next_head_id_, fork_head_.fork(heads_.at(head_id), new_root_descent)).second;
-    DEBUG_ASSERT(head_inserted);
-    if (!try_justify(next_head_id_))
+// Root first, the candidate's node last.
+PUD_MHCS_TEMPLATE
+const std::vector<pud_node_id>& PUD_MHCS::path(pud_mhcs_head_id head_id) const {
+    return candidates_.at(head_id).path;
+}
+
+PUD_MHCS_TEMPLATE
+std::optional<pud_mhcs_head_id> PUD_MHCS::try_admit(candidate admitted) {
+    if (!try_justify(admitted))
         return std::nullopt;
-    return next_head_id_++;
+    const pud_mhcs_head_id head_id = next_head_id_++;
+    link(head_id, admitted);
+    candidates_.emplace(head_id, std::move(admitted));
+    return head_id;
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::vector<pud_node_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::get_path(pud_mhcs_head_id head_id) const {
-    return heads_.at(head_id).path();
-}
-
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-bool pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::check_head(pud_mhcs_head_id head_id) const {
-    return heads_.contains(head_id);
-}
-
-// Resumes a head and links the justification it finds; a head that finds none is dropped.
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-bool pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::try_justify(pud_mhcs_head_id head_id) {
-    std::optional<pud_candidate_resume_context<D>> resume_context = heads_.at(head_id).resume();
-    if (!resume_context.has_value()) {
-        heads_.erase(head_id);
-        return false;
+// A candidate that fails to be justified releases every witness search it still holds.
+PUD_MHCS_TEMPLATE
+bool PUD_MHCS::try_justify(candidate& justified) {
+    while (true) {
+        const pud_node_id node = justified.current.node;
+        if (check_node_refuted_.check_refuted(node)) {
+            release_witnesses(justified);
+            return false;
+        }
+        if (check_node_leaf_.check_leaf(node)) {
+            justified.witnesses = std::nullopt;
+            return true;
+        }
+        if (!justified.witnesses.has_value())
+            justified.witnesses = witness_pair{.a = std::nullopt, .b = std::nullopt, .next_child = 0};
+        if (!justified.witnesses->a.has_value())
+            justified.witnesses->a = try_add_witness(justified);
+        if (!justified.witnesses->b.has_value())
+            justified.witnesses->b = try_add_witness(justified);
+        const bool has_a = justified.witnesses->a.has_value();
+        const bool has_b = justified.witnesses->b.has_value();
+        if (has_a && has_b)
+            return true;
+        if (!has_a && !has_b)
+            return false;
+        advance(justified, has_a ? justified.witnesses->a.value() : justified.witnesses->b.value());
     }
-    link(head_id, resume_context->justification);
-    return true;
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-void pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::link(pud_mhcs_head_id head_id, pud_candidate_justification justification) {
-    head_to_justification_.insert({head_id, justification});
+PUD_MHCS_TEMPLATE
+std::optional<typename PUD_MHCS::witness> PUD_MHCS::try_add_witness(candidate& searching) {
+    const std::vector<pud_node_id>& children = get_children_.get(searching.current.node);
+    size_t& next_child = searching.witnesses->next_child;
+    while (next_child < children.size()) {
+        std::optional<pud_replay> search_root = descend_replay_.descend(searching.current, children.at(next_child++));
+        if (!search_root.has_value())
+            continue;
+        const std::optional<pud_mhws_head_id> added = try_add_witness_search_.try_add(search_root.value());
+        if (!added.has_value())
+            continue;
+        return witness{.id = added.value(), .search_root = std::move(search_root.value())};
+    }
+    return std::nullopt;
+}
 
-    if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
-        witness_head_to_head_.insert({choice_point->witness_a, head_id});
-        witness_head_to_head_.insert({choice_point->witness_b, head_id});
+PUD_MHCS_TEMPLATE
+std::optional<typename PUD_MHCS::witness> PUD_MHCS::try_fork_witness(
+    const candidate& forked, const std::optional<witness>& other) {
+    if (!other.has_value())
+        return std::nullopt;
+    std::optional<pud_replay> search_root = descend_replay_.descend(forked.current, other->search_root.node);
+    if (!search_root.has_value())
+        return std::nullopt;
+    const std::optional<pud_mhws_head_id> fork = try_fork_witness_search_.try_fork(other->id, search_root.value());
+    if (!fork.has_value())
+        return std::nullopt;
+    return witness{.id = fork.value(), .search_root = std::move(search_root.value())};
+}
+
+// Steps onto the survivor's search root, and the survivor's search moves one level down with it. A
+// survivor whose search root was its witness leaves the candidate on that leaf, its own witness.
+PUD_MHCS_TEMPLATE
+void PUD_MHCS::advance(candidate& advancing, witness& survivor) {
+    std::optional<pud_witness_advance> advanced = advance_witness_search_.advance(survivor.id);
+    advancing.path.push_back(survivor.search_root.node);
+    advancing.current = survivor.search_root;
+    if (!advanced.has_value()) {
+        advancing.witnesses = std::nullopt;
         return;
     }
-
-    const pud_candidate_self_witness& self_witness = std::get<pud_candidate_self_witness>(justification);
-
-    leaf_to_heads_[self_witness.node].insert(head_id);
+    survivor.search_root = std::move(advanced->search_root);
+    advancing.witnesses->next_child = advanced->next_sibling;
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-pud_candidate_justification pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::unlink_head(pud_mhcs_head_id head_id) {
-    auto extracted = head_to_justification_.extract(head_id);
+PUD_MHCS_TEMPLATE
+void PUD_MHCS::release_witnesses(candidate& released) {
+    if (!released.witnesses.has_value())
+        return;
+    if (released.witnesses->a.has_value())
+        remove_witness_search_.remove(released.witnesses->a->id);
+    if (released.witnesses->b.has_value())
+        remove_witness_search_.remove(released.witnesses->b->id);
+    released.witnesses = std::nullopt;
+}
 
-    pud_candidate_justification justification = std::move(extracted.mapped());
-
-    if (auto choice_point = std::get_if<pud_candidate_choice_point>(&justification)) {
-        witness_head_to_head_.erase(choice_point->witness_a);
-        witness_head_to_head_.erase(choice_point->witness_b);
-        return justification;
+PUD_MHCS_TEMPLATE
+void PUD_MHCS::link(pud_mhcs_head_id head_id, const candidate& linked) {
+    if (!linked.witnesses.has_value()) {
+        leaf_to_heads_[linked.current.node].insert(head_id);
+        return;
     }
-
-    const pud_candidate_self_witness& self_witness = std::get<pud_candidate_self_witness>(justification);
-
-    auto& head_ids = leaf_to_heads_.at(self_witness.node);
-    head_ids.erase(head_id);
-
-    if (head_ids.empty())
-        leaf_to_heads_.erase(self_witness.node);
-
-    return justification;
+    witness_to_head_.emplace(linked.witnesses->a->id, head_id);
+    witness_to_head_.emplace(linked.witnesses->b->id, head_id);
 }
 
-template<
-    typename D,
-    typename Head,
-    typename IMakeHead,
-    typename IForkHead,
-    typename IRemoveWitnessHead>
-std::unordered_set<pud_mhcs_head_id> pud_mhcs<D, Head, IMakeHead, IForkHead, IRemoveWitnessHead>::unlink_self_witnesses(pud_node_id node) {
-    auto extracted = leaf_to_heads_.extract(node);
-
-    if (extracted.empty())
-        return {};
-    
-    for (pud_mhcs_head_id head_id : extracted.mapped())
-        head_to_justification_.erase(head_id);
-
-    return std::move(extracted.mapped());
+PUD_MHCS_TEMPLATE
+void PUD_MHCS::unlink(pud_mhcs_head_id head_id, const candidate& linked) {
+    if (linked.witnesses.has_value()) {
+        witness_to_head_.erase(linked.witnesses->a->id);
+        witness_to_head_.erase(linked.witnesses->b->id);
+        return;
+    }
+    std::unordered_set<pud_mhcs_head_id>& heads = leaf_to_heads_.at(linked.current.node);
+    heads.erase(head_id);
+    if (heads.empty())
+        leaf_to_heads_.erase(linked.current.node);
 }
+
+#undef PUD_MHCS
+#undef PUD_MHCS_TEMPLATE
 
 #endif

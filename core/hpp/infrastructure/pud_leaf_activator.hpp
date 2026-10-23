@@ -2,44 +2,99 @@
 #define PUD_LEAF_ACTIVATOR_HPP
 
 #include <utility>
+#include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/pud_goal_queries.hpp"
+#include "value_objects/pud_leaf_state.hpp"
 #include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_structure_watch_change.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
-// Gives a leaf its fresh descent: a leaf that arrives with a refuted goal is refuted, and one that
-// still has open goals becomes open.
-template<typename Descent, typename IStoreNodeDescent, typename IMarkLeafOpen, typename IRefuteNode>
+// Gives a new leaf its state: a root starts from empty bindings; a child continues its parent's. Each
+// activation reports whether some open goal of the leaf has no candidate, which refutes the leaf; the
+// caller refutes it once that is safe, since the leaf already holds its other queries.
+template<
+    typename IGetLeafState,
+    typename IStoreLeafState,
+    typename IBind,
+    typename IWatch,
+    typename IGetNodeGoals,
+    typename IGetCallSite,
+    typename IMakeQueries>
 struct pud_leaf_activator {
     pud_leaf_activator(
-        IStoreNodeDescent& store_node_descent,
-        IMarkLeafOpen& mark_leaf_open,
-        IRefuteNode& refute_node);
-    void activate(pud_node_id leaf, Descent descent);
+        IGetLeafState& get_leaf_state,
+        IStoreLeafState& store_leaf_state,
+        IBind& bind,
+        IWatch& watch,
+        IGetNodeGoals& get_node_goals,
+        IGetCallSite& get_call_site,
+        IMakeQueries& make_queries);
+    bool activate_root(pud_node_id root);
+    bool activate_child(pud_node_id parent, pud_node_id child);
 private:
-    IStoreNodeDescent& store_node_descent_;
-    IMarkLeafOpen& mark_leaf_open_;
-    IRefuteNode& refute_node_;
+    IGetLeafState& get_leaf_state_;
+    IStoreLeafState& store_leaf_state_;
+    IBind& bind_;
+    IWatch& watch_;
+    IGetNodeGoals& get_node_goals_;
+    IGetCallSite& get_call_site_;
+    IMakeQueries& make_queries_;
 };
 
-template<typename D, typename ISND, typename IMLO, typename IRN>
-pud_leaf_activator<D, ISND, IMLO, IRN>::pud_leaf_activator(
-    ISND& store_node_descent,
-    IMLO& mark_leaf_open,
-    IRN& refute_node)
-    : store_node_descent_(store_node_descent)
-    , mark_leaf_open_(mark_leaf_open)
-    , refute_node_(refute_node) {}
+#define PUD_LEAF_ACTIVATOR_TEMPLATE                                                        \
+    template<typename IGetLeafState, typename IStoreLeafState, typename IBind, typename IWatch, \
+             typename IGetNodeGoals, typename IGetCallSite, typename IMakeQueries>
+#define PUD_LEAF_ACTIVATOR                                                                 \
+    pud_leaf_activator<IGetLeafState, IStoreLeafState, IBind, IWatch, IGetNodeGoals,       \
+        IGetCallSite, IMakeQueries>
 
-template<typename D, typename ISND, typename IMLO, typename IRN>
-void pud_leaf_activator<D, ISND, IMLO, IRN>::activate(pud_node_id leaf, D descent) {
-    const bool goal_refuted = !descent.body_goal_pq().refuted_goals().empty();
-    const bool goals_open = !descent.body_goal_expr().body_goal_exprs().empty();
-    store_node_descent_.store(leaf, std::move(descent));
-    if (goal_refuted) {
-        refute_node_.refute(leaf);
-        return;
-    }
-    if (!goals_open)
-        return;
-    mark_leaf_open_.mark_leaf_open(leaf);
+PUD_LEAF_ACTIVATOR_TEMPLATE
+PUD_LEAF_ACTIVATOR::pud_leaf_activator(
+    IGetLeafState& get_leaf_state,
+    IStoreLeafState& store_leaf_state,
+    IBind& bind,
+    IWatch& watch,
+    IGetNodeGoals& get_node_goals,
+    IGetCallSite& get_call_site,
+    IMakeQueries& make_queries)
+    : get_leaf_state_(get_leaf_state)
+    , store_leaf_state_(store_leaf_state)
+    , bind_(bind)
+    , watch_(watch)
+    , get_node_goals_(get_node_goals)
+    , get_call_site_(get_call_site)
+    , make_queries_(make_queries) {}
+
+PUD_LEAF_ACTIVATOR_TEMPLATE
+bool PUD_LEAF_ACTIVATOR::activate_root(pud_node_id root) {
+    const pud_ubs_state bindings{};
+    pud_goal_queries queries = make_queries_.make_root_queries(root, bindings);
+    store_leaf_state_.store(root, pud_leaf_state{
+        .bindings = bindings,
+        .watch = watch_.watch_root(bindings, get_node_goals_.get(root)),
+        .queries = std::move(queries.heads),
+    });
+    return queries.refuted;
 }
+
+PUD_LEAF_ACTIVATOR_TEMPLATE
+bool PUD_LEAF_ACTIVATOR::activate_child(pud_node_id parent, pud_node_id child) {
+    const pud_leaf_state& parent_state = get_leaf_state_.get(parent);
+    const pud_body_goal_id call_site = get_call_site_.get(parent);
+    pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);
+    pud_structure_watch_change watched =
+        watch_.descend(parent_state.watch, bindings, child, call_site, get_node_goals_.get(child));
+    pud_goal_queries queries =
+        make_queries_.make_child_queries(parent_state.queries, child, bindings, call_site, watched.changed_goals);
+    store_leaf_state_.store(child, pud_leaf_state{
+        .bindings = std::move(bindings),
+        .watch = std::move(watched.watch),
+        .queries = std::move(queries.heads),
+    });
+    return queries.refuted;
+}
+
+#undef PUD_LEAF_ACTIVATOR
+#undef PUD_LEAF_ACTIVATOR_TEMPLATE
 
 #endif

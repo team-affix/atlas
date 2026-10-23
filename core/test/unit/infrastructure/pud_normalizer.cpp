@@ -5,8 +5,10 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_normalizer.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/ubs_class.hpp"
 
 using ::testing::_;
+using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -21,25 +23,24 @@ struct MockMakeFunctor {
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
-struct MockFindRep {
-    MOCK_METHOD(uint32_t, find_rep, (uint32_t));
-};
-struct MockFindValue {
-    MOCK_METHOD(std::optional<framed_expr>, find_value, (uint32_t));
+struct MockFind {
+    MOCK_METHOD(ubs_class, find, (uint32_t));
 };
 
-using test_normalizer_t = global_normalizer<
-    NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>,
-    NiceMock<MockFindRep>, NiceMock<MockFindValue>>;
+uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
+    return frame_offset + index;
+}
+
+using test_normalizer_t = pud_normalizer<
+    NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>>;
 
 struct PudNormalizerTest : public ::testing::Test {
     std::deque<expr> owned;
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockMakeFunctor> make_functor;
     NiceMock<MockMakeVar> make_var;
-    NiceMock<MockFindRep> find_rep;
-    NiceMock<MockFindValue> find_value;
-    test_normalizer_t normalizer{globalize, make_functor, make_var, find_rep, find_value};
+    NiceMock<MockFind> find;
+    test_normalizer_t normalizer{globalize, make_functor, make_var, find};
 
     const expr* var(uint32_t index) {
         owned.push_back(expr{expr::var{index}});
@@ -52,17 +53,16 @@ struct PudNormalizerTest : public ::testing::Test {
     }
 
     void unbound(uint32_t global, uint32_t rep, const expr* rep_node) {
-        ON_CALL(find_value, find_value(global)).WillByDefault(Return(std::nullopt));
-        ON_CALL(find_rep, find_rep(global)).WillByDefault(Return(rep));
+        ON_CALL(find, find(global)).WillByDefault(Return(ubs_class{.root = global, .size = 1, .rep = rep, .value = std::nullopt}));
         ON_CALL(make_var, make_var(rep)).WillByDefault(Return(rep_node));
     }
 
     void bound(uint32_t global, framed_expr value) {
-        ON_CALL(find_value, find_value(global)).WillByDefault(Return(value));
+        ON_CALL(find, find(global)).WillByDefault(Return(ubs_class{.root = global, .size = 1, .rep = global, .value = value}));
     }
 
     void SetUp() override {
-        ON_CALL(globalize, globalize(_, _)).WillByDefault([](uint32_t offset, uint32_t index) { return offset + index; });
+        ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
     }
 };
 
@@ -124,13 +124,22 @@ TEST_F(PudNormalizerTest, MixedBoundAndUnboundArgsKeepRepresentatives) {
     EXPECT_EQ(normalizer.normalize({functor(9, {var(0), var(1)}), 0}), rebuilt);
 }
 
+TEST_F(PudNormalizerTest, ASharedSubtermIsRebuiltOnce) {
+    const expr* shared = functor(2, {});
+    const expr* rebuilt_shared = functor(2, {});
+    const expr* rebuilt = functor(1, {rebuilt_shared, rebuilt_shared});
+    EXPECT_CALL(make_functor, make_functor(2u, _)).WillOnce(Return(rebuilt_shared));
+    EXPECT_CALL(make_functor, make_functor(1u, std::vector<const expr*>{rebuilt_shared, rebuilt_shared}))
+        .WillOnce(Return(rebuilt));
+    EXPECT_EQ(normalizer.normalize({functor(1, {shared, shared}), 0}), rebuilt);
+}
+
 TEST_F(PudNormalizerTest, LaterBindingIsVisibleOnTheNextNormalize) {
     const expr* unbound_node = var(0);
     const expr* canonical = functor(3, {});
-    EXPECT_CALL(find_value, find_value(0u))
-        .WillOnce(Return(std::nullopt))
-        .WillOnce(Return(framed_expr{functor(3, {}), 0}));
-    ON_CALL(find_rep, find_rep(0u)).WillByDefault(Return(0u));
+    EXPECT_CALL(find, find(0u))
+        .WillOnce(Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = std::nullopt}))
+        .WillOnce(Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_expr{functor(3, {}), 0}}));
     ON_CALL(make_var, make_var(0u)).WillByDefault(Return(unbound_node));
     ON_CALL(make_functor, make_functor(3u, _)).WillByDefault(Return(canonical));
     EXPECT_EQ(normalizer.normalize({var(0), 0}), unbound_node);

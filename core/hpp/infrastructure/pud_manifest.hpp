@@ -2,302 +2,142 @@
 #define PUD_MANIFEST_HPP
 
 #include <cstdint>
+#include <deque>
+#include <optional>
+#include <random>
 #include <vector>
-
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
-
 #include "infrastructure/pud_acceptor.hpp"
-#include "infrastructure/pud_axiom_initializer.hpp"
-#include "infrastructure/pud_axioms.hpp"
-#include "infrastructure/pud_base_descent_runner.hpp"
-#include "infrastructure/pud_base_descent.hpp"
-#include "infrastructure/pud_binding_descent.hpp"
-#include "infrastructure/pud_body_goal_expr_descent.hpp"
-#include "infrastructure/pud_body_goal_pq_descent.hpp"
-#include "infrastructure/pud_call_sites.hpp"
-#include "infrastructure/pud_candidate_specialization_head.hpp"
-#include "infrastructure/pud_candidate_specialization_head_factory.hpp"
-#include "infrastructure/pud_candidate_specialization_head_forker.hpp"
-#include "infrastructure/pud_child_maker.hpp"
-#include "infrastructure/pud_cycle_detector.hpp"
-#include "infrastructure/pud_cycle_detector_factory.hpp"
-#include "infrastructure/pud_children.hpp"
-#include "infrastructure/pud_conjecture_initializer.hpp"
+#include "infrastructure/pud_binder.hpp"
+#include "infrastructure/pud_changed_class_finder.hpp"
 #include "infrastructure/pud_expander.hpp"
-#include "infrastructure/pud_exporter.hpp"
-#include "infrastructure/pud_frontier_recorder.hpp"
+#include "infrastructure/pud_frontier_change_collector.hpp"
+#include "infrastructure/pud_frontier_retirer.hpp"
 #include "infrastructure/pud_leaf_activator.hpp"
-#include "infrastructure/pud_unfolder.hpp"
-#include "infrastructure/pud_leaf_invalidator.hpp"
-#include "infrastructure/pud_leaf_nodes.hpp"
-#include "infrastructure/pud_live_leaf_finder.hpp"
-#include "infrastructure/pud_lvc_descent.hpp"
+#include "infrastructure/pud_leaf_materializer.hpp"
+#include "infrastructure/pud_leaf_query_maker.hpp"
+#include "infrastructure/pud_leaf_releaser.hpp"
+#include "infrastructure/pud_leaf_states.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
-#include "infrastructure/pud_next_body_goal_id_descent.hpp"
-#include "infrastructure/pud_node_added_body_goals.hpp"
-#include "infrastructure/pud_node_added_substitutions.hpp"
-#include "infrastructure/pud_node_added_var_count.hpp"
-#include "infrastructure/pud_node_descents.hpp"
-#include "infrastructure/pud_node_heads.hpp"
+#include "infrastructure/pud_node_goals.hpp"
 #include "infrastructure/pud_node_id_sequencer.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_node_parents.hpp"
-#include "infrastructure/pud_node_refuter.hpp"
-#include "infrastructure/pud_normalizer_factory.hpp"
-#include "infrastructure/pud_open_leaves.hpp"
-#include "infrastructure/pud_open_body_goal_finder.hpp"
-#include "infrastructure/pud_query_head.hpp"
-#include "infrastructure/pud_query_head_factory.hpp"
-#include "infrastructure/pud_query_head_forker.hpp"
-#include "infrastructure/pud_query_forks.hpp"
-#include "infrastructure/pud_query_head_nodes.hpp"
-#include "infrastructure/pud_query_opener.hpp"
+#include "infrastructure/pud_node_maker.hpp"
+#include "infrastructure/pud_node_states.hpp"
+#include "infrastructure/pud_node_status.hpp"
+#include "infrastructure/pud_node_table.hpp"
+#include "infrastructure/pud_query_holders.hpp"
+#include "infrastructure/pud_random_expansion_chooser.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
-#include "infrastructure/pud_refuted_leaves.hpp"
-#include "infrastructure/pud_refuted_node_checker.hpp"
-#include "infrastructure/pud_replay_descent.hpp"
-#include "infrastructure/pud_root_descent_maker.hpp"
-#include "infrastructure/pud_root_nodes.hpp"
-#include "infrastructure/pud_structure_watch_descent.hpp"
-#include "infrastructure/pud_touched_var_logger.hpp"
-#include "infrastructure/pud_transient_ubs_state.hpp"
-#include "infrastructure/pud_unifier.hpp"
-#include "infrastructure/pud_unifier_factory.hpp"
-#include "infrastructure/pud_witness_search_head.hpp"
-#include "infrastructure/pud_witness_search_head_factory.hpp"
-#include "infrastructure/pud_witness_search_head_forker.hpp"
+#include "infrastructure/pud_replayer.hpp"
+#include "infrastructure/pud_resolver.hpp"
+#include "infrastructure/pud_root_opener.hpp"
+#include "infrastructure/pud_solver.hpp"
+#include "infrastructure/pud_structure_watcher.hpp"
+#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_unfolder.hpp"
+#include "infrastructure/pud_unit_unfold_finder.hpp"
+#include "value_objects/expr.hpp"
+#include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/pud_mhq_head_id.hpp"
+#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_substitution.hpp"
 
+// The composition root of the progressive unfolding database and its solver.
 struct pud_manifest {
-    using child_iter_t = std::vector<pud_node_id>::const_iterator;
+    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using root_heads_t = pud_node_table<const expr*>;
+    using node_parents_t = pud_node_table<std::optional<pud_node_id>>;
+    using node_substitutions_t = pud_node_table<std::vector<pud_substitution>>;
+    using node_lvcs_t = pud_node_table<uint32_t>;
+    using call_sites_t = pud_node_table<pud_body_goal_id>;
+    using children_t = pud_node_table<std::vector<pud_node_id>>;
+    using axioms_t = std::vector<pud_node_id>;
+    using unit_queries_t = std::deque<pud_mhq_head_id>;
 
-    using bind_map_t = ubs_bind_map<
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state,
-        pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state, pud_transient_ubs_state>;
-    struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, expr_pool, bind_map_t> {
-        using pud_normalizer_factory::pud_normalizer_factory;
-    };
-    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, bind_map_t> {
-        using pud_cycle_detector_factory::pud_cycle_detector_factory;
-    };
-    using cycle_detector_t = pud_cycle_detector<globalizer, bind_map_t, bind_map_t>;
-    struct unifier_factory_t : pud_unifier_factory<globalizer, cycle_detector_t, bind_map_t> {
-        using pud_unifier_factory::pud_unifier_factory;
-    };
-    using unifier_t = unifier_factory_t::unifier_t;
-    using logger_t = pud_touched_var_logger<bind_map_t, bind_map_t, std::vector<uint32_t>>;
-    using logging_unifier_t = pud_unifier<globalizer, bind_map_t, bind_map_t, logger_t, logger_t, cycle_detector_t>;
-    using exporter_t = pud_exporter<globalizer, expr_pool, expr_pool, bind_map_t, bind_map_t, bind_map_t>;
+    using node_status_t = pud_node_status<pud_node_states, pud_node_live_child_counts>;
+    using refutation_propagator_t = pud_refutation_propagator<node_parents_t, pud_node_live_child_counts>;
+    using node_maker_t = pud_node_maker<
+        pud_node_id_sequencer, root_heads_t, node_parents_t, node_substitutions_t, pud_node_goals, pud_node_goals,
+        node_lvcs_t, node_lvcs_t, pud_node_states>;
 
-    struct refuted_node_checker_t : pud_refuted_node_checker<
-        pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts> {
-        using pud_refuted_node_checker::pud_refuted_node_checker;
-    };
+    using replayer_t = pud_replayer<root_heads_t, node_substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
+    using mhws_t = pud_mhws<replayer_t, node_status_t, node_status_t, children_t>;
+    using mhcs_t = pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, node_status_t, node_status_t, children_t>;
+    using mhq_t = pud_mhq<replayer_t, axioms_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
-    using replay_descent_t = pud_replay_descent<
-        bind_map_t, cycle_detector_t, unifier_t, expr_pool,
-        cycle_detector_factory_t, unifier_factory_t, pud_node_added_substitutions>;
+    using binder_t = pud_binder<term_factory_t, node_substitutions_t>;
+    using structure_watcher_t = pud_structure_watcher<term_factory_t, node_substitutions_t>;
+    using leaf_query_maker_t = pud_leaf_query_maker<mhq_t, mhq_t, pud_query_holders, pud_node_goals, node_lvcs_t>;
+    using leaf_activator_t = pud_leaf_activator<
+        pud_leaf_states, pud_leaf_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
+    using leaf_releaser_t = pud_leaf_releaser<pud_leaf_states, pud_leaf_states, pud_query_holders, mhq_t>;
+    using frontier_retirer_t = pud_frontier_retirer<pud_node_states, refutation_propagator_t, leaf_releaser_t, mhq_t, pud_query_holders>;
+    using change_collector_t = pud_frontier_change_collector<node_status_t, pud_node_goals>;
 
-    struct witness_search_head_t : pud_witness_search_head<
-        replay_descent_t, child_iter_t, pud_leaf_nodes, refuted_node_checker_t, pud_children> {
-        using pud_witness_search_head::pud_witness_search_head;
-    };
-    struct witness_search_head_factory_t : pud_witness_search_head_factory<
-        witness_search_head_t, replay_descent_t, pud_leaf_nodes, refuted_node_checker_t, pud_children> {
-        using pud_witness_search_head_factory::pud_witness_search_head_factory;
-    };
-    struct witness_search_head_forker_t : pud_witness_search_head_forker<witness_search_head_t, replay_descent_t> {
-        using pud_witness_search_head_forker::pud_witness_search_head_forker;
-    };
-    struct mhws_t : pud_mhws<
-        replay_descent_t, child_iter_t, witness_search_head_t,
-        witness_search_head_factory_t, witness_search_head_forker_t> {
-        using pud_mhws::pud_mhws;
-    };
+    using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
+    using resolver_t = pud_resolver<pud_leaf_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
+    using unfolder_t = pud_unfolder<call_sites_t, node_maker_t, children_t, pud_node_states, pud_node_live_child_counts, refutation_propagator_t>;
+    using expander_t = pud_expander<resolver_t, unfolder_t, leaf_activator_t, frontier_retirer_t, change_collector_t>;
+    using root_opener_t = pud_root_opener<node_maker_t, axioms_t, leaf_activator_t, frontier_retirer_t, change_collector_t>;
 
-    struct candidate_specialization_head_t : pud_candidate_specialization_head<
-        replay_descent_t, child_iter_t, mhws_t, mhws_t, mhws_t, mhws_t,
-        pud_leaf_nodes, refuted_node_checker_t, pud_children> {
-        using pud_candidate_specialization_head::pud_candidate_specialization_head;
-    };
-    struct candidate_specialization_head_factory_t : pud_candidate_specialization_head_factory<
-        candidate_specialization_head_t, replay_descent_t, mhws_t, mhws_t, mhws_t, mhws_t,
-        pud_leaf_nodes, refuted_node_checker_t, pud_children> {
-        using pud_candidate_specialization_head_factory::pud_candidate_specialization_head_factory;
-    };
-    struct candidate_specialization_head_forker_t : pud_candidate_specialization_head_forker<candidate_specialization_head_t, replay_descent_t> {
-        using pud_candidate_specialization_head_forker::pud_candidate_specialization_head_forker;
-    };
-    struct mhcs_t : pud_mhcs<
-        replay_descent_t, candidate_specialization_head_t,
-        candidate_specialization_head_factory_t, candidate_specialization_head_forker_t, mhws_t> {
-        using pud_mhcs::pud_mhcs;
-    };
+    using unit_unfold_finder_t = pud_unit_unfold_finder<unit_queries_t, unit_queries_t, unit_queries_t, pud_query_holders>;
+    using expansion_chooser_t = pud_random_expansion_chooser<pud_node_goals>;
+    using leaf_materializer_t = pud_leaf_materializer<pud_leaf_states, term_factory_t, term_factory_t>;
+    using solver_t = pud_solver<root_opener_t, root_opener_t, expander_t, unit_unfold_finder_t, expansion_chooser_t, leaf_materializer_t>;
 
-    struct query_head_t : pud_query_head<replay_descent_t, mhcs_t, mhcs_t> {
-        using pud_query_head::pud_query_head;
-    };
-    struct query_head_factory_t : pud_query_head_factory<query_head_t, replay_descent_t, mhcs_t, mhcs_t> {
-        using pud_query_head_factory::pud_query_head_factory;
-    };
-    struct query_head_forker_t : pud_query_head_forker<query_head_t, replay_descent_t> {
-        using pud_query_head_forker::pud_query_head_forker;
-    };
-    struct mhq_t : pud_mhq<replay_descent_t, query_head_t, query_head_factory_t, query_head_forker_t, mhcs_t> {
-        using pud_mhq::pud_mhq;
-    };
+    pud_manifest(uint32_t random_seed);
 
-    struct query_opener_t : pud_query_opener<
-        replay_descent_t, bind_map_t, cycle_detector_t, unifier_t, pud_axioms, pud_node_heads,
-        expr_pool, cycle_detector_factory_t, unifier_factory_t, pud_node_added_substitutions> {
-        using pud_query_opener::pud_query_opener;
-    };
+    expr_pool                  expr_pool_;
+    globalizer                 globalizer_;
+    term_factory_t             term_factory_;
+    pud_changed_class_finder   changed_class_finder_;
 
-    using binding_descent_t = pud_binding_descent<pud_node_added_substitutions>;
-    using lvc_descent_t = pud_lvc_descent<pud_node_added_var_count>;
-    using next_body_goal_id_descent_t = pud_next_body_goal_id_descent<pud_node_added_body_goals>;
-    using body_goal_expr_descent_t = pud_body_goal_expr_descent<pud_node_added_body_goals, pud_call_sites>;
-    using structure_watch_descent_t = pud_structure_watch_descent<pud_node_added_substitutions>;
-    using body_goal_pq_descent_t = pud_body_goal_pq_descent<
-        query_opener_t, mhq_t, mhq_t, mhq_t, pud_call_sites,
-        pud_query_head_nodes, pud_query_forks>;
-    using base_descent_t = pud_base_descent<
-        binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t, body_goal_expr_descent_t,
-        structure_watch_descent_t, body_goal_pq_descent_t>;
-    struct node_descents_t : pud_node_descents<base_descent_t> {
-        using pud_node_descents::pud_node_descents;
-    };
-    struct root_descent_maker_t : pud_root_descent_maker<
-        base_descent_t, binding_descent_t, lvc_descent_t, next_body_goal_id_descent_t,
-        body_goal_expr_descent_t, structure_watch_descent_t, body_goal_pq_descent_t,
-        pud_node_added_substitutions, pud_node_added_var_count,
-        pud_node_added_body_goals, pud_call_sites, query_opener_t, mhq_t,
-        mhq_t, mhq_t, pud_query_head_nodes, pud_query_forks> {
-        using pud_root_descent_maker::pud_root_descent_maker;
-    };
+    pud_node_id_sequencer      node_id_sequencer_;
+    pud_node_states            node_states_;
+    root_heads_t               root_heads_;
+    node_parents_t             node_parents_;
+    node_substitutions_t       node_substitutions_;
+    pud_node_goals             node_goals_;
+    node_lvcs_t                node_lvcs_;
+    call_sites_t               call_sites_;
+    children_t                 children_;
+    pud_node_live_child_counts live_child_counts_;
+    axioms_t                   axioms_;
+    node_status_t              node_status_;
+    refutation_propagator_t    refutation_propagator_;
+    node_maker_t               node_maker_;
 
-    struct open_body_goal_finder_t : pud_open_body_goal_finder<pud_node_added_body_goals, pud_call_sites> {
-        using pud_open_body_goal_finder::pud_open_body_goal_finder;
-    };
-    struct acceptor_t : pud_acceptor<
-        bind_map_t, cycle_detector_t, logging_unifier_t, logger_t, exporter_t,
-        open_body_goal_finder_t, pud_node_heads, pud_node_added_substitutions,
-        globalizer, expr_pool, expr_pool, cycle_detector_factory_t> {
-        using pud_acceptor::pud_acceptor;
-    };
-    struct child_maker_t : pud_child_maker<
-        pud_node_id_sequencer, pud_node_added_substitutions, pud_node_added_body_goals,
-        pud_node_added_var_count, pud_node_parents, pud_leaf_nodes> {
-        using pud_child_maker::pud_child_maker;
-    };
+    unit_queries_t             unit_queries_;
+    replayer_t                 replayer_;
+    mhws_t                     mhws_;
+    mhcs_t                     mhcs_;
+    mhq_t                      mhq_;
 
-    struct live_leaf_finder_t : pud_live_leaf_finder<refuted_node_checker_t, pud_leaf_nodes, pud_children> {
-        using pud_live_leaf_finder::pud_live_leaf_finder;
-    };
-    struct refutation_propagator_t : pud_refutation_propagator<
-        pud_root_nodes, pud_node_parents, pud_node_live_child_counts> {
-        using pud_refutation_propagator::pud_refutation_propagator;
-    };
-    struct leaf_invalidator_t : pud_leaf_invalidator<mhws_t, mhcs_t, mhcs_t, mhq_t> {
-        using pud_leaf_invalidator::pud_leaf_invalidator;
-    };
-    struct frontier_recorder_t : pud_frontier_recorder<pud_open_leaves, pud_open_leaves, pud_refuted_leaves> {
-        using pud_frontier_recorder::pud_frontier_recorder;
-    };
-    struct node_refuter_t : pud_node_refuter<
-        live_leaf_finder_t, frontier_recorder_t, pud_open_leaves, frontier_recorder_t,
-        refutation_propagator_t, node_descents_t, leaf_invalidator_t, pud_query_head_nodes> {
-        using pud_node_refuter::pud_node_refuter;
-    };
+    pud_leaf_states            leaf_states_;
+    pud_query_holders          query_holders_;
+    binder_t                   binder_;
+    structure_watcher_t        structure_watcher_;
+    leaf_query_maker_t         leaf_query_maker_;
+    leaf_activator_t           leaf_activator_;
+    leaf_releaser_t            leaf_releaser_;
+    frontier_retirer_t         frontier_retirer_;
+    change_collector_t         change_collector_;
 
-    struct unfolder_t : pud_unfolder<
-        node_descents_t, acceptor_t, child_maker_t, pud_call_sites, pud_children, pud_leaf_nodes> {
-        using pud_unfolder::pud_unfolder;
-    };
-    struct expander_t : pud_expander<
-        node_descents_t, mhq_t, mhcs_t, unfolder_t, frontier_recorder_t, pud_node_live_child_counts,
-        refutation_propagator_t, leaf_invalidator_t, pud_query_head_nodes, node_refuter_t,
-        refuted_node_checker_t, node_descents_t, frontier_recorder_t, node_descents_t> {
-        using pud_expander::pud_expander;
-    };
-    struct leaf_activator_t : pud_leaf_activator<base_descent_t, node_descents_t, frontier_recorder_t, node_refuter_t> {
-        using pud_leaf_activator::pud_leaf_activator;
-    };
-    struct base_descent_runner_t : pud_base_descent_runner<
-        base_descent_t, refuted_node_checker_t, root_descent_maker_t, pud_leaf_nodes,
-        pud_children, leaf_activator_t, node_refuter_t> {
-        using pud_base_descent_runner::pud_base_descent_runner;
-    };
-    struct axiom_initializer_t : pud_axiom_initializer<
-        pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
-        pud_root_nodes, pud_leaf_nodes, pud_axioms> {
-        using pud_axiom_initializer::pud_axiom_initializer;
-    };
-    struct conjecture_initializer_t : pud_conjecture_initializer<
-        pud_node_id_sequencer, pud_node_heads, pud_node_added_body_goals, pud_node_added_var_count,
-        pud_root_nodes, pud_leaf_nodes> {
-        using pud_conjecture_initializer::pud_conjecture_initializer;
-    };
+    acceptor_t                 acceptor_;
+    resolver_t                 resolver_;
+    unfolder_t                 unfolder_;
+    expander_t                 expander_;
+    root_opener_t              root_opener_;
 
-    pud_manifest();
-
-    expr_pool                               expr_pool_;
-    globalizer                              globalizer_;
-
-    pud_node_id_sequencer                   node_id_sequencer_;
-    pud_node_heads                          node_heads_;
-    pud_node_added_body_goals               node_added_body_goals_;
-    pud_node_added_var_count                node_added_var_count_;
-    pud_node_added_substitutions            node_added_substitutions_;
-    pud_call_sites                          call_sites_;
-    pud_children                            children_;
-    pud_node_parents                        node_parents_;
-    pud_root_nodes                          root_nodes_;
-    pud_axioms                              axioms_;
-    pud_leaf_nodes                          leaf_nodes_;
-    pud_open_leaves                         open_leaves_;
-    pud_refuted_leaves                      refuted_leaves_;
-    pud_node_live_child_counts              node_live_child_counts_;
-    pud_query_head_nodes                    query_head_nodes_;
-    pud_query_forks                         query_forks_;
-    refuted_node_checker_t                  refuted_node_checker_;
-    frontier_recorder_t                     frontier_recorder_;
-
-    normalizer_factory_t                    normalizer_factory_;
-    cycle_detector_factory_t                cycle_detector_factory_;
-    unifier_factory_t                       unifier_factory_;
-
-    witness_search_head_factory_t           witness_search_head_factory_;
-    witness_search_head_forker_t            witness_search_head_forker_;
-    mhws_t                                  mhws_;
-    candidate_specialization_head_factory_t candidate_specialization_head_factory_;
-    candidate_specialization_head_forker_t  candidate_specialization_head_forker_;
-    mhcs_t                                  mhcs_;
-    query_head_factory_t                    query_head_factory_;
-    query_head_forker_t                     query_head_forker_;
-    mhq_t                                   mhq_;
-    query_opener_t                          query_opener_;
-
-    node_descents_t                         node_descents_;
-    root_descent_maker_t                    root_descent_maker_;
-
-    open_body_goal_finder_t                 open_body_goal_finder_;
-    acceptor_t                              acceptor_;
-    child_maker_t                           child_maker_;
-
-    live_leaf_finder_t                      live_leaf_finder_;
-    refutation_propagator_t                 refutation_propagator_;
-    leaf_invalidator_t                      leaf_invalidator_;
-    node_refuter_t                          node_refuter_;
-
-    unfolder_t                              unfolder_;
-    expander_t                              expander_;
-    leaf_activator_t                        leaf_activator_;
-    base_descent_runner_t                   base_descent_runner_;
-    axiom_initializer_t                     axiom_initializer_;
-    conjecture_initializer_t                conjecture_initializer_;
+    std::mt19937               rng_;
+    unit_unfold_finder_t       unit_unfold_finder_;
+    expansion_chooser_t        expansion_chooser_;
+    leaf_materializer_t        leaf_materializer_;
+    solver_t                   solver_;
 };
 
 #endif

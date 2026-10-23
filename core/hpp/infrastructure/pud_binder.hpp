@@ -1,0 +1,46 @@
+#ifndef PUD_BINDER_HPP
+#define PUD_BINDER_HPP
+
+#include <optional>
+#include <utility>
+#include <variant>
+#include "value_objects/expr.hpp"
+#include "value_objects/framed_expr.hpp"
+#include "value_objects/pud_node_id.hpp"
+#include "value_objects/pud_substitution.hpp"
+#include "value_objects/pud_ubs_state.hpp"
+#include "value_objects/ubs_class.hpp"
+#include "debug_assert.hpp"
+
+// Gives a child the bindings of its rule: its parent's, with the child's substitutions applied. A
+// substitution targets a representative unbound in the parent, so applying it never displaces a value.
+template<typename IMakeBindMap, typename IGetNodeAddedSubstitutions>
+struct pud_binder {
+    pud_binder(IMakeBindMap& make_bind_map, IGetNodeAddedSubstitutions& get_node_added_substitutions);
+    pud_ubs_state bind(const pud_ubs_state& parent_bindings, pud_node_id child) const;
+private:
+    IMakeBindMap& make_bind_map_;
+    IGetNodeAddedSubstitutions& get_node_added_substitutions_;
+};
+
+template<typename IMBM, typename IGNAS>
+pud_binder<IMBM, IGNAS>::pud_binder(IMBM& make_bind_map, IGNAS& get_node_added_substitutions)
+    : make_bind_map_(make_bind_map)
+    , get_node_added_substitutions_(get_node_added_substitutions) {}
+
+template<typename IMBM, typename IGNAS>
+pud_ubs_state pud_binder<IMBM, IGNAS>::bind(const pud_ubs_state& parent_bindings, pud_node_id child) const {
+    auto&& bind_map = make_bind_map_.make_bind_map(parent_bindings);
+    for (const pud_substitution& substitution : get_node_added_substitutions_.get(child)) {
+        const ubs_class target = bind_map.find(substitution.var_idx);
+        if (const expr::var* var = std::get_if<expr::var>(&substitution.value->content)) {
+            [[maybe_unused]] const std::optional<framed_expr> displaced = bind_map.equate(target, bind_map.find(var->index));
+            DEBUG_ASSERT(!displaced.has_value());
+            continue;
+        }
+        bind_map.instantiate(target, framed_expr{substitution.value, 0});
+    }
+    return std::move(bind_map).persist();
+}
+
+#endif
