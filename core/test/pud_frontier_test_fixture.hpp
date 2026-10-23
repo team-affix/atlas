@@ -8,10 +8,11 @@
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/rule.hpp"
 
-// Minimal helpers for integration tests that drive open/expand on a real manifest.
+// Minimal helpers for integration tests that drive register/activate/expand on a real manifest.
 struct pud_frontier_test_fixture {
     pud_manifest manifest;
     test_functors functors;
+    std::vector<pud_node_id> pending_axiom_roots_;
 
     const expr* var(uint32_t index) { return manifest.expr_pool_.make_var(index); }
 
@@ -24,10 +25,18 @@ struct pud_frontier_test_fixture {
     }
 
     pud_node_id axiom(const expr* head, std::vector<const expr*> body, uint32_t var_count) {
-        return manifest.root_opener_.add_axiom(rule(head, body, var_count), manifest.database_axiom_group_);
+        const pud_node_id root = manifest.axiom_registrar_.register_axiom(
+            rule(head, body, var_count), manifest.database_axiom_group_);
+        pending_axiom_roots_.push_back(root);
+        return root;
     }
 
-    pud_frontier_change open_axioms() { return manifest.root_opener_.open(); }
+    pud_frontier_change open_axioms() {
+        const pud_frontier_change change =
+            manifest.axiom_registrar_.activate_axiom_group(manifest.database_axiom_group_, pending_axiom_roots_);
+        pending_axiom_roots_.clear();
+        return change;
+    }
 
     pud_frontier_change expand(pud_node_id leaf, pud_body_goal_id goal) {
         return manifest.expander_.expand(leaf, goal);

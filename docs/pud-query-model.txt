@@ -49,7 +49,7 @@ Leaf activation (replaces descents)
 - pud_leaf_query_maker: on a child, erase closed goal's head; fork changed goals
   in the child environment; open queries for newly added goals; hold every head
   the leaf keeps.
-- pud_root_opener adds rules to an axiom group; pud_root_activator / pud_child_activator
+- pud_axiom_registrar register_axiom / register_axiom_group; pud_root_activator / pud_child_activator
   store pud_active_state { bindings, watch, queries }.
 
 Unfold and solver

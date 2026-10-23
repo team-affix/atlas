@@ -29,7 +29,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 |----|--------|-------|
 | B1 | Resolved | Body-goal/query PQ descent dissolved into `pud_leaf_query_maker` + mhq API. |
 | B2 | Resolved | `pud_expander` exposes one `expand`; collaborators injected (5 capabilities). |
-| B3 | Resolved | Runtime facade deleted; `pud_root_opener`, `pud_solver`, `pud_command_handler` are the surface. |
+| B3 | Resolved | Runtime facade deleted; `pud_axiom_registrar`, `pud_solver`, `pud_command_handler` are the surface. |
 | B4 | Resolved | `pud_node_maker` replaces root descent maker passthrough. |
 | B5 | Resolved | mhws/mhcs/mhq own state; no head objects carrying collaborator bags. |
 

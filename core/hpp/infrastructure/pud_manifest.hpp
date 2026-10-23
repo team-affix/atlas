@@ -34,7 +34,7 @@
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
-#include "infrastructure/pud_root_opener.hpp"
+#include "infrastructure/pud_axiom_registrar.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
@@ -88,7 +88,7 @@ struct pud_manifest {
         pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
     using expander_t = pud_expander<
         resolver_t, unfolder_t, child_activator_t, leaf_refuter_t, node_deactivator_t, pud_query_holders, change_collector_t>;
-    using root_opener_t = pud_root_opener<
+    using axiom_registrar_t = pud_axiom_registrar<
         node_maker_t, pud_axiom_groups, pud_axiom_groups, root_activator_t, leaf_refuter_t, node_deactivator_t,
         pud_query_holders, change_collector_t>;
 
@@ -137,7 +137,7 @@ struct pud_manifest {
     resolver_t                 resolver_;
     unfolder_t                 unfolder_;
     expander_t                 expander_;
-    root_opener_t              root_opener_;
+    axiom_registrar_t          axiom_registrar_;
 };
 
 #endif

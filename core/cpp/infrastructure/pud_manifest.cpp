@@ -43,6 +43,6 @@ pud_manifest::pud_manifest()
     , resolver_(active_states_, node_goals_, node_lvcs_, mhq_, mhcs_, acceptor_)
     , unfolder_(call_sites_, node_maker_, children_, leaf_nodes_, live_child_counts_, refutation_propagator_)
     , expander_(resolver_, unfolder_, child_activator_, leaf_refuter_, node_deactivator_, query_holders_, change_collector_)
-    , root_opener_(
+    , axiom_registrar_(
           node_maker_, axiom_groups_, axiom_groups_, root_activator_, leaf_refuter_, node_deactivator_, query_holders_,
           change_collector_) {}

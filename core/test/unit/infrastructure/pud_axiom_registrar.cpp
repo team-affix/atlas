@@ -1,13 +1,11 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_root_opener.hpp"
+#include "infrastructure/pud_axiom_registrar.hpp"
 #include "value_objects/rule.hpp"
 
 using ::testing::_;
-using ::testing::ElementsAre;
 using ::testing::InSequence;
-using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -40,12 +38,12 @@ struct MockCollectChange {
     MOCK_METHOD(pud_frontier_change, finish, ());
 };
 
-using test_root_opener_t = pud_root_opener<
+using test_axiom_registrar_t = pud_axiom_registrar<
     NiceMock<MockMakeRoot>, NiceMock<MockStoreNodeAxiomGroup>, NiceMock<MockAddAxiomGroupMember>,
     NiceMock<MockActivateRoot>, NiceMock<MockRefuteLeaf>, NiceMock<MockDeactivateNode>, NiceMock<MockGetQueryHolders>,
     NiceMock<MockCollectChange>>;
 
-struct PudRootOpenerTest : public ::testing::Test {
+struct PudAxiomRegistrarTest : public ::testing::Test {
     NiceMock<MockMakeRoot> node_maker;
     NiceMock<MockStoreNodeAxiomGroup> node_groups;
     NiceMock<MockAddAxiomGroupMember> group_members;
@@ -54,7 +52,8 @@ struct PudRootOpenerTest : public ::testing::Test {
     NiceMock<MockDeactivateNode> deactivator;
     NiceMock<MockGetQueryHolders> holders;
     NiceMock<MockCollectChange> collector;
-    test_root_opener_t opener{node_maker, node_groups, group_members, activator, refuter, deactivator, holders, collector};
+    test_axiom_registrar_t registrar{
+        node_maker, node_groups, group_members, activator, refuter, deactivator, holders, collector};
     pud_axiom_group_id group{.value = 2};
     expr head{expr::functor{1, {}}};
     expr goal{expr::functor{2, {}}};
@@ -67,19 +66,21 @@ struct PudRootOpenerTest : public ::testing::Test {
 
 }
 
-TEST_F(PudRootOpenerTest, AnAxiomIsMadeRegisteredButNotYetActivated) {
+TEST_F(PudAxiomRegistrarTest, RegisterAxiomMakesAndRegistersButDoesNotActivate) {
     EXPECT_CALL(node_maker, make_root(rule(&head, {&goal}, 3))).WillOnce(Return(7));
     EXPECT_CALL(node_groups, store_node_group(7u, group));
     EXPECT_CALL(group_members, add_member(group, 7u));
     EXPECT_CALL(activator, activate_root(_)).Times(0);
-    EXPECT_EQ(opener.add_axiom(rule(&head, {&goal}, 3), group), 7u);
+    EXPECT_EQ(registrar.register_axiom(rule(&head, {&goal}, 3), group), 7u);
 }
 
-TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTheRefutedOnes) {
-    ON_CALL(node_maker, make_root(_)).WillByDefault(Return(7));
-    opener.add_axiom(rule(&head, {}, 0), group);
-    ON_CALL(node_maker, make_root(_)).WillByDefault(Return(8));
-    opener.add_axiom(rule(&head, {}, 0), group);
+TEST_F(PudAxiomRegistrarTest, RegisterAxiomGroupRegistersEveryRuleThenActivatesAndRefutes) {
+    const rule axiom(&head, {}, 0);
+    EXPECT_CALL(node_maker, make_root(_)).WillOnce(Return(7)).WillOnce(Return(8));
+    EXPECT_CALL(node_groups, store_node_group(7u, group));
+    EXPECT_CALL(node_groups, store_node_group(8u, group));
+    EXPECT_CALL(group_members, add_member(group, 7u));
+    EXPECT_CALL(group_members, add_member(group, 8u));
     InSequence in_order;
     EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(true));
     EXPECT_CALL(activator, activate_root(8)).WillOnce(Return(false));
@@ -89,13 +90,20 @@ TEST_F(PudRootOpenerTest, OpeningActivatesEveryAddedRootThenRefutesAndReleasesTh
     EXPECT_CALL(collector, add_produced(8));
     EXPECT_CALL(collector, add_refuted(7));
     EXPECT_CALL(collector, finish());
-    opener.open();
+    registrar.register_axiom_group(group, {axiom, axiom});
 }
 
-TEST_F(PudRootOpenerTest, ARootIsOpenedOnlyOnce) {
+TEST_F(PudAxiomRegistrarTest, ActivateAxiomGroupOnlyRunsActivationForSuppliedRoots) {
     ON_CALL(node_maker, make_root(_)).WillByDefault(Return(7));
-    opener.add_axiom(rule(&head, {}, 0), group);
-    opener.open();
+    registrar.register_axiom(rule(&head, {}, 0), group);
+    EXPECT_CALL(activator, activate_root(7)).WillOnce(Return(false));
+    EXPECT_CALL(collector, add_produced(7));
+    EXPECT_CALL(collector, finish());
+    registrar.activate_axiom_group(group, {7});
+}
+
+TEST_F(PudAxiomRegistrarTest, ActivateAxiomGroupWithNoRootsDoesNotActivate) {
     EXPECT_CALL(activator, activate_root(_)).Times(0);
-    opener.open();
+    EXPECT_CALL(collector, finish());
+    registrar.activate_axiom_group(group, {});
 }
