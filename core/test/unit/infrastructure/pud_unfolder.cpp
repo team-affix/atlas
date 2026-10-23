@@ -20,7 +20,7 @@ struct MockStoreChildren {
     MOCK_METHOD(void, store, (pud_node_id, std::vector<pud_node_id>));
 };
 struct MockMarkNodeState {
-    MOCK_METHOD(void, mark, (pud_node_id, pud_node_state));
+    MOCK_METHOD(void, unset_leaf, (pud_node_id));
 };
 struct MockStoreLiveChildCount {
     MOCK_METHOD(void, store, (pud_node_id, size_t));
@@ -59,7 +59,7 @@ TEST_F(PudUnfolderTest, TheLeafBecomesInteriorWithEveryChildAlive) {
     ON_CALL(make_child, make_child(_, _, first)).WillByDefault(Return(10));
     ON_CALL(make_child, make_child(_, _, second)).WillByDefault(Return(11));
     EXPECT_CALL(children, store(4, std::vector<pud_node_id>{10, 11}));
-    EXPECT_CALL(states, mark(4, pud_node_state::expanded));
+    EXPECT_CALL(states, unset_leaf(4));
     EXPECT_CALL(live_child_counts, store(4, 2u));
     EXPECT_CALL(propagator, refute(_)).Times(0);
     unfolder.unfold(4, 2, {first, second});

@@ -14,7 +14,7 @@ using ::testing::UnorderedElementsAre;
 namespace {
 
 struct MockMarkNodeState {
-    MOCK_METHOD(void, mark, (pud_node_id, pud_node_state));
+    MOCK_METHOD(void, mark_refuted, (pud_node_id));
 };
 struct MockPropagateRefutation {
     MOCK_METHOD(void, refute, (pud_node_id));
@@ -45,7 +45,7 @@ struct PudFrontierRetirerTest : public ::testing::Test {
 }
 
 TEST_F(PudFrontierRetirerTest, AnExpandedLeafIsReleasedAndInvalidatedButNotRefuted) {
-    EXPECT_CALL(states, mark(_, _)).Times(0);
+    EXPECT_CALL(states, mark_refuted(_)).Times(0);
     EXPECT_CALL(releaser, release(4));
     EXPECT_CALL(queries, invalidate_leaves(ElementsAre(4u)));
     EXPECT_THAT(retirer.retire({4}, {}), IsEmpty());
@@ -53,7 +53,7 @@ TEST_F(PudFrontierRetirerTest, AnExpandedLeafIsReleasedAndInvalidatedButNotRefut
 
 TEST_F(PudFrontierRetirerTest, ARefutedLeafIsMarkedAndPropagatedBeforeAnyLeafIsInvalidated) {
     InSequence in_order;
-    EXPECT_CALL(states, mark(6, pud_node_state::refuted));
+    EXPECT_CALL(states, mark_refuted(6));
     EXPECT_CALL(propagator, refute(6));
     EXPECT_CALL(releaser, release(4));
     EXPECT_CALL(releaser, release(6));
@@ -66,8 +66,8 @@ TEST_F(PudFrontierRetirerTest, AQueryLeftWithoutCandidatesRefutesEveryLeafStillH
     ON_CALL(holders, get_holders(30)).WillByDefault(Return(std::vector<pud_node_id>{7, 8}));
     ON_CALL(holders, get_holders(31)).WillByDefault(Return(std::vector<pud_node_id>{8}));
     EXPECT_CALL(queries, invalidate_leaves(ElementsAre(4u)));
-    EXPECT_CALL(states, mark(7, pud_node_state::refuted));
-    EXPECT_CALL(states, mark(8, pud_node_state::refuted));
+    EXPECT_CALL(states, mark_refuted(7));
+    EXPECT_CALL(states, mark_refuted(8));
     EXPECT_CALL(queries, invalidate_leaves(ElementsAre(7u, 8u)));
     EXPECT_THAT(retirer.retire({4}, {}), UnorderedElementsAre(7u, 8u));
 }

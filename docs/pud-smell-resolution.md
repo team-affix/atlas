@@ -131,7 +131,7 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | ID | Status | Notes |
 |----|--------|-------|
 | X1 | Resolved | `global_normalizer` → `pud_normalizer`; files match types. |
-| X2 | Resolved | `is_leaf` / `is_refuted` on `pud_node_status`; harness `verify_*`; docs use invalidate/fork/hold. |
+| X2 | Resolved | `pud_leaf_nodes` / `pud_refuted_leaves` + `pud_refuted_node_checker`; harness `verify_*`; docs use invalidate/fork/hold. |
 | X3 | Resolved | “Witness” vs “candidate” documented in `prompts/pud.txt`. |
 | X4 | Resolved | Symmetric names across mhws/mhcs/mhq. |
 | X5 | Resolved | No single-letter locals in new code paths (per project rules). |

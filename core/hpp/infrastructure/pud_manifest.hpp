@@ -26,8 +26,9 @@
 #include "infrastructure/pud_node_id_sequencer.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_node_maker.hpp"
-#include "infrastructure/pud_node_states.hpp"
-#include "infrastructure/pud_node_status.hpp"
+#include "infrastructure/pud_leaf_nodes.hpp"
+#include "infrastructure/pud_refuted_leaves.hpp"
+#include "infrastructure/pud_refuted_node_checker.hpp"
 #include "infrastructure/pud_node_table.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_random_expansion_chooser.hpp"
@@ -58,15 +59,17 @@ struct pud_manifest {
     using axioms_t = std::vector<pud_node_id>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
-    using node_status_t = pud_node_status<pud_node_states, pud_node_live_child_counts>;
+    using refuted_node_checker_t =
+        pud_refuted_node_checker<pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts>;
     using refutation_propagator_t = pud_refutation_propagator<node_parents_t, pud_node_live_child_counts>;
     using node_maker_t = pud_node_maker<
         pud_node_id_sequencer, root_heads_t, node_parents_t, node_substitutions_t, pud_node_goals, pud_node_goals,
-        node_lvcs_t, node_lvcs_t, pud_node_states>;
+        node_lvcs_t, node_lvcs_t, pud_leaf_nodes>;
 
     using replayer_t = pud_replayer<root_heads_t, node_substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, node_status_t, node_status_t, children_t>;
-    using mhcs_t = pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, node_status_t, node_status_t, children_t>;
+    using mhws_t = pud_mhws<replayer_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
+    using mhcs_t =
+        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
     using mhq_t = pud_mhq<replayer_t, axioms_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
     using binder_t = pud_binder<term_factory_t, node_substitutions_t>;
@@ -75,12 +78,14 @@ struct pud_manifest {
     using leaf_activator_t = pud_leaf_activator<
         pud_leaf_states, pud_leaf_states, binder_t, structure_watcher_t, pud_node_goals, call_sites_t, leaf_query_maker_t>;
     using leaf_releaser_t = pud_leaf_releaser<pud_leaf_states, pud_leaf_states, pud_query_holders, mhq_t>;
-    using frontier_retirer_t = pud_frontier_retirer<pud_node_states, refutation_propagator_t, leaf_releaser_t, mhq_t, pud_query_holders>;
-    using change_collector_t = pud_frontier_change_collector<node_status_t, pud_node_goals>;
+    using frontier_retirer_t =
+        pud_frontier_retirer<pud_refuted_leaves, refutation_propagator_t, leaf_releaser_t, mhq_t, pud_query_holders>;
+    using change_collector_t = pud_frontier_change_collector<refuted_node_checker_t, pud_node_goals>;
 
     using acceptor_t = pud_acceptor<pud_node_goals, replayer_t, replayer_t, expr_pool, term_factory_t, term_factory_t, pud_changed_class_finder>;
     using resolver_t = pud_resolver<pud_leaf_states, pud_node_goals, node_lvcs_t, mhq_t, mhcs_t, acceptor_t>;
-    using unfolder_t = pud_unfolder<call_sites_t, node_maker_t, children_t, pud_node_states, pud_node_live_child_counts, refutation_propagator_t>;
+    using unfolder_t =
+        pud_unfolder<call_sites_t, node_maker_t, children_t, pud_leaf_nodes, pud_node_live_child_counts, refutation_propagator_t>;
     using expander_t = pud_expander<resolver_t, unfolder_t, leaf_activator_t, frontier_retirer_t, change_collector_t>;
     using root_opener_t = pud_root_opener<node_maker_t, axioms_t, leaf_activator_t, frontier_retirer_t, change_collector_t>;
 
@@ -97,7 +102,8 @@ struct pud_manifest {
     pud_changed_class_finder   changed_class_finder_;
 
     pud_node_id_sequencer      node_id_sequencer_;
-    pud_node_states            node_states_;
+    pud_leaf_nodes             leaf_nodes_;
+    pud_refuted_leaves         refuted_leaves_;
     root_heads_t               root_heads_;
     node_parents_t             node_parents_;
     node_substitutions_t       node_substitutions_;
@@ -106,8 +112,8 @@ struct pud_manifest {
     call_sites_t               call_sites_;
     children_t                 children_;
     pud_node_live_child_counts live_child_counts_;
+    refuted_node_checker_t     refuted_node_checker_;
     axioms_t                   axioms_;
-    node_status_t              node_status_;
     refutation_propagator_t    refutation_propagator_;
     node_maker_t               node_maker_;
 

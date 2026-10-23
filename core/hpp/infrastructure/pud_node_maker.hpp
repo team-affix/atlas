@@ -9,7 +9,6 @@
 #include "value_objects/pud_child_delta.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_node_id.hpp"
-#include "value_objects/pud_node_state.hpp"
 
 // Makes database nodes. A root is a rule of its own; a child is its parent's rule resolved on one of
 // its goals, so it keeps every other goal of the parent, under the same ids, and adds its own.
@@ -22,7 +21,7 @@ template<
     typename IStoreGoals,
     typename IGetLvc,
     typename IStoreLvc,
-    typename IMarkNodeState>
+    typename ISetLeaf>
 struct pud_node_maker {
     pud_node_maker(
         IGetNextNodeId& get_next_node_id,
@@ -33,7 +32,7 @@ struct pud_node_maker {
         IStoreGoals& store_goals,
         IGetLvc& get_lvc,
         IStoreLvc& store_lvc,
-        IMarkNodeState& mark_node_state);
+        ISetLeaf& set_leaf);
     pud_node_id make_root(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count);
     pud_node_id make_child(pud_node_id parent, pud_body_goal_id call_site, const pud_child_delta& delta);
 private:
@@ -45,16 +44,16 @@ private:
     IStoreGoals& store_goals_;
     IGetLvc& get_lvc_;
     IStoreLvc& store_lvc_;
-    IMarkNodeState& mark_node_state_;
+    ISetLeaf& set_leaf_;
 };
 
 #define PUD_NODE_MAKER_TEMPLATE                                                            \
     template<typename IGetNextNodeId, typename IStoreRootHead, typename IStoreParent,       \
              typename IStoreSubstitutions, typename IGetGoals, typename IStoreGoals,        \
-             typename IGetLvc, typename IStoreLvc, typename IMarkNodeState>
+             typename IGetLvc, typename IStoreLvc, typename ISetLeaf>
 #define PUD_NODE_MAKER                                                                     \
     pud_node_maker<IGetNextNodeId, IStoreRootHead, IStoreParent, IStoreSubstitutions,      \
-        IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, IMarkNodeState>
+        IGetGoals, IStoreGoals, IGetLvc, IStoreLvc, ISetLeaf>
 
 PUD_NODE_MAKER_TEMPLATE
 PUD_NODE_MAKER::pud_node_maker(
@@ -66,7 +65,7 @@ PUD_NODE_MAKER::pud_node_maker(
     IStoreGoals& store_goals,
     IGetLvc& get_lvc,
     IStoreLvc& store_lvc,
-    IMarkNodeState& mark_node_state)
+    ISetLeaf& set_leaf)
     : get_next_node_id_(get_next_node_id)
     , store_root_head_(store_root_head)
     , store_parent_(store_parent)
@@ -75,12 +74,12 @@ PUD_NODE_MAKER::pud_node_maker(
     , store_goals_(store_goals)
     , get_lvc_(get_lvc)
     , store_lvc_(store_lvc)
-    , mark_node_state_(mark_node_state) {}
+    , set_leaf_(set_leaf) {}
 
 PUD_NODE_MAKER_TEMPLATE
 pud_node_id PUD_NODE_MAKER::make_root(const expr* head, const std::vector<const expr*>& goals, uint32_t var_count) {
     const pud_node_id root = get_next_node_id_.next();
-    mark_node_state_.mark(root, pud_node_state::leaf);
+    set_leaf_.set_leaf(root);
     store_parent_.store(root, std::nullopt);
     store_root_head_.store(root, head);
     store_goals_.store(root, pud_goal_list{.goals = {}, .next_id = 0}.adding(goals));
@@ -91,7 +90,7 @@ pud_node_id PUD_NODE_MAKER::make_root(const expr* head, const std::vector<const 
 PUD_NODE_MAKER_TEMPLATE
 pud_node_id PUD_NODE_MAKER::make_child(pud_node_id parent, pud_body_goal_id call_site, const pud_child_delta& delta) {
     const pud_node_id child = get_next_node_id_.next();
-    mark_node_state_.mark(child, pud_node_state::leaf);
+    set_leaf_.set_leaf(child);
     store_parent_.store(child, parent);
     store_substitutions_.store(child, delta.substitutions);
     store_goals_.store(child, get_goals_.get(parent).closing(call_site).adding(delta.body_goals));

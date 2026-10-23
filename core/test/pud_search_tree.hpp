@@ -13,10 +13,10 @@ struct MockDescendReplay {
     MOCK_METHOD(std::optional<pud_replay>, descend, (const pud_replay&, pud_node_id));
 };
 struct MockCheckNodeLeaf {
-    MOCK_METHOD(bool, is_leaf, (pud_node_id));
+    MOCK_METHOD(bool, check_leaf, (pud_node_id), (const));
 };
 struct MockCheckNodeRefuted {
-    MOCK_METHOD(bool, is_refuted, (pud_node_id));
+    MOCK_METHOD(bool, check_refuted, (pud_node_id), (const));
 };
 struct MockGetChildren {
     MOCK_METHOD(const std::vector<pud_node_id>&, get, (pud_node_id));
@@ -41,24 +41,24 @@ struct pud_search_tree {
 
     pud_search_tree() {
         ON_CALL(descend, descend(::testing::_, ::testing::_)).WillByDefault(::testing::Invoke(&pud_enter_child));
-        ON_CALL(leaves, is_leaf(::testing::_)).WillByDefault(::testing::Return(false));
-        ON_CALL(refuted, is_refuted(::testing::_)).WillByDefault(::testing::Return(false));
+        ON_CALL(leaves, check_leaf(::testing::_)).WillByDefault(::testing::Return(false));
+        ON_CALL(refuted, check_refuted(::testing::_)).WillByDefault(::testing::Return(false));
     }
 
     void branch(pud_node_id parent, std::vector<pud_node_id> kids) {
         child_lists[parent] = std::move(kids);
         ON_CALL(children, get(parent)).WillByDefault(::testing::ReturnRef(child_lists[parent]));
-        ON_CALL(leaves, is_leaf(parent)).WillByDefault(::testing::Return(false));
+        ON_CALL(leaves, check_leaf(parent)).WillByDefault(::testing::Return(false));
     }
 
     void leaf(pud_node_id node) {
         child_lists[node] = {};
         ON_CALL(children, get(node)).WillByDefault(::testing::ReturnRef(child_lists[node]));
-        ON_CALL(leaves, is_leaf(node)).WillByDefault(::testing::Return(true));
+        ON_CALL(leaves, check_leaf(node)).WillByDefault(::testing::Return(true));
     }
 
     void refute(pud_node_id node) {
-        ON_CALL(refuted, is_refuted(node)).WillByDefault(::testing::Return(true));
+        ON_CALL(refuted, check_refuted(node)).WillByDefault(::testing::Return(true));
     }
 
     void block(pud_node_id child) {

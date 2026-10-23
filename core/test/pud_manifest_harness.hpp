@@ -275,9 +275,9 @@ struct pud_manifest_harness {
         return waiting_solutions[conjecture].empty() && manifest.solver_.exhausted(conjecture);
     }
 
-    bool refuted(pud_node_id node) { return manifest.node_status_.is_refuted(node); }
+    bool refuted(pud_node_id node) { return manifest.refuted_node_checker_.check_refuted(node); }
 
-    bool leaf(pud_node_id node) { return manifest.node_status_.is_leaf(node); }
+    bool leaf(pud_node_id node) { return manifest.leaf_nodes_.check_leaf(node); }
 
     bool root(pud_node_id node) { return !manifest.node_parents_.get(node).has_value(); }
 

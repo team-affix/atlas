@@ -5,27 +5,26 @@
 #include <vector>
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_id.hpp"
-#include "value_objects/pud_node_state.hpp"
 
 // Takes leaves off the frontier, expanded or refuted, and follows every refutation that results: a
 // query left without candidates refutes every leaf that holds it. Every leaf of a round is marked
 // before any is invalidated, so no search reaches for a leaf that is gone but not yet reported.
 template<
-    typename IMarkNodeState,
+    typename IMarkLeafRefuted,
     typename IPropagateRefutation,
     typename IReleaseLeaf,
     typename IInvalidateQueryLeaves,
     typename IGetQueryHolders>
 struct pud_frontier_retirer {
     pud_frontier_retirer(
-        IMarkNodeState& mark_node_state,
+        IMarkLeafRefuted& mark_leaf_refuted,
         IPropagateRefutation& propagate_refutation,
         IReleaseLeaf& release_leaf,
         IInvalidateQueryLeaves& invalidate_query_leaves,
         IGetQueryHolders& get_query_holders);
     std::vector<pud_node_id> retire(const std::vector<pud_node_id>& expanded, const std::vector<pud_node_id>& refuted);
 private:
-    IMarkNodeState& mark_node_state_;
+    IMarkLeafRefuted& mark_leaf_refuted_;
     IPropagateRefutation& propagate_refutation_;
     IReleaseLeaf& release_leaf_;
     IInvalidateQueryLeaves& invalidate_query_leaves_;
@@ -33,20 +32,20 @@ private:
 };
 
 #define PUD_FRONTIER_RETIRER_TEMPLATE                                                      \
-    template<typename IMarkNodeState, typename IPropagateRefutation, typename IReleaseLeaf, \
+    template<typename IMarkLeafRefuted, typename IPropagateRefutation, typename IReleaseLeaf, \
              typename IInvalidateQueryLeaves, typename IGetQueryHolders>
 #define PUD_FRONTIER_RETIRER                                                               \
-    pud_frontier_retirer<IMarkNodeState, IPropagateRefutation, IReleaseLeaf,               \
+    pud_frontier_retirer<IMarkLeafRefuted, IPropagateRefutation, IReleaseLeaf,               \
         IInvalidateQueryLeaves, IGetQueryHolders>
 
 PUD_FRONTIER_RETIRER_TEMPLATE
 PUD_FRONTIER_RETIRER::pud_frontier_retirer(
-    IMarkNodeState& mark_node_state,
+    IMarkLeafRefuted& mark_leaf_refuted,
     IPropagateRefutation& propagate_refutation,
     IReleaseLeaf& release_leaf,
     IInvalidateQueryLeaves& invalidate_query_leaves,
     IGetQueryHolders& get_query_holders)
-    : mark_node_state_(mark_node_state)
+    : mark_leaf_refuted_(mark_leaf_refuted)
     , propagate_refutation_(propagate_refutation)
     , release_leaf_(release_leaf)
     , invalidate_query_leaves_(invalidate_query_leaves)
@@ -62,7 +61,7 @@ std::vector<pud_node_id> PUD_FRONTIER_RETIRER::retire(
     std::vector<pud_node_id> refuting = refuted;
     while (!leaving.empty() || !refuting.empty()) {
         for (pud_node_id leaf : refuting) {
-            mark_node_state_.mark(leaf, pud_node_state::refuted);
+            mark_leaf_refuted_.mark_refuted(leaf);
             propagate_refutation_.refute(leaf);
             all_refuted.push_back(leaf);
             leaving.push_back(leaf);

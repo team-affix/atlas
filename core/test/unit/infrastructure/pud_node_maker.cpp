@@ -37,7 +37,7 @@ struct MockStoreLvc {
     MOCK_METHOD(void, store, (pud_node_id, uint32_t));
 };
 struct MockMarkNodeState {
-    MOCK_METHOD(void, mark, (pud_node_id, pud_node_state));
+    MOCK_METHOD(void, set_leaf, (pud_node_id));
 };
 
 using test_node_maker_t = pud_node_maker<
@@ -73,7 +73,7 @@ struct PudNodeMakerTest : public ::testing::Test {
 
 TEST_F(PudNodeMakerTest, ARootIsALeafWithoutAParentHoldingItsHeadGoalsAndVariables) {
     InSequence in_order;
-    EXPECT_CALL(states, mark(9, pud_node_state::leaf));
+    EXPECT_CALL(states, set_leaf(9));
     EXPECT_CALL(parents, store(9, std::optional<pud_node_id>{}));
     EXPECT_CALL(root_heads, store(9, &head));
     EXPECT_CALL(store_goals, store(9, pud_goal_list{.goals = {}, .next_id = 0}.adding({&goal_a, &goal_b})));
@@ -88,7 +88,7 @@ TEST_F(PudNodeMakerTest, AChildClosesItsParentsCallSiteAndAppendsItsOwnGoals) {
 
 TEST_F(PudNodeMakerTest, AChildRecordsItsParentSubstitutionsAndFreshVariables) {
     const std::vector<pud_substitution> added{pud_substitution{.var_idx = 1, .value = &value}};
-    EXPECT_CALL(states, mark(9, pud_node_state::leaf));
+    EXPECT_CALL(states, set_leaf(9));
     EXPECT_CALL(parents, store(9, std::optional<pud_node_id>{4}));
     EXPECT_CALL(substitutions, store(9, added));
     EXPECT_CALL(store_lvc, store(9, 7u));

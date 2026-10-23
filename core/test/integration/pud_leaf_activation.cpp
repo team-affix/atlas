@@ -14,8 +14,9 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_node_goals.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_node_states.hpp"
-#include "infrastructure/pud_node_status.hpp"
+#include "infrastructure/pud_leaf_nodes.hpp"
+#include "infrastructure/pud_refuted_leaves.hpp"
+#include "infrastructure/pud_refuted_node_checker.hpp"
 #include "infrastructure/pud_node_table.hpp"
 #include "infrastructure/pud_leaf_states.hpp"
 #include "infrastructure/pud_query_holders.hpp"
@@ -39,10 +40,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using call_sites_t = pud_node_table<pud_body_goal_id>;
     using axioms_t = std::vector<pud_node_id>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
-    using node_status_t = pud_node_status<pud_node_states, pud_node_live_child_counts>;
+    using refuted_node_checker_t =
+        pud_refuted_node_checker<pud_leaf_nodes, pud_refuted_leaves, pud_node_live_child_counts>;
     using replayer_t = pud_replayer<root_heads_t, substitutions_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, node_status_t, node_status_t, children_t>;
-    using mhcs_t = pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, node_status_t, node_status_t, children_t>;
+    using mhws_t = pud_mhws<replayer_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
+    using mhcs_t =
+        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, pud_leaf_nodes, refuted_node_checker_t, children_t>;
     using mhq_t = pud_mhq<replayer_t, axioms_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
     using binder_t = pud_binder<term_factory_t, substitutions_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, substitutions_t>;
@@ -55,7 +58,8 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_node_states node_states;
+    pud_leaf_nodes leaf_nodes;
+    pud_refuted_leaves refuted_leaves;
     pud_node_live_child_counts live_child_counts;
     root_heads_t root_heads;
     substitutions_t substitutions;
@@ -67,10 +71,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     unit_queries_t unit_queries;
     pud_leaf_states leaf_states;
     pud_query_holders query_holders;
-    node_status_t node_status{node_states, live_child_counts};
+    refuted_node_checker_t refuted_node_checker{leaf_nodes, refuted_leaves, live_child_counts};
     replayer_t replayer{root_heads, substitutions, exprs, terms, terms, terms};
-    mhws_t mhws{replayer, node_status, node_status, children};
-    mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, node_status, node_status, children};
+    mhws_t mhws{replayer, leaf_nodes, refuted_node_checker, children};
+    mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, leaf_nodes, refuted_node_checker, children};
     mhq_t mhq{replayer, axioms, mhcs, mhcs, mhcs, mhcs, unit_queries};
     binder_t binder{terms, substitutions};
     watcher_t structure_watcher{terms, substitutions};
@@ -105,7 +109,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
     pud_node_id make_axiom(const expr* head) {
         const pud_node_id node = next_axiom++;
-        node_states.mark(node, pud_node_state::leaf);
+        leaf_nodes.set_leaf(node);
         root_heads.store(node, head);
         axioms.push_back(node);
         return node;
@@ -116,7 +120,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         uint32_t lvc,
         pud_goal_list goals,
         std::vector<pud_substitution> added) {
-        node_states.mark(node, pud_node_state::leaf);
+        leaf_nodes.set_leaf(node);
         node_goals.store(node, goals);
         lvcs.store(node, lvc);
         substitutions.store(node, std::move(added));
