@@ -7,7 +7,7 @@ pud_goal_list pud_initial_goal_opener::open_goals(const std::vector<const expr*>
     pud_body_goal_id next_id = 0;
     for (const expr* goal : opened_goals) {
         transient.set(next_id, goal);
-        next_id = next_id + 1;
+        ++next_id;
     }
     return pud_goal_list{.goals = std::move(transient).persistent(), .next_id = next_id};
 }

@@ -12,7 +12,7 @@ inline pud_goal_list reference_pud_goal_list(const pud_module& module, pud_node_
         pud_body_goal_id next_id = 0;
         for (const expr* goal : module.get_axiom(node).body) {
             goals = goals.set(next_id, goal);
-            next_id = next_id + 1;
+            ++next_id;
         }
         return pud_goal_list{.goals = goals, .next_id = next_id};
     }
@@ -22,7 +22,7 @@ inline pud_goal_list reference_pud_goal_list(const pud_module& module, pud_node_
     pud_body_goal_id next_id = parent_goals.next_id;
     for (const expr* goal : inference.body_goals) {
         goals = goals.set(next_id, goal);
-        next_id = next_id + 1;
+        ++next_id;
     }
     return pud_goal_list{.goals = goals, .next_id = next_id};
 }

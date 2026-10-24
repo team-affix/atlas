@@ -11,7 +11,7 @@ pud_goal_list pud_goal_resolver::resolve_goal(
     pud_body_goal_id next_id = goals.next_id;
     for (const expr* goal : added_goals) {
         transient.set(next_id, goal);
-        next_id = next_id + 1;
+        ++next_id;
     }
     return pud_goal_list{.goals = std::move(transient).persistent(), .next_id = next_id};
 }
