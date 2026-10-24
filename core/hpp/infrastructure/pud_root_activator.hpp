@@ -19,6 +19,7 @@
 // to refute the axiom.
 template<
     typename IGetAxiom,
+    typename IOpenGoals,
     typename IStoreNodeGoals,
     typename IStoreActiveState,
     typename IWatchRoot,
@@ -27,6 +28,7 @@ template<
 struct pud_root_activator {
     pud_root_activator(
         IGetAxiom& get_axiom,
+        IOpenGoals& open_goals,
         IStoreNodeGoals& store_node_goals,
         IStoreActiveState& store_active_state,
         IWatchRoot& watch_root,
@@ -35,6 +37,7 @@ struct pud_root_activator {
     bool activate_root(pud_global_node_id root);
 private:
     IGetAxiom& get_axiom_;
+    IOpenGoals& open_goals_;
     IStoreNodeGoals& store_node_goals_;
     IStoreActiveState& store_active_state_;
     IWatchRoot& watch_root_;
@@ -43,20 +46,24 @@ private:
 };
 
 #define PUD_ROOT_ACTIVATOR_TEMPLATE                                                            \
-    template<typename IGetAxiom, typename IStoreNodeGoals, typename IStoreActiveState,         \
-             typename IWatchRoot, typename IOpenQuery, typename IHoldQuery>
-#define PUD_ROOT_ACTIVATOR \
-    pud_root_activator<IGetAxiom, IStoreNodeGoals, IStoreActiveState, IWatchRoot, IOpenQuery, IHoldQuery>
+    template<typename IGetAxiom, typename IOpenGoals, typename IStoreNodeGoals,                \
+             typename IStoreActiveState, typename IWatchRoot, typename IOpenQuery,             \
+             typename IHoldQuery>
+#define PUD_ROOT_ACTIVATOR                                                                       \
+    pud_root_activator<IGetAxiom, IOpenGoals, IStoreNodeGoals, IStoreActiveState, IWatchRoot,  \
+        IOpenQuery, IHoldQuery>
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
 PUD_ROOT_ACTIVATOR::pud_root_activator(
     IGetAxiom& get_axiom,
+    IOpenGoals& open_goals,
     IStoreNodeGoals& store_node_goals,
     IStoreActiveState& store_active_state,
     IWatchRoot& watch_root,
     IOpenQuery& open_query,
     IHoldQuery& hold_query)
     : get_axiom_(get_axiom)
+    , open_goals_(open_goals)
     , store_node_goals_(store_node_goals)
     , store_active_state_(store_active_state)
     , watch_root_(watch_root)
@@ -66,9 +73,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
 PUD_ROOT_ACTIVATOR_TEMPLATE
 bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     const rule& axiom = get_axiom_.get_axiom(root);
-    pud_goal_list goals{.goals = {}, .next_id = 0};
-    for (const expr* goal : axiom.body)
-        goals = goals.adding(goal);
+    const pud_goal_list goals = open_goals_.open_goals(axiom.body);
     store_node_goals_.store(root, goals);
     const pud_ubs_state bindings{};
     immer::map<pud_body_goal_id, pud_mhq_head_id> queries;

@@ -12,8 +12,6 @@ struct pud_goal_list {
     immer::map<pud_body_goal_id, const expr*> goals;
     pud_body_goal_id next_id;
 
-    pud_goal_list closing(pud_body_goal_id goal) const;
-    pud_goal_list adding(const expr* goal) const;
     bool operator==(const pud_goal_list&) const = default;
 };
 

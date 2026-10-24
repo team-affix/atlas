@@ -14,6 +14,7 @@
 #include "reference_pud_goal_list.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_runtime.hpp"
 
 using ::testing::IsEmpty;
@@ -22,6 +23,7 @@ template<typename IRuntime>
 struct PudAnswerSetsRuntimeSuite1IntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
+    pud_goal_resolver goal_resolver;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
     const expr* atom(const char* name) { return exprs.make_functor(functors.id(name), {}); }
@@ -89,9 +91,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsSingleUnitSolution) {
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -202,9 +202,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsSingleUnitSolutionInE
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -310,9 +308,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesWhenNoCandidates) {
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -421,9 +417,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesWhenNoCandidatesInE
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -532,9 +526,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsClauseDerivedUnitSolu
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -646,9 +638,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsClauseDerivedUnitSolu
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -756,9 +746,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsSolutionWithCorrectBi
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -869,9 +857,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsSolutionWithCorrectBi
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -981,9 +967,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsClauseBodyBindingSolu
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -1096,9 +1080,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsClauseBodyBindingSolu
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -1209,9 +1191,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterCdclOnUnsatCla
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -1327,9 +1307,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterCdclOnUnsatCla
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -1440,9 +1418,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoGroundChoiceS
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -1563,9 +1539,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoGroundChoiceS
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -1685,9 +1659,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterEnumeratingAll
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -1808,9 +1780,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterEnumeratingAll
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -1930,9 +1900,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoVarChoiceSolu
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -2044,9 +2012,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoVarChoiceSolu
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -2155,9 +2121,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterEnumeratingAll
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -2269,9 +2233,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, RefutesAfterEnumeratingAll
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -2382,9 +2344,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoGoalSharedVar
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -2498,9 +2458,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoGoalSharedVar
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -2611,9 +2569,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesFourVarBindingSo
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -2727,9 +2683,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesFourVarBindingSo
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -2841,9 +2795,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesFourClauseBodyFa
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -2967,9 +2919,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesFourClauseBodyFa
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -3091,9 +3041,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsUniqueSharedVarConjun
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -3207,9 +3155,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, FindsUniqueSharedVarConjun
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -3315,9 +3261,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, ConflictedTickNotSolved) {
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -3426,9 +3370,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, ConflictedTickNotSolvedInE
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -3538,9 +3480,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoParentBinding
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -3653,9 +3593,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoParentBinding
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -3768,9 +3706,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesPeanoLessThanSev
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -3903,9 +3839,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesPeanoLessThanSev
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -4021,9 +3955,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesSatPAndQOrR) {
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -4146,9 +4078,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesSatPAndQOrRInEve
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -4267,9 +4197,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoSatAssignment
         live.erase(*chosen_leaf);
         leaf_goals.erase(*chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            pud_goal_list child_goals = parent_goals.closing(*chosen_goal);
-            for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                child_goals = child_goals.adding(body_goal);
+            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
             leaf_goals.emplace(child, child_goals);
         }
@@ -4391,9 +4319,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite1IntegrationTest, EnumeratesTwoSatAssignment
             live.erase(leaf);
             leaf_goals.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }

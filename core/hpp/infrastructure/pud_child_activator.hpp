@@ -28,6 +28,7 @@ template<
     typename IStoreActiveState,
     typename IGetInference,
     typename IGetNodeGoals,
+    typename IResolveGoal,
     typename IFindNodeGoal,
     typename IStoreNodeGoals,
     typename IIncrementLiveChildCount,
@@ -43,6 +44,7 @@ struct pud_child_activator {
         IStoreActiveState& store_active_state,
         IGetInference& get_inference,
         IGetNodeGoals& get_node_goals,
+        IResolveGoal& resolve_goal,
         IFindNodeGoal& find_node_goal,
         IStoreNodeGoals& store_node_goals,
         IIncrementLiveChildCount& increment_live_child_count,
@@ -58,6 +60,7 @@ private:
     IStoreActiveState& store_active_state_;
     IGetInference& get_inference_;
     IGetNodeGoals& get_node_goals_;
+    IResolveGoal& resolve_goal_;
     IFindNodeGoal& find_node_goal_;
     IStoreNodeGoals& store_node_goals_;
     IIncrementLiveChildCount& increment_live_child_count_;
@@ -71,14 +74,14 @@ private:
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
     template<typename IGetActiveState, typename IStoreActiveState, typename IGetInference,     \
-             typename IGetNodeGoals, typename IFindNodeGoal, typename IStoreNodeGoals,         \
-             typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
-             typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                    \
-             typename ICheckQueryExhausted>
+             typename IGetNodeGoals, typename IResolveGoal, typename IFindNodeGoal,            \
+             typename IStoreNodeGoals, typename IIncrementLiveChildCount, typename IBind,      \
+             typename IWatchDescend, typename IForkQuery, typename IOpenQuery,               \
+             typename IHoldQuery, typename ICheckQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetActiveState, IStoreActiveState, IGetInference, IGetNodeGoals,      \
-        IFindNodeGoal, IStoreNodeGoals, IIncrementLiveChildCount, IBind, IWatchDescend,        \
-        IForkQuery, IOpenQuery, IHoldQuery, ICheckQueryExhausted>
+        IResolveGoal, IFindNodeGoal, IStoreNodeGoals, IIncrementLiveChildCount, IBind,       \
+        IWatchDescend, IForkQuery, IOpenQuery, IHoldQuery, ICheckQueryExhausted>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
@@ -86,6 +89,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IStoreActiveState& store_active_state,
     IGetInference& get_inference,
     IGetNodeGoals& get_node_goals,
+    IResolveGoal& resolve_goal,
     IFindNodeGoal& find_node_goal,
     IStoreNodeGoals& store_node_goals,
     IIncrementLiveChildCount& increment_live_child_count,
@@ -99,6 +103,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , store_active_state_(store_active_state)
     , get_inference_(get_inference)
     , get_node_goals_(get_node_goals)
+    , resolve_goal_(resolve_goal)
     , find_node_goal_(find_node_goal)
     , store_node_goals_(store_node_goals)
     , increment_live_child_count_(increment_live_child_count)
@@ -113,9 +118,8 @@ PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
     const pud_inference& inference = get_inference_.get_inference(child);
-    pud_goal_list goals = get_node_goals_.get(parent).closing(inference.call_site);
-    for (const expr* goal : inference.body_goals)
-        goals = goals.adding(goal);
+    const pud_goal_list goals = resolve_goal_.resolve_goal(
+        get_node_goals_.get(parent), inference.call_site, inference.body_goals);
     store_node_goals_.store(child, goals);
     increment_live_child_count_.increment(parent);
     const uint32_t lvc = parent_state.lvc + inference.var_count;

@@ -91,7 +91,8 @@ struct PudAcceptorTest : public ::testing::Test {
     expr substituted_value{expr::functor{6, {}}};
     expr var_one{expr::var{1}};
     pud_ubs_state caller_state;
-    pud_goal_list callee_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&callee_goal);
+    pud_goal_list callee_goals{
+        .goals = immer::map<pud_body_goal_id, const expr*>{}.set(0, &callee_goal), .next_id = 1};
     rule axiom{&axiom_head, {}, 0};
     pud_inference node_inference{
         .parent = 2,

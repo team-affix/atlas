@@ -20,6 +20,9 @@ using queries_t = immer::map<pud_body_goal_id, pud_mhq_head_id>;
 struct MockGetAxiom {
     MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
 };
+struct MockOpenGoals {
+    MOCK_METHOD(pud_goal_list, open_goals, ((const std::vector<const expr*>&)), (const));
+};
 struct MockStoreNodeGoals {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_goal_list));
 };
@@ -37,28 +40,31 @@ struct MockHoldQuery {
 };
 
 using test_root_activator_t = pud_root_activator<
-    NiceMock<MockGetAxiom>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>,
-    NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
+    NiceMock<MockGetAxiom>, NiceMock<MockOpenGoals>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreActiveState>,
+    NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
 
 // The axiom at node 2 has the body a, b and three variables.
 struct PudRootActivatorTest : public ::testing::Test {
     NiceMock<MockGetAxiom> axioms;
+    NiceMock<MockOpenGoals> open_goals;
     NiceMock<MockStoreNodeGoals> goals;
     NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockWatchRoot> watcher;
     NiceMock<MockOpenQuery> queries;
     NiceMock<MockHoldQuery> holders;
-    test_root_activator_t activator{axioms, goals, store_states, watcher, queries, holders};
+    test_root_activator_t activator{axioms, open_goals, goals, store_states, watcher, queries, holders};
     expr head{expr::functor{9, {}}};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
     rule axiom{&head, {&goal_a, &goal_b}, 3};
-    pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&goal_a).adding(&goal_b);
+    pud_goal_list root_goals{
+        .goals = immer::map<pud_body_goal_id, const expr*>{}.set(0, &goal_a).set(1, &goal_b), .next_id = 2};
     pud_structure_watch root_watch;
 
     void SetUp() override {
         root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
         ON_CALL(axioms, get_axiom(pud_test_node(2))).WillByDefault(ReturnRef(axiom));
+        ON_CALL(open_goals, open_goals(axiom.body)).WillByDefault(Return(root_goals));
         ON_CALL(watcher, watch_root(_, _)).WillByDefault(Return(root_watch));
         ON_CALL(queries, try_open(k_test_module, pud_ubs_state{}, &goal_a, 3)).WillByDefault(Return(50));
         ON_CALL(queries, try_open(k_test_module, pud_ubs_state{}, &goal_b, 3)).WillByDefault(Return(51));
@@ -69,6 +75,7 @@ struct PudRootActivatorTest : public ::testing::Test {
 
 TEST_F(PudRootActivatorTest, AnAxiomsGoalsAreItsBodyInOrderAndAreStoredBeforeAnyQueryIsOpened) {
     InSequence in_order;
+    EXPECT_CALL(open_goals, open_goals(axiom.body)).WillOnce(Return(root_goals));
     EXPECT_CALL(goals, store(pud_test_node(2), root_goals));
     EXPECT_CALL(queries, try_open(_, _, _, _)).Times(2);
     activator.activate_root(pud_test_node(2));
@@ -104,6 +111,7 @@ TEST_F(PudRootActivatorTest, AGoalWithoutCandidatesRefutesTheAxiomButTheOtherQue
 TEST_F(PudRootActivatorTest, AnAxiomWithoutABodyHasNoGoalsAndOpensNothing) {
     rule fact{&head, {}, 0};
     ON_CALL(axioms, get_axiom(pud_test_node(2))).WillByDefault(ReturnRef(fact));
+    EXPECT_CALL(open_goals, open_goals(fact.body)).WillOnce(Return(pud_goal_list{.goals = {}, .next_id = 0}));
     EXPECT_CALL(goals, store(pud_test_node(2), (pud_goal_list{.goals = {}, .next_id = 0})));
     EXPECT_CALL(queries, try_open(_, _, _, _)).Times(0);
     EXPECT_FALSE(activator.activate_root(pud_test_node(2)));

@@ -13,6 +13,8 @@
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_goal_resolver.hpp"
+#include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -44,6 +46,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
     pud_structure_watcher<term_factory_t, modules_t> watcher{terms, modules};
+    pud_goal_resolver goal_resolver;
+    pud_initial_goal_opener initial_goal_opener;
     std::mt19937 rng{0};
     uint32_t checked_nodes = 0;
     uint32_t observed_changes = 0;
@@ -134,9 +138,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     }
 
     level make_root(pud_node_id root) {
-        pud_goal_list goals{.goals = {}, .next_id = 0};
-        for (const expr* goal : random_goals({}, 1 + pick(4)))
-            goals = goals.adding(goal);
+        const std::vector<const expr*> opened_goals = random_goals({}, 1 + pick(4));
+        const pud_goal_list goals = initial_goal_opener.open_goals(opened_goals);
         return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals), .node = root, .depth = 0};
     }
 
@@ -149,9 +152,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
             .var_count = 0,
         });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
-        pud_goal_list goals = parent.goals.closing(call_site);
-        for (const expr* goal : random_goals(child_bindings, pick(4)))
-            goals = goals.adding(goal);
+        const std::vector<const expr*> added_goals = random_goals(child_bindings, pick(4));
+        const pud_goal_list goals = goal_resolver.resolve_goal(parent.goals, call_site, added_goals);
 
         std::set<pud_body_goal_id> expected;
         for (const auto& [inherited_id, inherited_goal] : parent.goals.goals) {

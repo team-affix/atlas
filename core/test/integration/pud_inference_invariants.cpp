@@ -12,6 +12,7 @@
 #include "reference_pud_inference_violations.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_runtime.hpp"
 
 using ::testing::IsEmpty;
@@ -20,6 +21,7 @@ template<typename IRuntime>
 struct PudInferenceInvariantsIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
+    pud_goal_resolver goal_resolver;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
     const expr* atom(const char* name) { return exprs.make_functor(functors.id(name), {}); }
@@ -94,9 +96,10 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, ColorsInferencesStayValidUnder
             live.erase(chosen_leaf);
             leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(chosen_goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
+                    parent_goals,
+                    chosen_goal,
+                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -182,9 +185,10 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, PeanoAdditionInferencesStayVal
             live.erase(chosen_leaf);
             leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(chosen_goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
+                    parent_goals,
+                    chosen_goal,
+                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -269,9 +273,10 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, AppendSplitInferencesStayValid
             live.erase(chosen_leaf);
             leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(chosen_goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
+                    parent_goals,
+                    chosen_goal,
+                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
@@ -363,9 +368,10 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, GraphReachabilityInferencesSta
             live.erase(chosen_leaf);
             leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                pud_goal_list child_goals = parent_goals.closing(chosen_goal);
-                for (const expr* body_goal : leaf_module->get_inference(child.node).body_goals)
-                    child_goals = child_goals.adding(body_goal);
+                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
+                    parent_goals,
+                    chosen_goal,
+                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
                 leaf_goals.emplace(child, child_goals);
             }
