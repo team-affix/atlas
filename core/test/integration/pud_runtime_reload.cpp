@@ -252,6 +252,88 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ModuleIdsAreOnlyNames) {
     h.expect_faithful_reload(original);
 }
 
+TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulWithManyRandomUnfoldsReloads) {
+    auto& h = this->h;
+    h.rng.seed(60);
+    auto& original = h.build(h.peano_mul());
+    ASSERT_EQ(h.unfold_randomly(original, 70, std::nullopt), 70u);
+    EXPECT_GT(h.count_nodes(original), 120u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersUnfoldedToExhaustionReload) {
+    auto& h = this->h;
+    h.rng.seed(61);
+    auto& original = h.build(h.list_members());
+    EXPECT_GT(h.unfold_to_exhaustion(original, 9102), 5u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesWithDeepStructureReload) {
+    auto& h = this->h;
+    h.rng.seed(62);
+    auto& original = h.build(h.mirror_trees());
+    EXPECT_GT(h.unfold_to_exhaustion(original, 9202), 2u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainUnfoldsDeeplyThenReloads) {
+    auto& h = this->h;
+    auto& original = h.build(h.nested_unary_chain());
+    const pud_global_node_id deep_axiom{.module = 9301, .node = 1};
+    const pud_frontier_change change = original.unfold(deep_axiom, 0);
+    ASSERT_FALSE(change.offspring.empty());
+    for (int level = 0; level < 10; ++level) {
+        const std::optional<unfold_step> step = h.choose_step(original, 9301, goal_choice::leftmost);
+        if (!step.has_value())
+            break;
+        original.unfold(step->leaf, step->goal);
+    }
+    EXPECT_GT(h.count_nodes(original), 15u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendStressReloads) {
+    auto& h = this->h;
+    h.rng.seed(63);
+    auto& original = h.build(h.triple_append());
+    ASSERT_EQ(h.unfold_randomly(original, 55, std::nullopt), 55u);
+    EXPECT_GT(h.count_nodes(original), 80u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryNestedTermsReload) {
+    auto& h = this->h;
+    h.rng.seed(64);
+    auto& original = h.build(h.shared_binary());
+    ASSERT_EQ(h.unfold_randomly(original, 40, std::nullopt), 40u);
+    h.expect_consistent(original);
+    h.expect_faithful_reload(original);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryStressProgramReloadsAfterHeavyRandomUnfolds) {
+    auto& h = this->h;
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        for (const program_t& program : h.stress_programs()) {
+            h.rng.seed(300 + seed);
+            auto& original = h.build(program);
+            const size_t budget = 40 + h.rng() % 40;
+            h.unfold_randomly(original, budget, std::nullopt);
+            h.expect_consistent(original);
+            h.expect_faithful_reload(original);
+            if (this->HasFailure()) {
+                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
+                return;
+            }
+        }
+    }
+}
+
 TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryProgramReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
     auto& h = this->h;
     for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
@@ -411,6 +493,50 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
     h.resume_in_lockstep(original, first, 15, std::nullopt, goal_choice::random);
     auto& second = h.expect_faithful_reload(first);
     h.resume_in_lockstep(original, second, 15, std::nullopt, goal_choice::random);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOriginal) {
+    auto& h = this->h;
+    h.rng.seed(70);
+    auto& original = h.build(h.peano_mul());
+    h.unfold_randomly(original, 35, std::nullopt);
+    auto& resumed = h.expect_faithful_reload(original);
+    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 50, std::nullopt, goal_choice::random), 50u);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheOriginal) {
+    auto& h = this->h;
+    h.rng.seed(71);
+    auto& original = h.build(h.triple_append());
+    h.unfold_randomly(original, 25, std::nullopt);
+    auto& resumed = h.expect_faithful_reload(original);
+    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 45, std::nullopt, goal_choice::random), 45u);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustionLikeTheOriginal) {
+    auto& h = this->h;
+    h.rng.seed(72);
+    auto& original = h.build(h.mirror_trees());
+    h.unfold_randomly(original, 5, std::nullopt);
+    auto& resumed = h.expect_faithful_reload(original);
+    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, 9202, goal_choice::leftmost), 2000u);
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryStressProgramResumesAfterHeavyUnfolds) {
+    auto& h = this->h;
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        for (const program_t& program : h.stress_programs()) {
+            h.rng.seed(400 + seed);
+            auto& original = h.build(program);
+            h.unfold_randomly(original, 20 + h.rng() % 30, std::nullopt);
+            auto& resumed = h.expect_faithful_reload(original);
+            h.resume_in_lockstep(original, resumed, 35, std::nullopt, goal_choice::random);
+            if (this->HasFailure()) {
+                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
+                return;
+            }
+        }
+    }
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryProgramResumesLikeTheOriginalFromAnyPoint) {

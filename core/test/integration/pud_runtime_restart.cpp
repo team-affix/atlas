@@ -205,6 +205,87 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
     h.expect_same_modules(twin, copy);
 }
 
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedPeanoMulMatchesTwinUnderHeavyLoad) {
+    auto& h = this->h;
+    h.rng.seed(80);
+    auto& twin = h.build(h.peano_mul());
+    auto& restarted = h.build(h.peano_mul());
+    ASSERT_EQ(h.resume_in_lockstep(twin, restarted, 50, std::nullopt, goal_choice::random), 50u);
+    h.expect_faithful_restart(restarted, twin);
+    EXPECT_EQ(h.resume_in_lockstep(twin, restarted, 40, std::nullopt, goal_choice::random), 40u);
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListMembersMatchTwinToExhaustion) {
+    auto& h = this->h;
+    h.rng.seed(81);
+    auto& twin = h.build(h.list_members());
+    auto& restarted = h.build(h.list_members());
+    h.resume_in_lockstep(twin, restarted, 10, std::nullopt, goal_choice::random);
+    h.expect_faithful_restart(restarted, twin);
+    EXPECT_LT(h.resume_in_lockstep(twin, restarted, 2000, 9102, goal_choice::leftmost), 2000u);
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedMirrorTreesMatchTwin) {
+    auto& h = this->h;
+    h.rng.seed(82);
+    auto& twin = h.build(h.mirror_trees());
+    auto& restarted = h.build(h.mirror_trees());
+    ASSERT_EQ(h.resume_in_lockstep(twin, restarted, 15, std::nullopt, goal_choice::random), 15u);
+    h.expect_faithful_restart(restarted, twin);
+    EXPECT_LT(h.resume_in_lockstep(twin, restarted, 2000, 9202, goal_choice::leftmost), 2000u);
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedNestedUnaryChainMatchesTwin) {
+    auto& h = this->h;
+    h.rng.seed(83);
+    auto& twin = h.build(h.nested_unary_chain());
+    auto& restarted = h.build(h.nested_unary_chain());
+    ASSERT_EQ(h.resume_in_lockstep(twin, restarted, 30, std::nullopt, goal_choice::random), 30u);
+    h.expect_faithful_restart(restarted, twin);
+    EXPECT_EQ(h.resume_in_lockstep(twin, restarted, 25, std::nullopt, goal_choice::random), 25u);
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnderStress) {
+    auto& h = this->h;
+    h.rng.seed(84);
+    auto& twin = h.build(h.triple_append());
+    auto& restarted = h.build(h.triple_append());
+    ASSERT_EQ(h.resume_in_lockstep(twin, restarted, 45, std::nullopt, goal_choice::random), 45u);
+    h.expect_faithful_restart(restarted, twin);
+    for (int generation = 0; generation < 4 && !this->HasFailure(); ++generation) {
+        EXPECT_EQ(h.resume_in_lockstep(twin, restarted, 12, std::nullopt, goal_choice::random), 12u);
+        h.expect_faithful_restart(restarted, twin);
+    }
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSharedBinaryMatchesTwin) {
+    auto& h = this->h;
+    h.rng.seed(85);
+    auto& twin = h.build(h.shared_binary());
+    auto& restarted = h.build(h.shared_binary());
+    ASSERT_EQ(h.resume_in_lockstep(twin, restarted, 25, std::nullopt, goal_choice::random), 25u);
+    h.expect_faithful_restart(restarted, twin);
+    EXPECT_EQ(h.resume_in_lockstep(twin, restarted, 20, std::nullopt, goal_choice::random), 20u);
+}
+
+TYPED_TEST(PudRuntimeRestartIntegrationTest, EveryStressProgramRestartsAndContinuesLikeItsTwin) {
+    auto& h = this->h;
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        for (const program_t& program : h.stress_programs()) {
+            h.rng.seed(500 + seed);
+            auto& twin = h.build(program);
+            auto& restarted = h.build(program);
+            h.resume_in_lockstep(twin, restarted, 25 + h.rng() % 25, std::nullopt, goal_choice::random);
+            h.expect_faithful_restart(restarted, twin);
+            h.resume_in_lockstep(twin, restarted, 30, std::nullopt, goal_choice::random);
+            if (this->HasFailure()) {
+                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
+                return;
+            }
+        }
+    }
+}
+
 TYPED_TEST(PudRuntimeRestartIntegrationTest, EveryProgramRestartsAndContinuesLikeItsTwin) {
     auto& h = this->h;
     for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {

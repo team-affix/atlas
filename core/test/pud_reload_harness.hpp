@@ -138,6 +138,20 @@ struct pud_reload_harness {
         return built;
     }
 
+    const expr* nested_unary(const char* name, const expr* base, uint32_t depth) {
+        const expr* term = base;
+        for (uint32_t level = 0; level < depth; ++level)
+            term = functor(name, {term});
+        return term;
+    }
+
+    const expr* nested_binary(const char* name, const expr* base, uint32_t depth) {
+        const expr* term = base;
+        for (uint32_t level = 0; level < depth; ++level)
+            term = functor(name, {term, term});
+        return term;
+    }
+
     world_t& build(const program_t& program) {
         world_t& world = worlds.emplace_back(exprs);
         for (const module_spec& spec : program)
@@ -366,13 +380,40 @@ struct pud_reload_harness {
         };
     }
 
+    std::vector<rule> add_axioms() {
+        return {
+            rule(functor("add", {atom("z"), var(0), var(0)}), {}, 1),
+            rule(
+                functor("add", {functor("s", {var(0)}), var(1), functor("s", {var(2)})}),
+                {functor("add", {var(0), var(1), var(2)})},
+                3),
+        };
+    }
+
+    std::vector<rule> mul_axioms() {
+        return {
+            rule(functor("mul", {atom("z"), var(0), atom("z")}), {}, 1),
+            rule(
+                functor("mul", {functor("s", {var(0)}), var(1), var(2)}),
+                {functor("mul", {var(0), var(1), var(3)}), functor("add", {var(3), var(1), var(2)})},
+                4),
+        };
+    }
+
+    std::vector<rule> member_axioms() {
+        return {
+            rule(functor("mem", {var(0), functor("cons", {var(0), var(1)})}), {}, 2),
+            rule(
+                functor("mem", {var(0), functor("cons", {var(1), var(2)})}),
+                {functor("mem", {var(0), var(2)})},
+                3),
+        };
+    }
+
     program_t arithmetic() {
         std::vector<rule> base = nat_axioms();
-        base.push_back(rule(functor("add", {atom("z"), var(0), var(0)}), {}, 1));
-        base.push_back(rule(
-            functor("add", {functor("s", {var(0)}), var(1), functor("s", {var(2)})}),
-            {functor("add", {var(0), var(1), var(2)})},
-            3));
+        for (const rule& axiom : add_axioms())
+            base.push_back(axiom);
         return {
             module_spec{.id = 2001, .dependencies = {}, .axioms = base},
             module_spec{.id = 2002, .dependencies = {2001}, .axioms = {
@@ -487,8 +528,159 @@ struct pud_reload_harness {
         };
     }
 
+    program_t peano_mul() {
+        std::vector<rule> base = nat_axioms();
+        for (const rule& axiom : add_axioms())
+            base.push_back(axiom);
+        for (const rule& axiom : mul_axioms())
+            base.push_back(axiom);
+        return {
+            module_spec{.id = 9001, .dependencies = {}, .axioms = base},
+            module_spec{.id = 9002, .dependencies = {9001}, .axioms = {
+                rule(functor("factor", {var(0), var(1)}), {functor("mul", {var(0), var(1), peano(6)})}, 2),
+                rule(functor("triple", {var(0)}), {functor("mul", {peano(3), var(0), peano(9)})}, 1),
+                rule(
+                    functor("add_mul", {var(0), var(1), var(2)}),
+                    {functor("add", {var(0), var(1), var(2)}), functor("mul", {var(0), peano(2), var(3)})},
+                    4),
+            }},
+        };
+    }
+
+    program_t list_members() {
+        return {
+            module_spec{.id = 9101, .dependencies = {}, .axioms = member_axioms()},
+            module_spec{.id = 9102, .dependencies = {9101}, .axioms = {
+                rule(
+                    functor("every", {var(0)}),
+                    {functor("mem", {var(0), list({atom("x"), atom("y"), atom("z")})})},
+                    1),
+                rule(
+                    functor("pair_mem", {var(0), var(1)}),
+                    {
+                        functor("mem", {var(0), list({atom("a"), atom("b"), atom("c")})}),
+                        functor("mem", {var(1), list({atom("b"), atom("c"), atom("d")})}),
+                    },
+                    2),
+            }},
+        };
+    }
+
+    program_t mirror_trees() {
+        const expr* sample =
+            functor("branch", {functor("leaf", {atom("l")}), functor("branch", {functor("leaf", {atom("m")}), functor("leaf", {atom("r")})})});
+        return {
+            module_spec{.id = 9201, .dependencies = {}, .axioms = {
+                rule(functor("mirror", {functor("leaf", {var(0)}), functor("leaf", {var(0)})}), {}, 1),
+                rule(
+                    functor("mirror", {functor("branch", {var(0), var(1)}), functor("branch", {var(2), var(3)})}),
+                    {functor("mirror", {var(0), var(3)}), functor("mirror", {var(1), var(2)})},
+                    4),
+            }},
+            module_spec{.id = 9202, .dependencies = {9201}, .axioms = {
+                rule(functor("flip", {var(0)}), {functor("mirror", {sample, var(0)})}, 1),
+            }},
+        };
+    }
+
+    program_t nested_unary_chain() {
+        std::vector<rule> base = nat_axioms();
+        base.push_back(rule(
+            functor("deep_nat", {nested_unary("s", atom("z"), 8)}),
+            {functor("nat", {nested_unary("s", atom("z"), 8)})},
+            0));
+        base.push_back(rule(
+            functor("shallow", {var(0)}),
+            {functor("nat", {var(0)}), functor("add", {var(0), peano(2), nested_unary("s", nested_unary("s", atom("z"), 3), 2)})},
+            1));
+        for (const rule& axiom : add_axioms())
+            base.push_back(axiom);
+        return {
+            module_spec{.id = 9301, .dependencies = {}, .axioms = base},
+            module_spec{.id = 9302, .dependencies = {9301}, .axioms = {
+                rule(
+                    functor("reach", {var(0)}),
+                    {functor("nat", {nested_unary("s", atom("z"), 5)}), functor("add", {var(0), peano(1), nested_unary("s", atom("z"), 5)})},
+                    1),
+            }},
+        };
+    }
+
+    program_t triple_append() {
+        return {
+            module_spec{.id = 9401, .dependencies = {}, .axioms = {
+                rule(functor("app", {atom("nil"), var(0), var(0)}), {}, 1),
+                rule(
+                    functor("app", {functor("cons", {var(0), var(1)}), var(2), functor("cons", {var(0), var(3)})}),
+                    {functor("app", {var(1), var(2), var(3)})},
+                    4),
+            }},
+            module_spec{.id = 9402, .dependencies = {9401}, .axioms = {
+                rule(
+                    atom("triple_split"),
+                    {
+                        functor("app", {var(0), var(1), list({atom("a"), atom("b"), atom("c")})}),
+                        functor("app", {var(1), var(2), list({atom("d"), atom("e")})}),
+                        functor("app", {var(0), var(2), var(3)}),
+                    },
+                    4),
+                rule(
+                    functor("nested_app", {var(0)}),
+                    {
+                        functor("app", {var(0), var(1), list({atom("p"), atom("q")})}),
+                        functor("app", {var(1), list({atom("r")}), list({atom("p"), atom("q"), atom("r")})}),
+                    },
+                    2),
+            }},
+        };
+    }
+
+    program_t shared_binary() {
+        const expr* shared = nested_binary("pair", atom("v"), 4);
+        std::vector<rule> base = nat_axioms();
+        base.push_back(rule(functor("unpack", {shared, var(0)}), {functor("same", {var(0), shared})}, 1));
+        base.push_back(rule(functor("same", {var(0), var(0)}), {}, 1));
+        base.push_back(rule(
+            functor("both", {var(0), var(1)}),
+            {functor("same", {var(0), var(1)}), functor("nat", {var(0)})},
+            2));
+        return {
+            module_spec{.id = 9501, .dependencies = {}, .axioms = base},
+            module_spec{.id = 9502, .dependencies = {9501}, .axioms = {
+                rule(functor("grounded", {var(0)}), {functor("unpack", {shared, var(0)})}, 1),
+                rule(functor("nat_query", {var(0)}), {functor("both", {peano(2), var(0)})}, 1),
+            }},
+        };
+    }
+
     std::vector<program_t> every_program() {
-        return {colors(), arithmetic(), lists(), graph(), tiers(), siblings(), refutations(), cascade()};
+        return {
+            colors(),
+            arithmetic(),
+            lists(),
+            graph(),
+            tiers(),
+            siblings(),
+            refutations(),
+            cascade(),
+            peano_mul(),
+            list_members(),
+            mirror_trees(),
+            nested_unary_chain(),
+            triple_append(),
+            shared_binary(),
+        };
+    }
+
+    std::vector<program_t> stress_programs() {
+        return {
+            peano_mul(),
+            list_members(),
+            mirror_trees(),
+            nested_unary_chain(),
+            triple_append(),
+            shared_binary(),
+        };
     }
 };
 
