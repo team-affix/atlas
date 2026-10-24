@@ -1,11 +1,13 @@
 #include <cstdint>
+#include <deque>
 #include <random>
+#include <iterator>
 #include <set>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
+#include "reference_pud_canonical.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
@@ -26,18 +28,19 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         pud_ubs_state bindings;
         pud_goal_list goals;
         pud_structure_watch watch;
+        pud_node_id node;
         uint32_t depth;
     };
 
     static constexpr pud_module_id k_module = 0;
     static constexpr uint32_t k_var_count = 14;
-    static constexpr uint32_t k_rep_token_base = 1000000;
+    static constexpr uint32_t k_root_count = 140;
 
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
+    std::deque<pud_module> module_data;
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
     pud_structure_watcher<term_factory_t, modules_t> watcher{terms, modules};
@@ -46,7 +49,10 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     uint32_t observed_changes = 0;
 
     void SetUp() override {
-        modules.register_module(data);
+        std::vector<rule> roots;
+        for (uint32_t root = 0; root < k_root_count; ++root)
+            roots.push_back(rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0));
+        modules.register_module(module_data.emplace_back(k_module, std::vector<pud_module_id>{}, roots));
     }
 
     uint32_t pick(uint32_t bound) {
@@ -119,36 +125,6 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         return substitutions;
     }
 
-    void visit_canonical(
-        const ubs_bind_map& bind_map,
-        const expr* visited,
-        std::unordered_map<uint32_t, uint32_t>& numbering,
-        std::vector<uint32_t>& tokens) {
-        if (const expr::var* var = std::get_if<expr::var>(&visited->content)) {
-            const ubs_class var_class = bind_map.find(var->index);
-            if (!var_class.value.has_value()) {
-                const uint32_t number = numbering.emplace(var_class.rep, numbering.size()).first->second;
-                tokens.push_back(k_rep_token_base + number);
-                return;
-            }
-            visit_canonical(bind_map, var_class.value->skeleton, numbering, tokens);
-            return;
-        }
-        const expr::functor& functor = std::get<expr::functor>(visited->content);
-        tokens.push_back(functor.id);
-        tokens.push_back(functor.args.size());
-        for (const expr* arg : functor.args)
-            visit_canonical(bind_map, arg, numbering, tokens);
-    }
-
-    std::vector<uint32_t> canonical(const pud_ubs_state& bindings, const expr* goal) {
-        const ubs_bind_map bind_map{bindings};
-        std::unordered_map<uint32_t, uint32_t> numbering;
-        std::vector<uint32_t> tokens;
-        visit_canonical(bind_map, goal, numbering, tokens);
-        return tokens;
-    }
-
     std::vector<const expr*> random_goals(const pud_ubs_state& bindings, uint32_t count) {
         const std::vector<uint32_t> reps = unbound_reps(ubs_bind_map{bindings});
         std::vector<const expr*> goals;
@@ -157,24 +133,22 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         return goals;
     }
 
-    level make_root() {
+    level make_root(pud_node_id root) {
         pud_goal_list goals{.goals = {}, .next_id = 0};
         for (const expr* goal : random_goals({}, 1 + pick(4)))
             goals = goals.adding(goal);
-        return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals), .depth = 0};
+        return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals), .node = root, .depth = 0};
     }
 
-    level descend_and_check(const level& parent) {
+    level descend_and_check(const level& parent, pud_body_goal_id call_site) {
         const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
-            .parent = 0,
-            .call_site = 0,
+            .parent = parent.node,
+            .call_site = call_site,
             .substitutions = random_substitutions(parent.bindings),
             .body_goals = {},
             .var_count = 0,
         });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
-        const pud_body_goal_id call_site =
-            std::next(parent.goals.goals.begin(), pick(parent.goals.goals.size()))->first;
         pud_goal_list goals = parent.goals.closing(call_site);
         for (const expr* goal : random_goals(child_bindings, pick(4)))
             goals = goals.adding(goal);
@@ -183,7 +157,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         for (const auto& [inherited_id, inherited_goal] : parent.goals.goals) {
             if (inherited_id == call_site)
                 continue;
-            const bool changed = canonical(parent.bindings, inherited_goal) != canonical(child_bindings, inherited_goal);
+            const bool changed = reference_pud_canonical(parent.bindings, inherited_goal)
+                != reference_pud_canonical(child_bindings, inherited_goal);
             if (changed)
                 expected.insert(inherited_id);
         }
@@ -195,22 +170,24 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
 
         ++checked_nodes;
         observed_changes += expected.size();
-        return level{.bindings = child_bindings, .goals = goals, .watch = change.watch, .depth = parent.depth + 1};
+        return level{
+            .bindings = child_bindings, .goals = goals, .watch = change.watch, .node = child.node, .depth = parent.depth + 1};
     }
 
     void explore(const level& at, uint32_t max_depth) {
         if (at.depth == max_depth || at.goals.goals.empty() || ::testing::Test::HasFailure())
             return;
+        const pud_body_goal_id call_site = std::next(at.goals.goals.begin(), pick(at.goals.goals.size()))->first;
         const uint32_t branching = 1 + pick(3);
         for (uint32_t branch = 0; branch < branching; ++branch)
-            explore(descend_and_check(at), max_depth);
+            explore(descend_and_check(at, call_site), max_depth);
     }
 };
 
 TEST_F(PudStructureWatcherFuzzTest, MatchesCanonicalFormOracleOnRandomTrees) {
     for (uint32_t seed = 0; seed < 60; ++seed) {
         rng.seed(seed);
-        explore(make_root(), 5);
+        explore(make_root(seed), 5);
         ASSERT_FALSE(HasFailure()) << "seed " << seed;
     }
     EXPECT_GT(checked_nodes, 1000u);
@@ -220,9 +197,11 @@ TEST_F(PudStructureWatcherFuzzTest, MatchesCanonicalFormOracleOnRandomTrees) {
 TEST_F(PudStructureWatcherFuzzTest, MatchesCanonicalFormOracleOnDeepPaths) {
     for (uint32_t seed = 100; seed < 140; ++seed) {
         rng.seed(seed);
-        level at = make_root();
-        for (uint32_t step = 0; step < 40 && !at.goals.goals.empty() && !HasFailure(); ++step)
-            at = descend_and_check(at);
+        level at = make_root(seed);
+        for (uint32_t step = 0; step < 40 && !at.goals.goals.empty() && !HasFailure(); ++step) {
+            const pud_body_goal_id call_site = std::next(at.goals.goals.begin(), pick(at.goals.goals.size()))->first;
+            at = descend_and_check(at, call_site);
+        }
         ASSERT_FALSE(HasFailure()) << "seed " << seed;
     }
 }

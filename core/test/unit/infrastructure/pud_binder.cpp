@@ -62,7 +62,11 @@ struct PudBinderTest : public ::testing::Test {
 TEST_F(PudBinderTest, AVariableSubstitutionEquatesAndATermSubstitutionBindsInOrder) {
     InSequence in_order;
     EXPECT_CALL(make_bind_map, make_bind_map(parent_state));
-    EXPECT_CALL(bind_map, equate(singleton(3), singleton(1)));
-    EXPECT_CALL(bind_map, instantiate(singleton(4), (framed_expr{&value, 0})));
+    EXPECT_CALL(bind_map, equate(
+        (ubs_class{.root = 3, .size = 1, .rep = 3, .value = std::nullopt}),
+        (ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt})));
+    EXPECT_CALL(bind_map, instantiate(
+        (ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}),
+        (framed_expr{&value, 0})));
     EXPECT_EQ(binder.bind(parent_state, pud_test_node(8)), child_state);
 }

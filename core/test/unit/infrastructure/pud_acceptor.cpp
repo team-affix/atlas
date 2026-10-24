@@ -128,14 +128,6 @@ struct PudAcceptorTest : public ::testing::Test {
         ON_CALL(exporter, export_expr((framed_expr{&value, 10}))).WillByDefault(Return(&exported_value));
         ON_CALL(make_var, make_var(1)).WillByDefault(Return(&var_one));
     }
-
-    void edit_on_entering(std::vector<ubs_class> edited) {
-        ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::move(edited)}));
-    }
-
-    pud_inference accept() {
-        return acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path);
-    }
 };
 
 }
@@ -145,14 +137,14 @@ TEST_F(PudAcceptorTest, TheCallSiteEntersThePathsAxiomAtTheLvcThenEachNodeBelowR
     InSequence in_order;
     EXPECT_CALL(unifier, unify(entering_call_site, entered_head));
     EXPECT_CALL(unifier, unify(replayed_var, replayed_value));
-    accept();
+    acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path);
 }
 
 TEST_F(PudAcceptorTest, TheInferenceIsOfTheCallerOnItsCallSiteWithTheCalleesOpenGoalsExported) {
     EXPECT_CALL(make_exporter, make_exporter(_, 10u, _))
         .WillOnce(Invoke(this, &PudAcceptorTest::export_three_fresh_variables));
     EXPECT_EQ(
-        accept(),
+        acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path),
         (pud_inference{.parent = 3, .call_site = 1, .substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
 }
 
@@ -162,37 +154,42 @@ TEST_F(PudAcceptorTest, TheInferencesParentIsTheAcceptorsLocalId) {
 }
 
 TEST_F(PudAcceptorTest, ACallerClassMergedUnderASmallerRepresentativeIsSubstitutedByIt) {
-    edit_on_entering({singleton(4)});
+    ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}}}));
     ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = std::nullopt}));
-    EXPECT_EQ(accept().substitutions, (std::vector<pud_substitution>{{.var_idx = 4, .value = &var_one}}));
+    EXPECT_EQ(
+        acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions,
+        (std::vector<pud_substitution>{{.var_idx = 4, .value = &var_one}}));
 }
 
 TEST_F(PudAcceptorTest, ACallerClassBoundByTheResolutionIsSubstitutedByItsExportedValue) {
-    edit_on_entering({singleton(4)});
+    ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}}}));
     ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = framed_expr{&value, 10}}));
-    EXPECT_EQ(accept().substitutions, (std::vector<pud_substitution>{{.var_idx = 4, .value = &exported_value}}));
+    EXPECT_EQ(
+        acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions,
+        (std::vector<pud_substitution>{{.var_idx = 4, .value = &exported_value}}));
 }
 
 TEST_F(PudAcceptorTest, CalleeClassesAndCallerClassesAlreadyBoundWhenEditedAreNotSubstituted) {
     const ubs_class callee{.root = 12, .size = 1, .rep = 12, .value = std::nullopt};
     const ubs_class bound_before{.root = 3, .size = 1, .rep = 3, .value = framed_expr{&value, 0}};
-    edit_on_entering({callee, bound_before});
+    ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{callee, bound_before}}));
     ON_CALL(accepted, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = framed_expr{&value, 10}}));
-    EXPECT_TRUE(accept().substitutions.empty());
+    EXPECT_TRUE(acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions.empty());
 }
 
 TEST_F(PudAcceptorTest, AClassThatOnlyGainedCalleeVariablesIsNotSubstituted) {
-    edit_on_entering({singleton(4)});
+    ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}}}));
     ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 12, .size = 2, .rep = 4, .value = std::nullopt}));
-    EXPECT_TRUE(accept().substitutions.empty());
+    EXPECT_TRUE(acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions.empty());
 }
 
 TEST_F(PudAcceptorTest, CallerClassesEditedAnywhereOnThePathAreSubstitutedOnceInRepresentativeOrder) {
-    edit_on_entering({singleton(7)});
+    ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 7, .size = 1, .rep = 7, .value = std::nullopt}}}));
     ON_CALL(unifier, unify(replayed_var, replayed_value))
-        .WillByDefault(Return(edited_t{std::vector<ubs_class>{singleton(4), singleton(7)}}));
+        .WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}, ubs_class{.root = 7, .size = 1, .rep = 7, .value = std::nullopt}}}));
     ON_CALL(accepted, find(7)).WillByDefault(Return(ubs_class{.root = 2, .size = 3, .rep = 1, .value = std::nullopt}));
     ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 2, .size = 3, .rep = 1, .value = std::nullopt}));
-    EXPECT_EQ(accept().substitutions,
+    EXPECT_EQ(
+        acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions,
         (std::vector<pud_substitution>{{.var_idx = 4, .value = &var_one}, {.var_idx = 7, .value = &var_one}}));
 }

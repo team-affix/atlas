@@ -42,7 +42,7 @@ fuzz_pair make_fuzz_pair(test_functors& functors, pud_term_stack& stack, std::mt
     const uint32_t right_frame = static_cast<uint32_t>(rng() % 4u);
     const expr* left = builder.make(left_kind, var_slot);
     const expr* right = builder.make(right_kind, var_slot + 1u);
-    return fuzz_pair{pud_fe(left, left_frame), pud_fe(right, right_frame)};
+    return fuzz_pair{framed_expr{left, left_frame}, framed_expr{right, right_frame}};
 }
 
 } // namespace
@@ -89,10 +89,10 @@ TEST_F(PudUnifierFuzzIntegrationTest, HeavyVariableReuseMatchesReference) {
         for (int arg = 5; arg >= 0; --arg)
             ref_mirror.push_back(ref.pool.make_var(static_cast<uint32_t>(arg % 2u)));
         const expr* ref_right = ref.pool.make_functor(pid, ref_mirror);
-        const framed_expr lhs{pud_fe(left, 0)};
-        const framed_expr rhs{pud_fe(right, 0)};
-        const framed_expr ref_lhs{pud_fe(ref_left, 0)};
-        const framed_expr ref_rhs{pud_fe(ref_right, 0)};
+        const framed_expr lhs{left, 0};
+        const framed_expr rhs{right, 0};
+        const framed_expr ref_lhs{ref_left, 0};
+        const framed_expr ref_rhs{ref_right, 0};
         EXPECT_EQ(
             prod.unifier.unify(lhs, rhs).has_value(),
             reference_pud_unify_terms(ref, ref_lhs, ref_rhs));
@@ -118,13 +118,13 @@ TEST_F(PudUnifierFuzzIntegrationTest, RandomUnifySequenceMatchesReferenceAfterEa
         const uint32_t right_frame = static_cast<uint32_t>(rng() % 5u);
         const bool use_atom = (rng() % 4u) == 0u;
         const uint32_t atom_pick = rng() % 2u;
-        framed_expr left{pud_fe(prod.pool.make_var(left_var), left_frame)};
-        framed_expr right{pud_fe(prod.pool.make_var(right_var), right_frame)};
-        framed_expr ref_left{pud_fe(ref.pool.make_var(left_var), left_frame)};
-        framed_expr ref_right{pud_fe(ref.pool.make_var(right_var), right_frame)};
+        framed_expr left{prod.pool.make_var(left_var), left_frame};
+        framed_expr right{prod.pool.make_var(right_var), right_frame};
+        framed_expr ref_left{ref.pool.make_var(left_var), left_frame};
+        framed_expr ref_right{ref.pool.make_var(right_var), right_frame};
         if (use_atom) {
-            right = pud_fe(prod_atoms[atom_pick], 0);
-            ref_right = pud_fe(ref_atoms[atom_pick], 0);
+            right = framed_expr{prod_atoms[atom_pick], 0};
+            ref_right = framed_expr{ref_atoms[atom_pick], 0};
         }
         EXPECT_EQ(
             prod.unifier.unify(left, right).has_value(),
@@ -149,9 +149,9 @@ TEST_F(PudUnifierFuzzIntegrationTest, RandomFrameOffsetsMatchReference) {
         const uint32_t left_frame = static_cast<uint32_t>(rng() % 12u);
         const uint32_t right_frame = static_cast<uint32_t>(rng() % 12u);
         EXPECT_EQ(
-            prod.unifier.unify(pud_fe(left, left_frame), pud_fe(right, right_frame)).has_value(),
+            prod.unifier.unify(framed_expr{left, left_frame}, framed_expr{right, right_frame}).has_value(),
             reference_pud_unify_terms(
-                ref, pud_fe(ref_left, left_frame), pud_fe(ref_right, right_frame)));
+                ref, framed_expr{ref_left, left_frame}, framed_expr{ref_right, right_frame}));
     }
 }
 
@@ -183,10 +183,10 @@ TEST_F(PudUnifierFuzzIntegrationTest, ShrinkingFindsSmallerReproWhenMismatchDete
              pid,
              {ref.pool.make_functor(functors.id("b"), {}), ref.pool.make_var(1u)}),
          ref.pool.make_var(0u)});
-    const framed_expr lhs{pud_fe(big_left, 0)};
-    const framed_expr rhs{pud_fe(big_right, 0)};
-    const framed_expr ref_lhs{pud_fe(ref_big_left, 0)};
-    const framed_expr ref_rhs{pud_fe(ref_big_right, 0)};
+    const framed_expr lhs{big_left, 0};
+    const framed_expr rhs{big_right, 0};
+    const framed_expr ref_lhs{ref_big_left, 0};
+    const framed_expr ref_rhs{ref_big_right, 0};
     const bool prod_ok = prod.unifier.unify(lhs, rhs).has_value();
     const bool ref_ok = reference_pud_unify_terms(ref, ref_lhs, ref_rhs);
     EXPECT_EQ(prod_ok, ref_ok);
@@ -198,8 +198,8 @@ TEST_F(PudUnifierFuzzIntegrationTest, ShrinkingFindsSmallerReproWhenMismatchDete
         const expr* ref_minimal_left = mini_ref.pool.make_var(0u);
         const expr* ref_minimal_right = mini_ref.pool.make_functor(functors.id("a"), {});
         EXPECT_EQ(
-            mini_prod.unifier.unify(pud_fe(minimal_left, 0), pud_fe(minimal_right, 0)).has_value(),
+            mini_prod.unifier.unify(framed_expr{minimal_left, 0}, framed_expr{minimal_right, 0}).has_value(),
             reference_pud_unify_terms(
-                mini_ref, pud_fe(ref_minimal_left, 0), pud_fe(ref_minimal_right, 0)));
+                mini_ref, framed_expr{ref_minimal_left, 0}, framed_expr{ref_minimal_right, 0}));
     }
 }

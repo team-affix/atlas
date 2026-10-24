@@ -80,7 +80,7 @@ struct PudReplayerTest : public ::testing::Test {
     pud_ubs_state persisted_state;
 
     void SetUp() override {
-        distinguish_persisted_state();
+        persisted_state.parents = persisted_state.parents.set(1, 0);
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));
         ON_CALL(make_cycle_detector, make_cycle_detector(_)).WillByDefault(ReturnRef(cycle_detector));
         ON_CALL(make_unifier, make_unifier(_, _)).WillByDefault(ReturnRef(unifier));
@@ -90,11 +90,6 @@ struct PudReplayerTest : public ::testing::Test {
         ON_CALL(make_var, make_var(3)).WillByDefault(Return(&var_three));
         ON_CALL(make_var, make_var(4)).WillByDefault(Return(&var_four));
         ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_unified));
-    }
-
-    // Distinguishes the persisted state from the caller's, so a test sees which one a replay carries.
-    void distinguish_persisted_state() {
-        persisted_state.parents = persisted_state.parents.set(1, 0);
     }
 };
 

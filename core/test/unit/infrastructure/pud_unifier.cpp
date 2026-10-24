@@ -45,10 +45,6 @@ ubs_class singleton(uint32_t var) {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-ubs_class bound(uint32_t root, framed_expr value) {
-    return ubs_class{.root = root, .size = 1, .rep = root, .value = value};
-}
-
 using test_unifier_t = pud_unifier<
     NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockEquate>,
     NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>>;
@@ -103,26 +99,35 @@ TEST_F(PudUnifierTest, VarsInTheSameClassAreNotEquated) {
 }
 
 TEST_F(PudUnifierTest, TwoUnboundVarsEquateTheirClasses) {
-    EXPECT_CALL(equate, equate(singleton(4), singleton(9)));
+    EXPECT_CALL(equate, equate(
+        ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt},
+        ubs_class{.root = 9, .size = 1, .rep = 9, .value = std::nullopt}));
     EXPECT_TRUE(unifier.unify({var(4), 0}, {var(6), 3}));
 }
 
 TEST_F(PudUnifierTest, AnUnboundVarIsBoundToTheOtherSideAsIsWithItsFrame) {
     const expr* term = functor(1, {var(0)});
-    EXPECT_CALL(instantiate, instantiate(singleton(2), (framed_expr{term, 8})));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 2, .size = 1, .rep = 2, .value = std::nullopt},
+        (framed_expr{term, 8})));
     EXPECT_TRUE(unifier.unify({var(2), 0}, {term, 8}));
 }
 
 TEST_F(PudUnifierTest, VarOnEitherSideBindsTheSameWay) {
     const expr* term = functor(1, {});
-    EXPECT_CALL(instantiate, instantiate(singleton(2), (framed_expr{term, 4})));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 2, .size = 1, .rep = 2, .value = std::nullopt},
+        (framed_expr{term, 4})));
     EXPECT_TRUE(unifier.unify({term, 4}, {var(2), 0}));
 }
 
 TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
-    ON_CALL(find, find(2)).WillByDefault(Return(bound(2, framed_expr{functor(1, {var(0)}), 10})));
+    ON_CALL(find, find(2)).WillByDefault(Return(ubs_class{
+        .root = 2, .size = 1, .rep = 2, .value = framed_expr{functor(1, {var(0)}), 10}}));
     const expr* five = functor(5, {});
-    EXPECT_CALL(instantiate, instantiate(singleton(10), (framed_expr{five, 0})));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 10, .size = 1, .rep = 10, .value = std::nullopt},
+        (framed_expr{five, 0})));
     EXPECT_CALL(instantiate, instantiate(Field(&ubs_class::root, 2u), _)).Times(0);
     EXPECT_TRUE(unifier.unify({var(2), 0}, {functor(1, {five}), 0}));
 }
@@ -130,20 +135,24 @@ TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
 TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
     const framed_expr kept{functor(3, {var(0)}), 20};
     const framed_expr displaced{functor(3, {functor(9, {})}), 0};
-    const ubs_class merged = bound(1, kept);
+    const ubs_class kept_class = ubs_class{.root = 1, .size = 1, .rep = 1, .value = kept};
+    const ubs_class displaced_class = ubs_class{.root = 2, .size = 1, .rep = 2, .value = displaced};
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
-    EXPECT_CALL(find, find(1)).WillOnce(Return(bound(1, kept))).WillOnce(Return(merged));
-    EXPECT_CALL(find, find(2)).WillOnce(Return(bound(2, displaced)));
+    EXPECT_CALL(find, find(1)).WillOnce(Return(kept_class)).WillOnce(Return(kept_class));
+    EXPECT_CALL(find, find(2)).WillOnce(Return(displaced_class));
     InSequence in_order;
-    EXPECT_CALL(equate, equate(bound(1, kept), bound(2, displaced))).WillOnce(Return(displaced));
-    EXPECT_CALL(instantiate, instantiate(singleton(20), _));
+    EXPECT_CALL(equate, equate(kept_class, displaced_class)).WillOnce(Return(displaced));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 20, .size = 1, .rep = 20, .value = std::nullopt}, _));
     EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));
 }
 
 TEST_F(PudUnifierTest, ArgumentsAreUnifiedFirstToLast) {
     InSequence in_order;
-    EXPECT_CALL(instantiate, instantiate(singleton(0), _));
-    EXPECT_CALL(instantiate, instantiate(singleton(1), _));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 0, .size = 1, .rep = 0, .value = std::nullopt}, _));
+    EXPECT_CALL(instantiate, instantiate(
+        ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt}, _));
     EXPECT_TRUE(unifier.unify(
         {functor(1, {var(0), var(1)}), 0},
         {functor(1, {functor(2, {}), functor(3, {})}), 0}));
@@ -193,17 +202,26 @@ TEST_F(PudUnifierTest, EqualTermsEditNothing) {
 }
 
 TEST_F(PudUnifierTest, AnInstantiatedClassIsReportedAsItWasBeforeTheEdit) {
-    EXPECT_THAT(unifier.unify({var(2), 0}, {functor(1, {}), 8}).value(), ElementsAre(singleton(2)));
+    EXPECT_THAT(
+        unifier.unify({var(2), 0}, {functor(1, {}), 8}).value(),
+        ElementsAre(ubs_class{.root = 2, .size = 1, .rep = 2, .value = std::nullopt}));
 }
 
 TEST_F(PudUnifierTest, BothEquatedClassesAreReportedAsTheyWereBeforeTheEdit) {
-    EXPECT_THAT(unifier.unify({var(4), 0}, {var(6), 3}).value(), ElementsAre(singleton(4), singleton(9)));
+    EXPECT_THAT(
+        unifier.unify({var(4), 0}, {var(6), 3}).value(),
+        ElementsAre(
+            ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt},
+            ubs_class{.root = 9, .size = 1, .rep = 9, .value = std::nullopt}));
 }
 
 TEST_F(PudUnifierTest, EveryEditIsReportedInTheOrderItWasMade) {
     EXPECT_THAT(
         unifier.unify({functor(1, {var(0), var(1)}), 0}, {functor(1, {functor(2, {}), var(5)}), 0}).value(),
-        ElementsAre(singleton(0), singleton(1), singleton(5)));
+        ElementsAre(
+            ubs_class{.root = 0, .size = 1, .rep = 0, .value = std::nullopt},
+            ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt},
+            ubs_class{.root = 5, .size = 1, .rep = 5, .value = std::nullopt}));
 }
 
 TEST_F(PudUnifierTest, AFailedUnificationReportsNoEdits) {

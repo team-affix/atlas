@@ -3,13 +3,6 @@
 #include "functor_fixture.hpp"
 #include "pud_term_stack.hpp"
 
-namespace {
-
-uint32_t gkey(globalizer& globalize, uint32_t frame, uint32_t local) {
-    return globalize.globalize(frame, local);
-}
-
-}
 
 struct PudUnifierExtendedIntegrationTest : public ::testing::Test {
     test_functors functors;
@@ -31,50 +24,56 @@ TEST_F(PudUnifierExtendedIntegrationTest, CrossArgMirrorBindsIdentically) {
     const expr* mirror_by = mirrored.pool.make_functor(
         functors.id("p"),
         {mirrored.pool.make_functor(functors.id("b"), {}), mirrored.pool.make_var(1u)});
-    EXPECT_TRUE(stack.unifier.unify(pud_fe(f_xy, 0), pud_fe(f_by, 0)));
-    EXPECT_TRUE(mirrored.unifier.unify(pud_fe(mirror_by, 0), pud_fe(mirror_xy, 0)));
-    EXPECT_EQ(stack.resolve(0u), atom("b"));
-    EXPECT_EQ(stack.resolve(1u), atom("a"));
-    EXPECT_EQ(mirrored.resolve(0u), mirrored.pool.make_functor(functors.id("b"), {}));
-    EXPECT_EQ(mirrored.resolve(1u), mirrored.pool.make_functor(functors.id("a"), {}));
+    EXPECT_TRUE(stack.unifier.unify(framed_expr{f_xy, 0}, framed_expr{f_by, 0}));
+    EXPECT_TRUE(mirrored.unifier.unify(framed_expr{mirror_by, 0}, framed_expr{mirror_xy, 0}));
+    EXPECT_EQ(stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u}), atom("b"));
+    EXPECT_EQ(stack.normalizer.normalize(framed_expr{stack.pool.make_var(1u), 0u}), atom("a"));
+    EXPECT_EQ(mirrored.normalizer.normalize(framed_expr{mirrored.pool.make_var(0u), 0u}), mirrored.pool.make_functor(functors.id("b"), {}));
+    EXPECT_EQ(mirrored.normalizer.normalize(framed_expr{mirrored.pool.make_var(1u), 0u}), mirrored.pool.make_functor(functors.id("a"), {}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, SwappingFramesPreservesSuccessAndBindings) {
     const expr* local0 = v(0);
     const expr* local3 = v(3);
     pud_term_stack swapped;
-    const bool ok_a = stack.unifier.unify(pud_fe(local0, 4), pud_fe(local3, 0)).has_value();
-    const bool ok_b = swapped.unifier.unify(pud_fe(local3, 0), pud_fe(local0, 4)).has_value();
+    const bool ok_a = stack.unifier.unify(framed_expr{local0, 4}, framed_expr{local3, 0}).has_value();
+    const bool ok_b = swapped.unifier.unify(framed_expr{local3, 0}, framed_expr{local0, 4}).has_value();
     EXPECT_EQ(ok_a, ok_b);
-    const uint32_t stack_global = gkey(stack.globalize, 4, 0);
-    const uint32_t swapped_global = gkey(swapped.globalize, 4, 0);
+    const uint32_t stack_global = stack.globalize.globalize(4, 0);
+    const uint32_t swapped_global = swapped.globalize.globalize(4, 0);
     EXPECT_EQ(
-        std::get<expr::var>(stack.resolve(stack_global)->content).index,
-        std::get<expr::var>(swapped.resolve(swapped_global)->content).index);
+        std::get<expr::var>(stack.normalizer.normalize(framed_expr{stack.pool.make_var(stack_global), 0u})->content).index,
+        std::get<expr::var>(swapped.normalizer.normalize(framed_expr{swapped.pool.make_var(swapped_global), 0u})->content).index);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, FunctorMismatchPerformsZeroWrites) {
-    const pud_ubs_state before = stack.snapshot();
+    pud_ubs_state before = std::move(stack.bind_map).persist();
+    stack.bind_map = ubs_bind_map{before};
     const expr* fa = atom("a");
     const expr* fb = atom("b");
-    EXPECT_FALSE(stack.unifier.unify(pud_fe(fa, 0), pud_fe(fb, 0)));
-    EXPECT_TRUE(before == stack.snapshot());
+    EXPECT_FALSE(stack.unifier.unify(framed_expr{fa, 0}, framed_expr{fb, 0}));
+    pud_ubs_state after = std::move(stack.bind_map).persist();
+    stack.bind_map = ubs_bind_map{after};
+    EXPECT_TRUE(before == after);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, ArityMismatchPerformsZeroWrites) {
-    const pud_ubs_state before = stack.snapshot();
+    pud_ubs_state before = std::move(stack.bind_map).persist();
+    stack.bind_map = ubs_bind_map{before};
     const uint32_t pid = functors.id("p");
     const expr* unary = stack.pool.make_functor(pid, {v(0)});
     const expr* binary = stack.pool.make_functor(pid, {v(0), v(1)});
-    EXPECT_FALSE(stack.unifier.unify(pud_fe(unary, 0), pud_fe(binary, 0)));
-    EXPECT_TRUE(before == stack.snapshot());
+    EXPECT_FALSE(stack.unifier.unify(framed_expr{unary, 0}, framed_expr{binary, 0}));
+    pud_ubs_state after = std::move(stack.bind_map).persist();
+    stack.bind_map = ubs_bind_map{after};
+    EXPECT_TRUE(before == after);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, LastArgumentMismatchAfterPartialProcessing) {
     const expr* fxa = stack.pool.make_functor(functors.id("p"), {v(0), atom("a")});
     const expr* fxb = stack.pool.make_functor(functors.id("p"), {atom("b"), v(0)});
-    EXPECT_FALSE(stack.unifier.unify(pud_fe(fxa, 0), pud_fe(fxb, 0)));
-    EXPECT_EQ(stack.resolve(0u), atom("b"));
+    EXPECT_FALSE(stack.unifier.unify(framed_expr{fxa, 0}, framed_expr{fxb, 0}));
+    EXPECT_EQ(stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u}), atom("b"));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, DeepIdenticalStructureDepthFiftySucceeds) {
@@ -87,7 +86,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, DeepIdenticalStructureDepthFiftySuccee
     const expr* other_deep = leaf;
     for (int depth = 0; depth < 50; ++depth)
         other_deep = other.pool.make_functor(fid, {other_deep});
-    EXPECT_TRUE(stack.unifier.unify(pud_fe(deep, 0), pud_fe(other_deep, 0)));
+    EXPECT_TRUE(stack.unifier.unify(framed_expr{deep, 0}, framed_expr{other_deep, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, WideArityHundredLastMismatchFails) {
@@ -102,47 +101,47 @@ TEST_F(PudUnifierExtendedIntegrationTest, WideArityHundredLastMismatchFails) {
     left_args.back() = atom("a");
     const expr* left = stack.pool.make_functor(pid, left_args);
     const expr* right = stack.pool.make_functor(pid, right_args);
-    EXPECT_FALSE(stack.unifier.unify(pud_fe(left, 0), pud_fe(right, 0)));
+    EXPECT_FALSE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarStructurallyEqualDifferentFramingSucceeds) {
     pud_term_stack s;
     const expr* a0 = s.pool.make_functor(functors.id("a"), {});
     const expr* wrapped = s.pool.make_functor(functors.id("w"), {a0});
-    s.instantiate(0u, framed_expr{s.pool.make_functor(functors.id("w"), {a0}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("w"), {a0}), 0u});
     const expr* wrap_rhs = s.pool.make_functor(functors.id("w"), {s.pool.make_var(1u)});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0), pud_fe(wrap_rhs, 0)));
-    EXPECT_EQ(s.resolve(1u), a0);
+        framed_expr{s.pool.make_var(0u), 0}, framed_expr{wrap_rhs, 0}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(1u), 0u}), a0);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithDifferentBoundFunctorFails) {
     pud_term_stack s;
-    s.instantiate(0u, framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u});
-    s.instantiate(1u, framed_expr{s.pool.make_functor(functors.id("b"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(1u), framed_expr{s.pool.make_functor(functors.id("b"), {}), 0u});
     EXPECT_FALSE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0),
-        pud_fe(s.pool.make_var(1u), 0)));
+        framed_expr{s.pool.make_var(0u), 0},
+        framed_expr{s.pool.make_var(1u), 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarDiffersOnlyInNestedVarBindsNested) {
     pud_term_stack s;
     const expr* a_atom = s.pool.make_functor(functors.id("a"), {});
-    s.instantiate(0u, framed_expr{s.pool.make_functor(functors.id("w"), {a_atom}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("w"), {a_atom}), 0u});
     const expr* rhs = s.pool.make_functor(functors.id("w"), {s.pool.make_var(1u)});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0), pud_fe(rhs, 0)));
-    EXPECT_EQ(s.resolve(1u), a_atom);
+        framed_expr{s.pool.make_var(0u), 0}, framed_expr{rhs, 0}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(1u), 0u}), a_atom);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithUnboundVarBindsUnboundClass) {
     pud_term_stack s;
     const expr* ground = s.pool.make_functor(functors.id("g"), {});
-    s.instantiate(0u, framed_expr{s.pool.make_functor(functors.id("g"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("g"), {}), 0u});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0),
-        pud_fe(s.pool.make_var(1u), 0)));
-    EXPECT_EQ(s.resolve(1u), ground);
+        framed_expr{s.pool.make_var(0u), 0},
+        framed_expr{s.pool.make_var(1u), 0}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(1u), 0u}), ground);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, OccursIndirectSecondUnifyFails) {
@@ -151,67 +150,67 @@ TEST_F(PudUnifierExtendedIntegrationTest, OccursIndirectSecondUnifyFails) {
         functors.id("f"), {s.pool.make_var(1u), s.pool.make_var(2u)});
     const expr* g_x = s.pool.make_functor(functors.id("g"), {s.pool.make_var(0u)});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0), pud_fe(f_yz, 0)));
+        framed_expr{s.pool.make_var(0u), 0}, framed_expr{f_yz, 0}));
     EXPECT_FALSE(s.unifier.unify(
-        pud_fe(s.pool.make_var(2u), 0), pud_fe(g_x, 0)));
+        framed_expr{s.pool.make_var(2u), 0}, framed_expr{g_x, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, OccursThreeMemberClassCycleFails) {
     pud_term_stack s;
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(v(1), 0)));
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(1), 0), pud_fe(v(2), 0)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{v(1), 0}));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(1), 0}, framed_expr{v(2), 0}));
     const expr* fx = stack.pool.make_functor(functors.id("f"), {v(0)});
-    EXPECT_FALSE(s.unifier.unify(pud_fe(v(2), 0), pud_fe(fx, 0)));
+    EXPECT_FALSE(s.unifier.unify(framed_expr{v(2), 0}, framed_expr{fx, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, OccursThroughBindingPlusMergeFails) {
     pud_term_stack s;
     const expr* fy = stack.pool.make_functor(functors.id("f"), {v(1)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(fy, 0)));
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(1), 0), pud_fe(v(2), 0)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{fy, 0}));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(1), 0}, framed_expr{v(2), 0}));
     const expr* gx = stack.pool.make_functor(functors.id("g"), {v(0)});
-    EXPECT_FALSE(s.unifier.unify(pud_fe(v(2), 0), pud_fe(gx, 0)));
+    EXPECT_FALSE(s.unifier.unify(framed_expr{v(2), 0}, framed_expr{gx, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, OccursExpandedTermFails) {
     pud_term_stack s;
     const expr* fa_y = stack.pool.make_functor(functors.id("p"), {atom("a"), v(1)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(fa_y, 0)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{fa_y, 0}));
     const expr* inner = stack.pool.make_functor(functors.id("p"), {atom("a"), v(1)});
     const expr* expanded = stack.pool.make_functor(functors.id("p"), {atom("a"), inner});
-    EXPECT_FALSE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(expanded, 0)));
+    EXPECT_FALSE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{expanded, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, OccursFailsWhereTheSameVarAloneWouldBind) {
     pud_term_stack s;
     const expr* loop = stack.pool.make_functor(functors.id("l"), {v(0)});
-    EXPECT_FALSE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(loop, 0)));
+    EXPECT_FALSE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{loop, 0}));
     pud_term_stack fresh;
-    EXPECT_TRUE(fresh.unifier.unify(pud_fe(v(0), 0), pud_fe(atom("a"), 0)));
+    EXPECT_TRUE(fresh.unifier.unify(framed_expr{v(0), 0}, framed_expr{atom("a"), 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, CallerCannotBindTermWithCalleeInSameClass) {
     pud_term_stack s;
-    const uint32_t caller = gkey(s.globalize, 2u, 0u);
-    const uint32_t callee = gkey(s.globalize, 0u, 1u);
-    EXPECT_TRUE(s.unifier.unify(pud_fe(s.pool.make_var(0u), 2), pud_fe(s.pool.make_var(1u), 0)));
+    const uint32_t caller = s.globalize.globalize(2u, 0u);
+    const uint32_t callee = s.globalize.globalize(0u, 1u);
+    EXPECT_TRUE(s.unifier.unify(framed_expr{s.pool.make_var(0u), 2}, framed_expr{s.pool.make_var(1u), 0}));
     const expr* bad = s.pool.make_functor(functors.id("w"), {s.pool.make_var(1u)});
-    EXPECT_FALSE(s.unifier.unify(pud_fe(s.pool.make_var(0u), 2), pud_fe(bad, 0)));
+    EXPECT_FALSE(s.unifier.unify(framed_expr{s.pool.make_var(0u), 2}, framed_expr{bad, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, DifferentClassVariablePassesOccurs) {
     pud_term_stack s;
     const expr* ok = stack.pool.make_functor(functors.id("w"), {v(1)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(ok, 0)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{ok, 0}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, SameSkeletonTwoOffsetsEquatesGlobals) {
     pud_term_stack s;
     const expr* fx = stack.pool.make_functor(functors.id("f"), {v(0)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(fx, 0), pud_fe(fx, 10)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{fx, 0}, framed_expr{fx, 10}));
     EXPECT_EQ(
-        s.resolve(gkey(s.globalize, 0, 0)),
-        s.resolve(gkey(s.globalize, 10, 0)));
+        s.normalizer.normalize(framed_expr{s.pool.make_var(s.globalize.globalize(0, 0)), 0u}),
+        s.normalizer.normalize(framed_expr{s.pool.make_var(s.globalize.globalize(10, 0)), 0u}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, FramedAgainstStoredOffsetZeroUsesCorrectFrames) {
@@ -219,38 +218,38 @@ TEST_F(PudUnifierExtendedIntegrationTest, FramedAgainstStoredOffsetZeroUsesCorre
     const expr* y = s.pool.make_var(1u);
     const expr* fx = s.pool.make_functor(functors.id("w"), {y});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 5), pud_fe(fx, 0)));
+        framed_expr{s.pool.make_var(0u), 5}, framed_expr{fx, 0}));
     const uint32_t bound_global = s.globalize.globalize(5u, 0u);
-    const expr* stored = s.resolve(bound_global);
+    const expr* stored = s.normalizer.normalize(framed_expr{s.pool.make_var(bound_global), 0u});
     EXPECT_TRUE(std::holds_alternative<expr::functor>(stored->content));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, ThreeFramesMapToDistinctGlobals) {
     pud_term_stack s;
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 0), pud_fe(v(0), 1)));
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 2), pud_fe(v(0), 3)));
-    const uint32_t g0 = gkey(s.globalize, 0, 0);
-    const uint32_t g1 = gkey(s.globalize, 1, 0);
-    const uint32_t g2 = gkey(s.globalize, 2, 0);
-    const uint32_t g3 = gkey(s.globalize, 3, 0);
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 0}, framed_expr{v(0), 1}));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 2}, framed_expr{v(0), 3}));
+    const uint32_t g0 = s.globalize.globalize(0, 0);
+    const uint32_t g1 = s.globalize.globalize(1, 0);
+    const uint32_t g2 = s.globalize.globalize(2, 0);
+    const uint32_t g3 = s.globalize.globalize(3, 0);
     EXPECT_NE(g0, g1);
     EXPECT_NE(g2, g3);
-    EXPECT_EQ(s.resolve(g0), s.resolve(g1));
-    EXPECT_EQ(s.resolve(g2), s.resolve(g3));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(g0), 0u}), s.normalizer.normalize(framed_expr{s.pool.make_var(g1), 0u}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(g2), 0u}), s.normalizer.normalize(framed_expr{s.pool.make_var(g3), 0u}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, FreshVarToGroundBindsOnlyThatVar) {
     pud_term_stack s;
     const expr* a = s.pool.make_functor(functors.id("a"), {});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(s.pool.make_var(0u), 0), pud_fe(a, 0)));
-    EXPECT_EQ(s.resolve(0u), a);
+    EXPECT_TRUE(s.unifier.unify(framed_expr{s.pool.make_var(0u), 0}, framed_expr{a, 0}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(0u), 0u}), a);
     EXPECT_EQ(s.bind_map.find(1u), (ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt}));
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, PairwiseDistinctFreshVarsMergeIntoOneClass) {
     pud_term_stack s;
     for (uint32_t var = 1u; var < 6u; ++var)
-        EXPECT_TRUE(s.unifier.unify(pud_fe(s.pool.make_var(0u), 0), pud_fe(s.pool.make_var(var), 0)));
+        EXPECT_TRUE(s.unifier.unify(framed_expr{s.pool.make_var(0u), 0}, framed_expr{s.pool.make_var(var), 0}));
     for (uint32_t var = 0u; var < 6u; ++var) {
         EXPECT_EQ(s.bind_map.find(var).rep, 0u);
         EXPECT_EQ(s.bind_map.find(var).size, 6u);
@@ -265,11 +264,11 @@ TEST_F(PudUnifierExtendedIntegrationTest, RuleApplicationThenNormalizeGoal) {
     const expr* goal = s.pool.make_functor(
         f, {s.pool.make_functor(functors.id("b"), {}), s.pool.make_var(0u)});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(goal, 4), pud_fe(rule_head, 0)));
+        framed_expr{goal, 4}, framed_expr{rule_head, 0}));
     const uint32_t goal_var = s.globalize.globalize(4u, 0u);
-    EXPECT_EQ(s.normalizer.normalize(pud_fe(s.pool.make_var(0u), 4)),
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(0u), 4}),
         s.pool.make_functor(functors.id("a"), {}));
-    EXPECT_EQ(s.resolve(goal_var),
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(goal_var), 0u}),
         s.pool.make_functor(functors.id("a"), {}));
 }
 
@@ -277,31 +276,31 @@ TEST_F(PudUnifierExtendedIntegrationTest, TwoOffsetsDoNotInterfere) {
     pud_term_stack s;
     const expr* atom_x = s.pool.make_functor(functors.id("x"), {});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 10),
-        pud_fe(s.pool.make_var(0u), 0)));
+        framed_expr{s.pool.make_var(0u), 10},
+        framed_expr{s.pool.make_var(0u), 0}));
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 20), pud_fe(atom_x, 0)));
-    const uint32_t global_10 = gkey(s.globalize, 10, 0);
-    const uint32_t global_20 = gkey(s.globalize, 20, 0);
-    const expr* rep_10 = s.resolve(global_10);
-    const expr* rep_0 = s.resolve(0u);
+        framed_expr{s.pool.make_var(0u), 20}, framed_expr{atom_x, 0}));
+    const uint32_t global_10 = s.globalize.globalize(10, 0);
+    const uint32_t global_20 = s.globalize.globalize(20, 0);
+    const expr* rep_10 = s.normalizer.normalize(framed_expr{s.pool.make_var(global_10), 0u});
+    const expr* rep_0 = s.normalizer.normalize(framed_expr{s.pool.make_var(0u), 0u});
     EXPECT_TRUE(std::holds_alternative<expr::var>(rep_10->content));
     EXPECT_TRUE(std::holds_alternative<expr::var>(rep_0->content));
     EXPECT_EQ(
         std::get<expr::var>(rep_10->content).index,
         std::get<expr::var>(rep_0->content).index);
-    EXPECT_EQ(s.resolve(global_20), atom_x);
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{s.pool.make_var(global_20), 0u}), atom_x);
 }
 
 TEST_F(PudUnifierExtendedIntegrationTest, CalleeUnboundVersusMergedWithCaller) {
     pud_term_stack s;
-    const uint32_t caller = gkey(s.globalize, 1, 0);
-    const uint32_t callee = gkey(s.globalize, 0, 2);
-    EXPECT_TRUE(s.unifier.unify(pud_fe(v(0), 1), pud_fe(v(2), 0)));
-    EXPECT_EQ(s.normalizer.normalize(pud_fe(v(2), 0)), s.pool.make_var(caller));
+    const uint32_t caller = s.globalize.globalize(1, 0);
+    const uint32_t callee = s.globalize.globalize(0, 2);
+    EXPECT_TRUE(s.unifier.unify(framed_expr{v(0), 1}, framed_expr{v(2), 0}));
+    EXPECT_EQ(s.normalizer.normalize(framed_expr{v(2), 0}), s.pool.make_var(caller));
     pud_term_stack lone;
     EXPECT_EQ(
-        lone.normalizer.normalize(pud_fe(lone.pool.make_var(2u), 0)),
+        lone.normalizer.normalize(framed_expr{lone.pool.make_var(2u), 0}),
         lone.pool.make_var(2u));
 }
 
@@ -316,14 +315,14 @@ TEST_F(PudUnifierExtendedIntegrationTest, AppendStyleListAtIncreasingOffsets) {
     const expr* cell_b = s.pool.make_functor(cons, {atom_b, nil_node});
     const expr* list_ab = s.pool.make_functor(cons, {atom_a, cell_b});
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 0), pud_fe(cell_a, 0)));
+        framed_expr{s.pool.make_var(0u), 0}, framed_expr{cell_a, 0}));
     EXPECT_TRUE(s.unifier.unify(
-        pud_fe(s.pool.make_var(0u), 8), pud_fe(list_ab, 4)));
+        framed_expr{s.pool.make_var(0u), 8}, framed_expr{list_ab, 4}));
     EXPECT_EQ(
-        s.normalizer.normalize(pud_fe(s.pool.make_var(0u), 0)),
+        s.normalizer.normalize(framed_expr{s.pool.make_var(0u), 0}),
         cell_a);
     EXPECT_EQ(
-        s.normalizer.normalize(pud_fe(s.pool.make_var(0u), 8)),
+        s.normalizer.normalize(framed_expr{s.pool.make_var(0u), 8}),
         list_ab);
 }
 
@@ -347,12 +346,12 @@ TEST_F(PudUnifierExtendedIntegrationTest, PeanoPlusDerivesExpectedResult) {
     const expr* rule_base = s.pool.make_functor(
         plus_id, {z, s.pool.make_var(4u), s.pool.make_var(4u)});
 
-    EXPECT_TRUE(s.unifier.unify(pud_fe(goal, 0), pud_fe(rule_step, 0)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{goal, 0}, framed_expr{rule_step, 0}));
     const expr* subgoal = s.pool.make_functor(plus_id, {sz, sz, s.pool.make_var(10u)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(subgoal, 0), pud_fe(rule_step, 20)));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{subgoal, 0}, framed_expr{rule_step, 20}));
     const expr* subgoal2 = s.pool.make_functor(plus_id, {z, sz, s.pool.make_var(10u)});
-    EXPECT_TRUE(s.unifier.unify(pud_fe(subgoal2, 0), pud_fe(rule_base, 40)));
-    const expr* derived = s.normalizer.normalize(pud_fe(s.pool.make_var(10u), 0));
+    EXPECT_TRUE(s.unifier.unify(framed_expr{subgoal2, 0}, framed_expr{rule_base, 40}));
+    const expr* derived = s.normalizer.normalize(framed_expr{s.pool.make_var(10u), 0});
     EXPECT_TRUE(std::holds_alternative<expr::functor>(derived->content));
     const expr::functor& outer = std::get<expr::functor>(derived->content);
     EXPECT_EQ(outer.id, s_id);

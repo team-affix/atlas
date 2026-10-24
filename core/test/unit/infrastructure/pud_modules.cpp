@@ -29,19 +29,6 @@ struct MockModuleData {
     MOCK_METHOD(bool, check_refuted, (pud_node_id), (const));
 };
 
-// A module drawn on a mock: its id, its direct dependencies and how many axioms it has.
-struct drawn_module {
-    NiceMock<MockModuleData> data;
-    std::vector<pud_module_id> dependencies;
-
-    drawn_module(pud_module_id id, std::vector<pud_module_id> depends_on, size_t axiom_count)
-        : dependencies(std::move(depends_on)) {
-        ON_CALL(data, get_module_id()).WillByDefault(Return(id));
-        ON_CALL(data, get_dependencies()).WillByDefault(ReturnRef(dependencies));
-        ON_CALL(data, count_axioms()).WillByDefault(Return(axiom_count));
-    }
-};
-
 struct PudModulesTest : public ::testing::Test {
     pud_modules<NiceMock<MockModuleData>> modules;
     expr head{expr::functor{1, {}}};
@@ -50,144 +37,281 @@ struct PudModulesTest : public ::testing::Test {
     std::vector<pud_node_id> children{4, 5};
 };
 
-pud_global_node_id at(pud_module_id module, pud_node_id node) {
-    return pud_global_node_id{.module = module, .node = node};
-}
-
 }
 
 TEST_F(PudModulesTest, AModulesAxiomsAreItsFirstNodes) {
-    drawn_module base{10, {}, 3};
-    modules.register_module(base.data);
-    EXPECT_THAT(modules.list_axioms(10), ElementsAre(at(10, 0), at(10, 1), at(10, 2)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(3));
+    modules.register_module(base_data);
+    EXPECT_THAT(
+        modules.list_axioms(10),
+        ElementsAre(
+            pud_global_node_id{.module = 10, .node = 0},
+            pud_global_node_id{.module = 10, .node = 1},
+            pud_global_node_id{.module = 10, .node = 2}));
 }
 
 TEST_F(PudModulesTest, AModuleWithoutDependenciesSeesOnlyItsOwnAxioms) {
-    drawn_module base{10, {}, 2};
-    modules.register_module(base.data);
-    EXPECT_THAT(modules.list_visible_axioms(10), ElementsAre(at(10, 0), at(10, 1)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(2));
+    modules.register_module(base_data);
+    EXPECT_THAT(
+        modules.list_visible_axioms(10),
+        ElementsAre(pud_global_node_id{.module = 10, .node = 0}, pud_global_node_id{.module = 10, .node = 1}));
 }
 
 TEST_F(PudModulesTest, AModuleSeesItsDependenciesAxiomsBeforeItsOwn) {
-    drawn_module base{10, {}, 2};
-    drawn_module dependent{20, {10}, 1};
-    modules.register_module(base.data);
-    modules.register_module(dependent.data);
-    EXPECT_THAT(modules.list_visible_axioms(20), ElementsAre(at(10, 0), at(10, 1), at(20, 0)));
-    EXPECT_THAT(modules.list_axioms(20), ElementsAre(at(20, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(2));
+    NiceMock<MockModuleData> dependent_data;
+    std::vector<pud_module_id> dependent_dependencies{10};
+    ON_CALL(dependent_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(dependent_data, get_dependencies()).WillByDefault(ReturnRef(dependent_dependencies));
+    ON_CALL(dependent_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(dependent_data);
+    EXPECT_THAT(
+        modules.list_visible_axioms(20),
+        ElementsAre(
+            pud_global_node_id{.module = 10, .node = 0},
+            pud_global_node_id{.module = 10, .node = 1},
+            pud_global_node_id{.module = 20, .node = 0}));
+    EXPECT_THAT(modules.list_axioms(20), ElementsAre(pud_global_node_id{.module = 20, .node = 0}));
 }
 
 TEST_F(PudModulesTest, ADependencyNeverSeesItsDependentsAxioms) {
-    drawn_module base{10, {}, 1};
-    drawn_module dependent{20, {10}, 1};
-    modules.register_module(base.data);
-    modules.register_module(dependent.data);
-    EXPECT_THAT(modules.list_visible_axioms(10), ElementsAre(at(10, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> dependent_data;
+    std::vector<pud_module_id> dependent_dependencies{10};
+    ON_CALL(dependent_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(dependent_data, get_dependencies()).WillByDefault(ReturnRef(dependent_dependencies));
+    ON_CALL(dependent_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(dependent_data);
+    EXPECT_THAT(modules.list_visible_axioms(10), ElementsAre(pud_global_node_id{.module = 10, .node = 0}));
 }
 
 TEST_F(PudModulesTest, IndirectDependenciesAreSeenDependenciesFirst) {
-    drawn_module base{10, {}, 1};
-    drawn_module middle{20, {10}, 1};
-    drawn_module top{30, {20}, 1};
-    modules.register_module(base.data);
-    modules.register_module(middle.data);
-    modules.register_module(top.data);
-    EXPECT_THAT(modules.list_visible_axioms(30), ElementsAre(at(10, 0), at(20, 0), at(30, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> middle_data;
+    std::vector<pud_module_id> middle_dependencies{10};
+    ON_CALL(middle_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(middle_data, get_dependencies()).WillByDefault(ReturnRef(middle_dependencies));
+    ON_CALL(middle_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> top_data;
+    std::vector<pud_module_id> top_dependencies{20};
+    ON_CALL(top_data, get_module_id()).WillByDefault(Return(30));
+    ON_CALL(top_data, get_dependencies()).WillByDefault(ReturnRef(top_dependencies));
+    ON_CALL(top_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(middle_data);
+    modules.register_module(top_data);
+    EXPECT_THAT(
+        modules.list_visible_axioms(30),
+        ElementsAre(
+            pud_global_node_id{.module = 10, .node = 0},
+            pud_global_node_id{.module = 20, .node = 0},
+            pud_global_node_id{.module = 30, .node = 0}));
 }
 
 TEST_F(PudModulesTest, ASharedDependencyIsSeenOnce) {
-    drawn_module base{10, {}, 1};
-    drawn_module left{20, {10}, 1};
-    drawn_module right{30, {10}, 1};
-    drawn_module joined{40, {20, 30}, 1};
-    modules.register_module(base.data);
-    modules.register_module(left.data);
-    modules.register_module(right.data);
-    modules.register_module(joined.data);
-    EXPECT_THAT(modules.list_visible_axioms(40), ElementsAre(at(10, 0), at(20, 0), at(30, 0), at(40, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> left_data;
+    std::vector<pud_module_id> left_dependencies{10};
+    ON_CALL(left_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(left_data, get_dependencies()).WillByDefault(ReturnRef(left_dependencies));
+    ON_CALL(left_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> right_data;
+    std::vector<pud_module_id> right_dependencies{10};
+    ON_CALL(right_data, get_module_id()).WillByDefault(Return(30));
+    ON_CALL(right_data, get_dependencies()).WillByDefault(ReturnRef(right_dependencies));
+    ON_CALL(right_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> joined_data;
+    std::vector<pud_module_id> joined_dependencies{20, 30};
+    ON_CALL(joined_data, get_module_id()).WillByDefault(Return(40));
+    ON_CALL(joined_data, get_dependencies()).WillByDefault(ReturnRef(joined_dependencies));
+    ON_CALL(joined_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(left_data);
+    modules.register_module(right_data);
+    modules.register_module(joined_data);
+    EXPECT_THAT(
+        modules.list_visible_axioms(40),
+        ElementsAre(
+            pud_global_node_id{.module = 10, .node = 0},
+            pud_global_node_id{.module = 20, .node = 0},
+            pud_global_node_id{.module = 30, .node = 0},
+            pud_global_node_id{.module = 40, .node = 0}));
 }
 
 TEST_F(PudModulesTest, SiblingModulesDoNotSeeEachOther) {
-    drawn_module base{10, {}, 1};
-    drawn_module left{20, {10}, 1};
-    drawn_module right{30, {10}, 1};
-    modules.register_module(base.data);
-    modules.register_module(left.data);
-    modules.register_module(right.data);
-    EXPECT_THAT(modules.list_visible_axioms(20), ElementsAre(at(10, 0), at(20, 0)));
-    EXPECT_THAT(modules.list_visible_axioms(30), ElementsAre(at(10, 0), at(30, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> left_data;
+    std::vector<pud_module_id> left_dependencies{10};
+    ON_CALL(left_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(left_data, get_dependencies()).WillByDefault(ReturnRef(left_dependencies));
+    ON_CALL(left_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> right_data;
+    std::vector<pud_module_id> right_dependencies{10};
+    ON_CALL(right_data, get_module_id()).WillByDefault(Return(30));
+    ON_CALL(right_data, get_dependencies()).WillByDefault(ReturnRef(right_dependencies));
+    ON_CALL(right_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(left_data);
+    modules.register_module(right_data);
+    EXPECT_THAT(
+        modules.list_visible_axioms(20),
+        ElementsAre(pud_global_node_id{.module = 10, .node = 0}, pud_global_node_id{.module = 20, .node = 0}));
+    EXPECT_THAT(
+        modules.list_visible_axioms(30),
+        ElementsAre(pud_global_node_id{.module = 10, .node = 0}, pud_global_node_id{.module = 30, .node = 0}));
 }
 
 TEST_F(PudModulesTest, AModuleWithNoAxiomsSeesItsDependencies) {
-    drawn_module base{10, {}, 1};
-    drawn_module empty{20, {10}, 0};
-    modules.register_module(base.data);
-    modules.register_module(empty.data);
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> empty_data;
+    std::vector<pud_module_id> empty_dependencies{10};
+    ON_CALL(empty_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(empty_data, get_dependencies()).WillByDefault(ReturnRef(empty_dependencies));
+    ON_CALL(empty_data, count_axioms()).WillByDefault(Return(0));
+    modules.register_module(base_data);
+    modules.register_module(empty_data);
     EXPECT_THAT(modules.list_axioms(20), IsEmpty());
-    EXPECT_THAT(modules.list_visible_axioms(20), ElementsAre(at(10, 0)));
+    EXPECT_THAT(modules.list_visible_axioms(20), ElementsAre(pud_global_node_id{.module = 10, .node = 0}));
 }
 
 TEST_F(PudModulesTest, RegisteringAModuleBeforeItsDependencyFails) {
-    drawn_module dependent{20, {10}, 1};
-    EXPECT_THROW(modules.register_module(dependent.data), std::logic_error);
+    NiceMock<MockModuleData> dependent_data;
+    std::vector<pud_module_id> dependent_dependencies{10};
+    ON_CALL(dependent_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(dependent_data, get_dependencies()).WillByDefault(ReturnRef(dependent_dependencies));
+    ON_CALL(dependent_data, count_axioms()).WillByDefault(Return(1));
+    EXPECT_THROW(modules.register_module(dependent_data), std::logic_error);
 }
 
 TEST_F(PudModulesTest, RegisteringAModuleTwiceFails) {
-    drawn_module base{10, {}, 1};
-    modules.register_module(base.data);
-    EXPECT_THROW(modules.register_module(base.data), std::logic_error);
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    EXPECT_THROW(modules.register_module(base_data), std::logic_error);
 }
 
 TEST_F(PudModulesTest, AnInferenceIsStoredInTheNamedModuleAndNamedThere) {
-    drawn_module base{10, {}, 1};
-    drawn_module other{20, {}, 1};
-    modules.register_module(base.data);
-    modules.register_module(other.data);
-    EXPECT_CALL(other.data, store_inference(inference)).WillOnce(Return(1));
-    EXPECT_CALL(base.data, store_inference).Times(0);
-    EXPECT_EQ(modules.store_inference(20, inference), at(20, 1));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(other_data);
+    EXPECT_CALL(other_data, store_inference(inference)).WillOnce(Return(1));
+    EXPECT_CALL(base_data, store_inference).Times(0);
+    EXPECT_EQ(modules.store_inference(20, inference), (pud_global_node_id{.module = 20, .node = 1}));
 }
 
 TEST_F(PudModulesTest, EveryLookupReachesTheNodesOwnModuleByItsLocalId) {
-    drawn_module base{10, {}, 1};
-    drawn_module other{20, {}, 1};
-    modules.register_module(base.data);
-    modules.register_module(other.data);
-    EXPECT_CALL(other.data, get_axiom(0)).WillOnce(ReturnRef(axiom));
-    EXPECT_CALL(other.data, get_inference(3)).WillOnce(ReturnRef(inference));
-    EXPECT_CALL(other.data, get_children(3)).WillOnce(ReturnRef(children));
-    EXPECT_CALL(other.data, check_leaf(3)).WillOnce(Return(true));
-    EXPECT_CALL(other.data, check_refuted(3)).WillOnce(Return(true));
-    EXPECT_CALL(other.data, mark_refuted(3));
-    EXPECT_EQ(&modules.get_axiom(at(20, 0)), &axiom);
-    EXPECT_EQ(&modules.get_inference(at(20, 3)), &inference);
-    EXPECT_EQ(&modules.get_children(at(20, 3)), &children);
-    EXPECT_TRUE(modules.check_leaf(at(20, 3)));
-    EXPECT_TRUE(modules.check_refuted(at(20, 3)));
-    modules.mark_refuted(at(20, 3));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(other_data);
+    EXPECT_CALL(other_data, get_axiom(0)).WillOnce(ReturnRef(axiom));
+    EXPECT_CALL(other_data, get_inference(3)).WillOnce(ReturnRef(inference));
+    EXPECT_CALL(other_data, get_children(3)).WillOnce(ReturnRef(children));
+    EXPECT_CALL(other_data, check_leaf(3)).WillOnce(Return(true));
+    EXPECT_CALL(other_data, check_refuted(3)).WillOnce(Return(true));
+    EXPECT_CALL(other_data, mark_refuted(3));
+    EXPECT_EQ(&modules.get_axiom(pud_global_node_id{.module = 20, .node = 0}), &axiom);
+    EXPECT_EQ(&modules.get_inference(pud_global_node_id{.module = 20, .node = 3}), &inference);
+    EXPECT_EQ(&modules.get_children(pud_global_node_id{.module = 20, .node = 3}), &children);
+    EXPECT_TRUE(modules.check_leaf(pud_global_node_id{.module = 20, .node = 3}));
+    EXPECT_TRUE(modules.check_refuted(pud_global_node_id{.module = 20, .node = 3}));
+    modules.mark_refuted(pud_global_node_id{.module = 20, .node = 3});
 }
 
 TEST_F(PudModulesTest, AParentIsInItsChildsModule) {
-    drawn_module other{20, {}, 1};
-    modules.register_module(other.data);
-    ON_CALL(other.data, get_parent(3)).WillByDefault(Return(std::optional<pud_node_id>{1}));
-    EXPECT_EQ(modules.get_parent(at(20, 3)), std::optional<pud_global_node_id>{at(20, 1)});
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(other_data);
+    ON_CALL(other_data, get_parent(3)).WillByDefault(Return(std::optional<pud_node_id>{1}));
+    EXPECT_EQ(
+        modules.get_parent(pud_global_node_id{.module = 20, .node = 3}),
+        (std::optional<pud_global_node_id>{pud_global_node_id{.module = 20, .node = 1}}));
 }
 
 TEST_F(PudModulesTest, AnAxiomHasNoParent) {
-    drawn_module other{20, {}, 1};
-    modules.register_module(other.data);
-    ON_CALL(other.data, get_parent(0)).WillByDefault(Return(std::nullopt));
-    EXPECT_EQ(modules.get_parent(at(20, 0)), std::nullopt);
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(other_data);
+    ON_CALL(other_data, get_parent(0)).WillByDefault(Return(std::nullopt));
+    EXPECT_EQ(modules.get_parent(pud_global_node_id{.module = 20, .node = 0}), std::nullopt);
 }
 
 TEST_F(PudModulesTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
-    drawn_module base{10, {}, 1};
-    drawn_module other{20, {}, 1};
-    modules.register_module(base.data);
-    modules.register_module(other.data);
-    ON_CALL(base.data, check_refuted(0)).WillByDefault(Return(true));
-    ON_CALL(other.data, check_refuted(0)).WillByDefault(Return(false));
-    EXPECT_TRUE(modules.check_refuted(at(10, 0)));
-    EXPECT_FALSE(modules.check_refuted(at(20, 0)));
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_axioms()).WillByDefault(Return(1));
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(base_data);
+    modules.register_module(other_data);
+    ON_CALL(base_data, check_refuted(0)).WillByDefault(Return(true));
+    ON_CALL(other_data, check_refuted(0)).WillByDefault(Return(false));
+    EXPECT_TRUE(modules.check_refuted(pud_global_node_id{.module = 10, .node = 0}));
+    EXPECT_FALSE(modules.check_refuted(pud_global_node_id{.module = 20, .node = 0}));
 }

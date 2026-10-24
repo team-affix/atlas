@@ -52,15 +52,6 @@ struct PudNormalizerTest : public ::testing::Test {
         return &owned.back();
     }
 
-    void unbound(uint32_t global, uint32_t rep, const expr* rep_node) {
-        ON_CALL(find, find(global)).WillByDefault(Return(ubs_class{.root = global, .size = 1, .rep = rep, .value = std::nullopt}));
-        ON_CALL(make_var, make_var(rep)).WillByDefault(Return(rep_node));
-    }
-
-    void bound(uint32_t global, framed_expr value) {
-        ON_CALL(find, find(global)).WillByDefault(Return(ubs_class{.root = global, .size = 1, .rep = global, .value = value}));
-    }
-
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
     }
@@ -70,19 +61,23 @@ struct PudNormalizerTest : public ::testing::Test {
 
 TEST_F(PudNormalizerTest, UnboundVarNormalizesToItsRepresentative) {
     const expr* rep = var(2);
-    unbound(7, 2, rep);
+    ON_CALL(find, find(7)).WillByDefault(Return(ubs_class{.root = 7, .size = 1, .rep = 2, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(2)).WillByDefault(Return(rep));
     EXPECT_EQ(normalizer.normalize({var(4), 3}), rep);
 }
 
 TEST_F(PudNormalizerTest, SameLocalUnderDifferentOffsetsIsDifferent) {
-    unbound(0, 0, var(0));
-    unbound(1, 1, var(1));
+    ON_CALL(find, find(0)).WillByDefault(Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(0)).WillByDefault(Return(var(0)));
+    ON_CALL(find, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(1)).WillByDefault(Return(var(1)));
     EXPECT_NE(normalizer.normalize({var(0), 0}), normalizer.normalize({var(0), 1}));
 }
 
 TEST_F(PudNormalizerTest, BoundVarNormalizesThroughItsValue) {
     const expr* canonical = functor(9, {});
-    bound(1, framed_expr{functor(9, {}), 0});
+    ON_CALL(find, find(1)).WillByDefault(Return(ubs_class{
+        .root = 1, .size = 1, .rep = 1, .value = framed_expr{functor(9, {}), 0}}));
     EXPECT_CALL(make_functor, make_functor(9u, _)).WillOnce(Return(canonical));
     EXPECT_EQ(normalizer.normalize({var(1), 0}), canonical);
 }
@@ -90,17 +85,22 @@ TEST_F(PudNormalizerTest, BoundVarNormalizesThroughItsValue) {
 TEST_F(PudNormalizerTest, ABoundValueIsReadInItsOwnFrame) {
     const expr* rep = var(12);
     const expr* rebuilt = functor(3, {rep});
-    bound(0, framed_expr{functor(3, {var(2)}), 10});
-    unbound(12, 12, rep);
+    ON_CALL(find, find(0)).WillByDefault(Return(ubs_class{
+        .root = 0, .size = 1, .rep = 0, .value = framed_expr{functor(3, {var(2)}), 10}}));
+    ON_CALL(find, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(12)).WillByDefault(Return(rep));
     EXPECT_CALL(make_functor, make_functor(3u, std::vector<const expr*>{rep})).WillOnce(Return(rebuilt));
     EXPECT_EQ(normalizer.normalize({var(0), 0}), rebuilt);
 }
 
 TEST_F(PudNormalizerTest, ChainsOfBoundVarsNormalizeFully) {
     const expr* ground = functor(99, {});
-    bound(0, framed_expr{functor(10, {var(1)}), 0});
-    bound(1, framed_expr{functor(10, {var(2)}), 0});
-    bound(2, framed_expr{functor(99, {}), 0});
+    ON_CALL(find, find(0)).WillByDefault(Return(ubs_class{
+        .root = 0, .size = 1, .rep = 0, .value = framed_expr{functor(10, {var(1)}), 0}}));
+    ON_CALL(find, find(1)).WillByDefault(Return(ubs_class{
+        .root = 1, .size = 1, .rep = 1, .value = framed_expr{functor(10, {var(2)}), 0}}));
+    ON_CALL(find, find(2)).WillByDefault(Return(ubs_class{
+        .root = 2, .size = 1, .rep = 2, .value = framed_expr{functor(99, {}), 0}}));
     ON_CALL(make_functor, make_functor(_, _)).WillByDefault(Return(ground));
     EXPECT_EQ(normalizer.normalize({var(0), 0}), ground);
 }
@@ -117,8 +117,9 @@ TEST_F(PudNormalizerTest, MixedBoundAndUnboundArgsKeepRepresentatives) {
     const expr* a = functor(1, {});
     const expr* rep_y = var(5);
     const expr* rebuilt = functor(9, {a, rep_y});
-    bound(0, framed_expr{a, 0});
-    unbound(1, 5, rep_y);
+    ON_CALL(find, find(0)).WillByDefault(Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_expr{a, 0}}));
+    ON_CALL(find, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 1, .rep = 5, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(5)).WillByDefault(Return(rep_y));
     EXPECT_CALL(make_functor, make_functor(1u, _)).WillRepeatedly(Return(a));
     EXPECT_CALL(make_functor, make_functor(9u, std::vector<const expr*>{a, rep_y})).WillOnce(Return(rebuilt));
     EXPECT_EQ(normalizer.normalize({functor(9, {var(0), var(1)}), 0}), rebuilt);
@@ -148,8 +149,10 @@ TEST_F(PudNormalizerTest, LaterBindingIsVisibleOnTheNextNormalize) {
 
 TEST_F(PudNormalizerTest, SameClassDifferentLocalsShareRepresentative) {
     const expr* rep = var(2);
-    unbound(3, 2, rep);
-    unbound(4, 2, rep);
+    ON_CALL(find, find(3)).WillByDefault(Return(ubs_class{.root = 3, .size = 1, .rep = 2, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(2)).WillByDefault(Return(rep));
+    ON_CALL(find, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 2, .value = std::nullopt}));
+    ON_CALL(make_var, make_var(2)).WillByDefault(Return(rep));
     EXPECT_EQ(normalizer.normalize({var(0), 3}), rep);
     EXPECT_EQ(normalizer.normalize({var(1), 3}), rep);
 }

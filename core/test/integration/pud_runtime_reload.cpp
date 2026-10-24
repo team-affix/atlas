@@ -1,10 +1,18 @@
+#include <algorithm>
 #include <cstdint>
+#include <deque>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <random>
+#include <set>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_reload_harness.hpp"
+#include "functor_fixture.hpp"
+#include "reference_pud_frontier.hpp"
+#include "reference_pud_goal_list.hpp"
+#include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_runtime.hpp"
@@ -13,11 +21,19 @@ using ::testing::IsEmpty;
 using ::testing::Not;
 using ::testing::UnorderedElementsAreArray;
 
-// Reloading onto copies: a fresh runtime registers copies of a world's modules, while the original
-// world goes on, so the two can be compared at every step.
+// Reloading onto copies: a fresh runtime registers copies of the caller's modules while the original
+// runtime goes on, so the two can be compared at every step. Each test builds its program, drives
+// the runtime, and checks the result inline; the only shared code is the reference walks.
 template<typename IRuntime>
 struct PudRuntimeReloadIntegrationTest : public ::testing::Test {
-    pud_reload_harness<IRuntime> h;
+    test_functors functors;
+    expr_pool exprs;
+
+    const expr* var(uint32_t index) { return exprs.make_var(index); }
+    const expr* atom(const char* name) { return exprs.make_functor(functors.id(name), {}); }
+    const expr* functor(const char* name, std::vector<const expr*> args) {
+        return exprs.make_functor(functors.id(name), std::move(args));
+    }
 };
 
 using reloaded_runtimes_t = ::testing::Types<pud_runtime<pud_module, expr_pool>>;
@@ -26,532 +42,9398 @@ TYPED_TEST_SUITE(PudRuntimeReloadIntegrationTest, reloaded_runtimes_t);
 // Reloading: the frontier, the refutations and the modules come back exactly as they were left.
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AModuleWithoutAxiomsReloadsToAnEmptyFrontier) {
-    auto& h = this->h;
-    auto& original = h.build({module_spec{.id = 9, .dependencies = {}, .axioms = {}}});
-    EXPECT_THAT(h.expect_faithful_reload(original).live, IsEmpty());
+    std::deque<pud_module> modules;
+    modules.emplace_back(9, std::vector<pud_module_id>{}, std::vector<rule>{});
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    EXPECT_THAT(reloaded_live, IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, FactsAloneReloadAsTheirOwnFrontier) {
-    auto& h = this->h;
-    auto& original = h.build({module_spec{.id = 10, .dependencies = {}, .axioms = {
-        rule(h.functor("p", {h.atom("a")}), {}, 0),
-        rule(h.functor("p", {h.atom("b")}), {}, 0),
-        rule(h.functor("q", {h.atom("a")}), {}, 0),
-    }}});
-    EXPECT_EQ(h.expect_faithful_reload(original).live.size(), 3u);
+    std::deque<pud_module> modules;
+    modules.emplace_back(10, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+        rule(this->functor("q", {this->atom("a")}), {}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    EXPECT_EQ(reloaded_live.size(), 3u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AxiomsWithNothingDerivedReload) {
-    auto& h = this->h;
-    auto& original = h.build(h.colors());
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationFoundOnRegistrationIsNotFoundAgainOnReload) {
-    auto& h = this->h;
-    auto& original = h.build(h.refutations());
-    ASSERT_THAT(original.refuted_on_registration, Not(IsEmpty()));
-    h.expect_faithful_reload(original);
+    std::deque<pud_module> modules;
+    modules.emplace_back(7001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("a", {this->atom("one")}), {}, 0),
+        rule(this->functor("a", {this->atom("two")}), {}, 0),
+        rule(this->functor("b", {this->atom("two")}), {}, 0),
+        rule(this->functor("d", {this->atom("one")}), {}, 0),
+        rule(this->functor("c", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("b", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+        rule(this->functor("e", {this->var(0)}), {this->functor("c", {this->var(0)})}, 1),
+        rule(this->atom("f"), {this->atom("missing")}, 0),
+        rule(this->functor("g", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("missing", {this->var(0)})}, 1),
+        rule(this->functor("h", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    std::vector<pud_global_node_id> refuted_on_registration;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        refuted_on_registration.insert(refuted_on_registration.end(), change.refuted.begin(), change.refuted.end());
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_THAT(refuted_on_registration, Not(IsEmpty()));
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AFewUnfoldsReload) {
-    auto& h = this->h;
-    auto& original = h.build(h.colors());
-    ASSERT_EQ(h.unfold_randomly(original, 3, std::nullopt), 3u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(0);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    size_t taken = 0;
+    for (; taken < 3; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    ASSERT_EQ(taken, 3u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+
+    std::deque<pud_module> copies(modules.begin(), modules.end());
+    TypeParam reloaded(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : copies) {
+        const pud_frontier_change change = reloaded.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(copies));
+    EXPECT_THAT(reference_pud_stranded_nodes(copies), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, copies), IsEmpty());
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AProgramUnfoldedToExhaustionReloads) {
-    auto& h = this->h;
-    auto& original = h.build(h.colors());
-    EXPECT_GT(h.unfold_to_exhaustion(original, std::nullopt), 5u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(0);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 5u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AFrontierOfOnlySolvedLeavesReloads) {
-    auto& h = this->h;
-    auto& original = h.build(h.colors());
-    h.unfold_to_exhaustion(original, std::nullopt);
-    for (pud_global_node_id leaf : original.live)
-        EXPECT_THAT(h.goal_ids_of(original, leaf), IsEmpty());
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(0);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    for (pud_global_node_id leaf : live) {
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        EXPECT_THAT(goal_ids, IsEmpty());
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ADeeplyUnfoldedDatabaseReloads) {
-    auto& h = this->h;
-    auto& original = h.build(h.arithmetic());
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
     pud_global_node_id deepest{.module = 2001, .node = 1};
     pud_body_goal_id goal = 0;
     for (int level = 0; level < 12; ++level) {
-        const pud_frontier_change change = original.unfold(deepest, goal);
+        const pud_frontier_change change = runtime.unfold(deepest, goal);
+        live.erase(deepest);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
         ASSERT_FALSE(change.offspring.empty()) << "level " << level;
         deepest = change.offspring.back();
-        ASSERT_THAT(h.goal_ids_of(original, deepest), Not(IsEmpty())) << "level " << level;
-        goal = h.goal_ids_of(original, deepest).front();
+        const pud_module* deepest_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == deepest.module)
+                deepest_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal_expr] : reference_pud_goal_list(*deepest_module, deepest.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        ASSERT_THAT(goal_ids, Not(IsEmpty())) << "level " << level;
+        goal = goal_ids.front();
     }
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ManyRandomUnfoldsOfArithmeticReload) {
-    auto& h = this->h;
-    h.rng.seed(1);
-    auto& original = h.build(h.arithmetic());
-    ASSERT_EQ(h.unfold_randomly(original, 40, std::nullopt), 40u);
-    EXPECT_GT(h.count_nodes(original), 60u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(1);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 40; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 40u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 60u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, UnfoldingOnlyTheQueriesOfArithmeticReloads) {
-    auto& h = this->h;
-    h.rng.seed(2);
-    auto& original = h.build(h.arithmetic());
-    ASSERT_EQ(h.unfold_randomly(original, 30, 2002), 30u);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(2);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 2002;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 30u);
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, RandomUnfoldsOfListsReload) {
-    auto& h = this->h;
-    h.rng.seed(3);
-    auto& original = h.build(h.lists());
-    ASSERT_EQ(h.unfold_randomly(original, 30, std::nullopt), 30u);
-    EXPECT_GT(h.count_nodes(original), 40u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(3);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 30u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 40u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ListQueriesUnfoldedToExhaustionReload) {
-    auto& h = this->h;
-    h.rng.seed(4);
-    auto& original = h.build(h.lists());
-    EXPECT_GT(h.unfold_to_exhaustion(original, 3002), 3u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(4);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 3002;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 3u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphQueriesUnfoldedToExhaustionReload) {
-    auto& h = this->h;
-    h.rng.seed(5);
-    auto& original = h.build(h.graph());
-    EXPECT_GT(h.unfold_to_exhaustion(original, 4002), 5u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(5);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 4002;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 5u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
-    auto& h = this->h;
-    h.rng.seed(6);
-    auto& original = h.build(h.graph());
-    EXPECT_GT(h.unfold_randomly(original, 40, std::nullopt), 20u);
-    EXPECT_GT(h.count_nodes(original), 50u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(6);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 40; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    EXPECT_GT(taken, 20u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 50u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheBottomModuleReload) {
-    auto& h = this->h;
-    h.rng.seed(7);
-    auto& original = h.build(h.tiers());
-    EXPECT_GT(h.unfold_randomly(original, 10, 5002), 0u);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(7);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 10; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 5002;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    EXPECT_GT(taken, 0u);
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheTopModuleReload) {
-    auto& h = this->h;
-    h.rng.seed(8);
-    auto& original = h.build(h.tiers());
-    EXPECT_GT(h.unfold_to_exhaustion(original, 5003), 1u);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(8);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 5003;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 1u);
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedEverywhereReload) {
-    auto& h = this->h;
-    h.rng.seed(9);
-    auto& original = h.build(h.tiers());
-    EXPECT_GT(h.unfold_to_exhaustion(original, std::nullopt), 2u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(9);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 2u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingModulesOverOneBaseReload) {
-    auto& h = this->h;
-    h.rng.seed(10);
-    auto& original = h.build(h.siblings());
-    ASSERT_EQ(h.unfold_randomly(original, 40, std::nullopt), 40u);
-    EXPECT_GT(h.count_nodes(original), 50u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(10);
+    std::deque<pud_module> modules;
+    modules.emplace_back(6001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6002, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("even", {this->atom("z")}), {}, 0),
+        rule(this->functor("even", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("even", {this->var(0)})}, 1),
+    });
+    const expr* peano_1 = this->functor("s", {this->atom("z")});
+    modules.emplace_back(6003, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("odd", {peano_1}), {}, 0),
+        rule(this->functor("odd", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("odd", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6004, std::vector<pud_module_id>{6002, 6003}, std::vector<rule>{
+        rule(this->functor("even_nat", {this->var(0)}), {this->functor("even", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("odd_nat", {this->var(0)}), {this->functor("odd", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 40; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 40u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 50u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadingRefutationsReload) {
-    auto& h = this->h;
-    h.rng.seed(11);
-    auto& original = h.build(h.refutations());
-    EXPECT_GT(h.unfold_to_exhaustion(original, std::nullopt), 2u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(11);
+    std::deque<pud_module> modules;
+    modules.emplace_back(7001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("a", {this->atom("one")}), {}, 0),
+        rule(this->functor("a", {this->atom("two")}), {}, 0),
+        rule(this->functor("b", {this->atom("two")}), {}, 0),
+        rule(this->functor("d", {this->atom("one")}), {}, 0),
+        rule(this->functor("c", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("b", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+        rule(this->functor("e", {this->var(0)}), {this->functor("c", {this->var(0)})}, 1),
+        rule(this->atom("f"), {this->atom("missing")}, 0),
+        rule(this->functor("g", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("missing", {this->var(0)})}, 1),
+        rule(this->functor("h", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 2u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, NothingBelowARefutedInteriorNodeComesBackOnReload) {
-    auto& h = this->h;
-    auto& original = h.build(h.cascade());
-    original.unfold(pud_global_node_id{.module = 8001, .node = 2}, 0);
-    const pud_module& base = original.module_of(8001);
-    ASSERT_TRUE(base.check_refuted(2));
-    ASSERT_THAT(base.get_children(2), Not(IsEmpty()));
-    const auto& reloaded = h.expect_faithful_reload(original);
-    for (pud_node_id child : base.get_children(2))
-        EXPECT_FALSE(reloaded.live.contains(pud_global_node_id{.module = 8001, .node = child}));
+    std::deque<pud_module> modules;
+    modules.emplace_back(8001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("base", {this->atom("c")}), {}, 0),
+        rule(this->functor("check", {this->atom("a")}), {}, 0),
+        rule(this->functor("mid", {this->var(0)}), {this->functor("base", {this->var(0)}), this->functor("check", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(8002, std::vector<pud_module_id>{8001}, std::vector<rule>{
+        rule(this->atom("top"), {this->functor("mid", {this->atom("c")})}, 0),
+        rule(this->atom("other"), {this->functor("check", {this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    const pud_frontier_change unfold_change = runtime.unfold(pud_global_node_id{.module = 8001, .node = 2}, 0);
+    live.erase(pud_global_node_id{.module = 8001, .node = 2});
+    live.insert(unfold_change.offspring.begin(), unfold_change.offspring.end());
+    for (pud_global_node_id refuted : unfold_change.refuted)
+        live.erase(refuted);
+    const pud_module* base = nullptr;
+    for (const pud_module& module : modules) {
+        if (module.get_module_id() == 8001)
+            base = &module;
+    }
+    ASSERT_TRUE(base->check_refuted(2));
+    ASSERT_THAT(base->get_children(2), Not(IsEmpty()));
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+    for (pud_node_id child : base->get_children(2))
+        EXPECT_FALSE(reloaded_live.contains(pud_global_node_id{.module = 8001, .node = child}));
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationThatCrossedModulesStaysOnReload) {
-    auto& h = this->h;
-    auto& original = h.build(h.cascade());
-    original.unfold(pud_global_node_id{.module = 8001, .node = 2}, 0);
-    ASSERT_TRUE(original.module_of(8002).check_refuted(0));
-    const auto& reloaded = h.expect_faithful_reload(original);
-    EXPECT_FALSE(reloaded.live.contains(pud_global_node_id{.module = 8002, .node = 0}));
-    EXPECT_TRUE(reloaded.live.contains(pud_global_node_id{.module = 8002, .node = 1}));
+    std::deque<pud_module> modules;
+    modules.emplace_back(8001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("base", {this->atom("c")}), {}, 0),
+        rule(this->functor("check", {this->atom("a")}), {}, 0),
+        rule(this->functor("mid", {this->var(0)}), {this->functor("base", {this->var(0)}), this->functor("check", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(8002, std::vector<pud_module_id>{8001}, std::vector<rule>{
+        rule(this->atom("top"), {this->functor("mid", {this->atom("c")})}, 0),
+        rule(this->atom("other"), {this->functor("check", {this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    const pud_frontier_change unfold_change = runtime.unfold(pud_global_node_id{.module = 8001, .node = 2}, 0);
+    live.erase(pud_global_node_id{.module = 8001, .node = 2});
+    live.insert(unfold_change.offspring.begin(), unfold_change.offspring.end());
+    for (pud_global_node_id refuted : unfold_change.refuted)
+        live.erase(refuted);
+    const pud_module* dep_module = nullptr;
+    for (const pud_module& module : modules) {
+        if (module.get_module_id() == 8002)
+            dep_module = &module;
+    }
+    ASSERT_TRUE(dep_module->check_refuted(0));
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+    EXPECT_FALSE(reloaded_live.contains(pud_global_node_id{.module = 8002, .node = 0}));
+    EXPECT_TRUE(reloaded_live.contains(pud_global_node_id{.module = 8002, .node = 1}));
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AReloadOfAReloadIsFaithfulToo) {
-    auto& h = this->h;
-    h.rng.seed(12);
-    auto& original = h.build(h.lists());
-    h.unfold_randomly(original, 25, std::nullopt);
-    const auto& first = h.expect_faithful_reload(original);
-    const auto& second = h.expect_faithful_reload(first);
-    EXPECT_EQ(second.live, original.live);
-    h.expect_same_modules(original, second);
+    std::mt19937 rng(12);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+    std::deque<pud_module> second_modules(reloaded_modules.begin(), reloaded_modules.end());
+    TypeParam second_runtime(this->exprs);
+    std::set<pud_global_node_id> second_live;
+    std::vector<pud_global_node_id> refuted_on_second_reload;
+    for (pud_module& copy : second_modules) {
+        const pud_frontier_change change = second_runtime.register_module(copy);
+        refuted_on_second_reload.insert(refuted_on_second_reload.end(), change.refuted.begin(), change.refuted.end());
+        second_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            second_live.erase(refuted);
+    }
+    EXPECT_EQ(second_live, live);
+    EXPECT_EQ(second_live, reference_pud_frontier(second_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(second_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_second_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(reloaded_modules, second_modules), IsEmpty());
+    EXPECT_EQ(second_live, live);
+    EXPECT_THAT(reference_pud_module_differences(modules, second_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingTheSameModulesManyTimesNeverChangesThem) {
-    auto& h = this->h;
-    h.rng.seed(13);
-    auto& original = h.build(h.graph());
-    h.unfold_randomly(original, 30, std::nullopt);
-    for (int reload_index = 0; reload_index < 6; ++reload_index)
-        h.expect_faithful_reload(original);
+    std::mt19937 rng(13);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    for (int reload_index = 0; reload_index < 6; ++reload_index) {
+        std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+        TypeParam reloaded_runtime(this->exprs);
+        std::set<pud_global_node_id> reloaded_live;
+        std::vector<pud_global_node_id> refuted_on_reload;
+        for (pud_module& copy : reloaded_modules) {
+                const pud_frontier_change change = reloaded_runtime.register_module(copy);
+                refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+                reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+                for (pud_global_node_id refuted : change.refuted)
+                        reloaded_live.erase(refuted);
+        }
+        EXPECT_EQ(reloaded_live, live);
+        EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+        EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+        EXPECT_THAT(refuted_on_reload, IsEmpty());
+        EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+    }
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ModuleIdsAreOnlyNames) {
-    auto& h = this->h;
+    std::mt19937 rng(14);
     const pud_module_id large = std::numeric_limits<pud_module_id>::max() - 3;
-    auto& original = h.build({
-        module_spec{.id = large, .dependencies = {}, .axioms = h.nat_axioms()},
-        module_spec{.id = 0, .dependencies = {large}, .axioms = {
-            rule(h.functor("number", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1),
-        }},
+    std::deque<pud_module> modules;
+    modules.emplace_back(large, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
     });
-    h.rng.seed(14);
-    h.unfold_randomly(original, 20, std::nullopt);
-    h.expect_faithful_reload(original);
+    modules.emplace_back(0, std::vector<pud_module_id>{large}, std::vector<rule>{
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulWithManyRandomUnfoldsReloads) {
-    auto& h = this->h;
-    h.rng.seed(60);
-    auto& original = h.build(h.peano_mul());
-    ASSERT_EQ(h.unfold_randomly(original, 70, std::nullopt), 70u);
-    EXPECT_GT(h.count_nodes(original), 120u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(60);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 70; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 70u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 120u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersUnfoldedToExhaustionReload) {
-    auto& h = this->h;
-    h.rng.seed(61);
-    auto& original = h.build(h.list_members());
-    EXPECT_GT(h.unfold_to_exhaustion(original, 9102), 5u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(61);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9101, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mem", {this->var(0), this->functor("cons", {this->var(0), this->var(1)})}), {}, 2),
+        rule(
+            this->functor("mem", {this->var(0), this->functor("cons", {this->var(1), this->var(2)})}),
+            {this->functor("mem", {this->var(0), this->var(2)})},
+            3),
+    });
+    const expr* list_xyz = this->atom("nil");
+    list_xyz = this->functor("cons", {this->atom("z"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("y"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("x"), list_xyz});
+    const expr* list_abcd = this->atom("nil");
+    list_abcd = this->functor("cons", {this->atom("d"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("c"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("b"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("a"), list_abcd});
+    const expr* list_bcd = this->functor("cons", {this->atom("b"), this->functor("cons", {this->atom("c"), this->functor("cons", {this->atom("d"), this->atom("nil")})})});
+    modules.emplace_back(9102, std::vector<pud_module_id>{9101}, std::vector<rule>{
+        rule(
+            this->functor("every", {this->var(0)}),
+            {this->functor("mem", {this->var(0), list_xyz})},
+            1),
+        rule(
+            this->functor("pair_mem", {this->var(0), this->var(1)}),
+            {
+                this->functor("mem", {this->var(0), list_abcd}),
+                this->functor("mem", {this->var(1), list_bcd}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 9102;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 5u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesWithDeepStructureReload) {
-    auto& h = this->h;
-    h.rng.seed(62);
-    auto& original = h.build(h.mirror_trees());
-    EXPECT_GT(h.unfold_to_exhaustion(original, 9202), 2u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(62);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2000u; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 9202;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
+
+    EXPECT_GT(taken, 2u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainUnfoldsDeeplyThenReloads) {
-    auto& h = this->h;
-    auto& original = h.build(h.nested_unary_chain());
-    const pud_global_node_id deep_axiom{.module = 9301, .node = 1};
-    const pud_frontier_change change = original.unfold(deep_axiom, 0);
-    ASSERT_FALSE(change.offspring.empty());
-    for (int level = 0; level < 10; ++level) {
-        const std::optional<unfold_step> step = h.choose_step(original, 9301, goal_choice::leftmost);
-        if (!step.has_value())
-            break;
-        original.unfold(step->leaf, step->goal);
+    std::deque<pud_module> modules;
+    const expr* nested_s8 = this->atom("z");
+    for (uint32_t level = 0; level < 8; ++level)
+        nested_s8 = this->functor("s", {nested_s8});
+    const expr* nested_s3 = this->atom("z");
+    for (uint32_t level = 0; level < 3; ++level)
+        nested_s3 = this->functor("s", {nested_s3});
+    const expr* nested_s2 = this->functor("s", {this->functor("s", {nested_s3})});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9301, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(
+            this->functor("deep_nat", {nested_s8}),
+            {this->functor("nat", {nested_s8})},
+            0),
+        rule(
+            this->functor("shallow", {this->var(0)}),
+            {this->functor("nat", {this->var(0)}), this->functor("add", {this->var(0), peano_2, nested_s2})},
+            1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    const expr* nested_s5 = this->atom("z");
+    for (uint32_t level = 0; level < 5; ++level)
+        nested_s5 = this->functor("s", {nested_s5});
+    modules.emplace_back(9302, std::vector<pud_module_id>{9301}, std::vector<rule>{
+        rule(
+            this->functor("reach", {this->var(0)}),
+            {this->functor("nat", {nested_s5}), this->functor("add", {this->var(0), this->functor("s", {this->atom("z")}), nested_s5})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
     }
-    EXPECT_GT(h.count_nodes(original), 15u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+
+    const pud_global_node_id deep_axiom{.module = 9301, .node = 1};
+    const pud_frontier_change deep_change = runtime.unfold(deep_axiom, 0);
+    live.erase(deep_axiom);
+    live.insert(deep_change.offspring.begin(), deep_change.offspring.end());
+    for (pud_global_node_id refuted : deep_change.refuted)
+        live.erase(refuted);
+    ASSERT_FALSE(deep_change.offspring.empty());
+    std::mt19937 rng(0);
+    for (int level = 0; level < 10; ++level) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            if (leaf.module != 9301)
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 15u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendStressReloads) {
-    auto& h = this->h;
-    h.rng.seed(63);
-    auto& original = h.build(h.triple_append());
-    ASSERT_EQ(h.unfold_randomly(original, 55, std::nullopt), 55u);
-    EXPECT_GT(h.count_nodes(original), 80u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(63);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 55; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 55u);
+    size_t node_count = 0;
+    for (const pud_module& module : modules)
+        node_count += reference_pud_count_nodes(module);
+
+    EXPECT_GT(node_count, 80u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryNestedTermsReload) {
-    auto& h = this->h;
-    h.rng.seed(64);
-    auto& original = h.build(h.shared_binary());
-    ASSERT_EQ(h.unfold_randomly(original, 40, std::nullopt), 40u);
-    h.expect_consistent(original);
-    h.expect_faithful_reload(original);
+    std::mt19937 rng(64);
+    std::deque<pud_module> modules;
+    const expr* shared = this->atom("v");
+    for (int level = 0; level < 4; ++level)
+        shared = this->functor("pair", {shared, shared});
+    modules.emplace_back(9501, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("unpack", {shared, this->var(0)}), {this->functor("same", {this->var(0), shared})}, 1),
+        rule(this->functor("same", {this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("both", {this->var(0), this->var(1)}),
+            {this->functor("same", {this->var(0), this->var(1)}), this->functor("nat", {this->var(0)})},
+            2),
+    });
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9502, std::vector<pud_module_id>{9501}, std::vector<rule>{
+        rule(this->functor("grounded", {this->var(0)}), {this->functor("unpack", {shared, this->var(0)})}, 1),
+        rule(this->functor("nat_query", {this->var(0)}), {this->functor("both", {peano_2, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 40; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+    ASSERT_EQ(taken, 40u);
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
 }
 
-TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryStressProgramReloadsAfterHeavyRandomUnfolds) {
-    auto& h = this->h;
+TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsAfterHeavyRandomUnfolds) {
     for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
-        for (const program_t& program : h.stress_programs()) {
-            h.rng.seed(300 + seed);
-            auto& original = h.build(program);
-            const size_t budget = 40 + h.rng() % 40;
-            h.unfold_randomly(original, budget, std::nullopt);
-            h.expect_consistent(original);
-            h.expect_faithful_reload(original);
-            if (this->HasFailure()) {
-                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
-                return;
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
             }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9001;
+            return;
         }
     }
+
 }
 
-TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryProgramReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
-    auto& h = this->h;
-    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
-        for (const program_t& program : h.every_program()) {
-            h.rng.seed(seed);
-            auto& original = h.build(program);
-            h.unfold_randomly(original, h.rng() % 30, std::nullopt);
-            h.expect_consistent(original);
-            h.expect_faithful_reload(original);
-            if (this->HasFailure()) {
-                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
-                return;
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsAfterHeavyRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9101, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mem", {this->var(0), this->functor("cons", {this->var(0), this->var(1)})}), {}, 2),
+        rule(
+            this->functor("mem", {this->var(0), this->functor("cons", {this->var(1), this->var(2)})}),
+            {this->functor("mem", {this->var(0), this->var(2)})},
+            3),
+    });
+    const expr* list_xyz = this->atom("nil");
+    list_xyz = this->functor("cons", {this->atom("z"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("y"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("x"), list_xyz});
+    const expr* list_abcd = this->atom("nil");
+    list_abcd = this->functor("cons", {this->atom("d"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("c"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("b"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("a"), list_abcd});
+    const expr* list_bcd = this->functor("cons", {this->atom("b"), this->functor("cons", {this->atom("c"), this->functor("cons", {this->atom("d"), this->atom("nil")})})});
+    modules.emplace_back(9102, std::vector<pud_module_id>{9101}, std::vector<rule>{
+        rule(
+            this->functor("every", {this->var(0)}),
+            {this->functor("mem", {this->var(0), list_xyz})},
+            1),
+        rule(
+            this->functor("pair_mem", {this->var(0), this->var(1)}),
+            {
+                this->functor("mem", {this->var(0), list_abcd}),
+                this->functor("mem", {this->var(1), list_bcd}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
             }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9101;
+            return;
         }
     }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsAfterHeavyRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9201;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsAfterHeavyRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    const expr* nested_s8 = this->atom("z");
+    for (uint32_t level = 0; level < 8; ++level)
+        nested_s8 = this->functor("s", {nested_s8});
+    const expr* nested_s3 = this->atom("z");
+    for (uint32_t level = 0; level < 3; ++level)
+        nested_s3 = this->functor("s", {nested_s3});
+    const expr* nested_s2 = this->functor("s", {this->functor("s", {nested_s3})});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9301, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(
+            this->functor("deep_nat", {nested_s8}),
+            {this->functor("nat", {nested_s8})},
+            0),
+        rule(
+            this->functor("shallow", {this->var(0)}),
+            {this->functor("nat", {this->var(0)}), this->functor("add", {this->var(0), peano_2, nested_s2})},
+            1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    const expr* nested_s5 = this->atom("z");
+    for (uint32_t level = 0; level < 5; ++level)
+        nested_s5 = this->functor("s", {nested_s5});
+    modules.emplace_back(9302, std::vector<pud_module_id>{9301}, std::vector<rule>{
+        rule(
+            this->functor("reach", {this->var(0)}),
+            {this->functor("nat", {nested_s5}), this->functor("add", {this->var(0), this->functor("s", {this->atom("z")}), nested_s5})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9301;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsAfterHeavyRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9401;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsAfterHeavyRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 4 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(300 + seed);
+    std::deque<pud_module> modules;
+    const expr* shared = this->atom("v");
+    for (int level = 0; level < 4; ++level)
+        shared = this->functor("pair", {shared, shared});
+    modules.emplace_back(9501, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("unpack", {shared, this->var(0)}), {this->functor("same", {this->var(0), shared})}, 1),
+        rule(this->functor("same", {this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("both", {this->var(0), this->var(1)}),
+            {this->functor("same", {this->var(0), this->var(1)}), this->functor("nat", {this->var(0)})},
+            2),
+    });
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9502, std::vector<pud_module_id>{9501}, std::vector<rule>{
+        rule(this->functor("grounded", {this->var(0)}), {this->functor("unpack", {shared, this->var(0)})}, 1),
+        rule(this->functor("nat_query", {this->var(0)}), {this->functor("both", {peano_2, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+
+        const size_t budget = 40 + rng() % 40;
+    size_t taken = 0;
+    for (; taken < budget; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9501;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 1001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 2001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 3001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 4001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 5001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(6001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6002, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("even", {this->atom("z")}), {}, 0),
+        rule(this->functor("even", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("even", {this->var(0)})}, 1),
+    });
+    const expr* peano_1 = this->functor("s", {this->atom("z")});
+    modules.emplace_back(6003, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("odd", {peano_1}), {}, 0),
+        rule(this->functor("odd", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("odd", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6004, std::vector<pud_module_id>{6002, 6003}, std::vector<rule>{
+        rule(this->functor("even_nat", {this->var(0)}), {this->functor("even", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("odd_nat", {this->var(0)}), {this->functor("odd", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 6001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(7001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("a", {this->atom("one")}), {}, 0),
+        rule(this->functor("a", {this->atom("two")}), {}, 0),
+        rule(this->functor("b", {this->atom("two")}), {}, 0),
+        rule(this->functor("d", {this->atom("one")}), {}, 0),
+        rule(this->functor("c", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("b", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+        rule(this->functor("e", {this->var(0)}), {this->functor("c", {this->var(0)})}, 1),
+        rule(this->atom("f"), {this->atom("missing")}, 0),
+        rule(this->functor("g", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("missing", {this->var(0)})}, 1),
+        rule(this->functor("h", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 7001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(8001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("base", {this->atom("c")}), {}, 0),
+        rule(this->functor("check", {this->atom("a")}), {}, 0),
+        rule(this->functor("mid", {this->var(0)}), {this->functor("base", {this->var(0)}), this->functor("check", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(8002, std::vector<pud_module_id>{8001}, std::vector<rule>{
+        rule(this->atom("top"), {this->functor("mid", {this->atom("c")})}, 0),
+        rule(this->atom("other"), {this->functor("check", {this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 8001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9101, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mem", {this->var(0), this->functor("cons", {this->var(0), this->var(1)})}), {}, 2),
+        rule(
+            this->functor("mem", {this->var(0), this->functor("cons", {this->var(1), this->var(2)})}),
+            {this->functor("mem", {this->var(0), this->var(2)})},
+            3),
+    });
+    const expr* list_xyz = this->atom("nil");
+    list_xyz = this->functor("cons", {this->atom("z"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("y"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("x"), list_xyz});
+    const expr* list_abcd = this->atom("nil");
+    list_abcd = this->functor("cons", {this->atom("d"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("c"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("b"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("a"), list_abcd});
+    const expr* list_bcd = this->functor("cons", {this->atom("b"), this->functor("cons", {this->atom("c"), this->functor("cons", {this->atom("d"), this->atom("nil")})})});
+    modules.emplace_back(9102, std::vector<pud_module_id>{9101}, std::vector<rule>{
+        rule(
+            this->functor("every", {this->var(0)}),
+            {this->functor("mem", {this->var(0), list_xyz})},
+            1),
+        rule(
+            this->functor("pair_mem", {this->var(0), this->var(1)}),
+            {
+                this->functor("mem", {this->var(0), list_abcd}),
+                this->functor("mem", {this->var(1), list_bcd}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9101;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9201;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    const expr* nested_s8 = this->atom("z");
+    for (uint32_t level = 0; level < 8; ++level)
+        nested_s8 = this->functor("s", {nested_s8});
+    const expr* nested_s3 = this->atom("z");
+    for (uint32_t level = 0; level < 3; ++level)
+        nested_s3 = this->functor("s", {nested_s3});
+    const expr* nested_s2 = this->functor("s", {this->functor("s", {nested_s3})});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9301, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(
+            this->functor("deep_nat", {nested_s8}),
+            {this->functor("nat", {nested_s8})},
+            0),
+        rule(
+            this->functor("shallow", {this->var(0)}),
+            {this->functor("nat", {this->var(0)}), this->functor("add", {this->var(0), peano_2, nested_s2})},
+            1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    const expr* nested_s5 = this->atom("z");
+    for (uint32_t level = 0; level < 5; ++level)
+        nested_s5 = this->functor("s", {nested_s5});
+    modules.emplace_back(9302, std::vector<pud_module_id>{9301}, std::vector<rule>{
+        rule(
+            this->functor("reach", {this->var(0)}),
+            {this->functor("nat", {nested_s5}), this->functor("add", {this->var(0), this->functor("s", {this->atom("z")}), nested_s5})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9301;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9401;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsFaithfullyAfterAnyNumberOfRandomUnfolds) {
+    for (uint32_t seed = 0; seed < 6 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(seed);
+    std::deque<pud_module> modules;
+    const expr* shared = this->atom("v");
+    for (int level = 0; level < 4; ++level)
+        shared = this->functor("pair", {shared, shared});
+    modules.emplace_back(9501, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("unpack", {shared, this->var(0)}), {this->functor("same", {this->var(0), shared})}, 1),
+        rule(this->functor("same", {this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("both", {this->var(0), this->var(1)}),
+            {this->functor("same", {this->var(0), this->var(1)}), this->functor("nat", {this->var(0)})},
+            2),
+    });
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9502, std::vector<pud_module_id>{9501}, std::vector<rule>{
+        rule(this->functor("grounded", {this->var(0)}), {this->functor("unpack", {shared, this->var(0)})}, 1),
+        rule(this->functor("nat_query", {this->var(0)}), {this->functor("both", {peano_2, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9501;
+            return;
+        }
+    }
+
 }
 
 // Resuming: a reloaded runtime unfolds exactly as the original goes on unfolding.
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumingFromAxiomsAloneIsLikeNeverHavingReloaded) {
-    auto& h = this->h;
-    h.rng.seed(20);
-    auto& original = h.build(h.arithmetic());
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 30, std::nullopt, goal_choice::random), 30u);
+    std::mt19937 rng(20);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 30 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 30u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(21);
-    auto& original = h.build(h.colors());
-    h.unfold_randomly(original, 4, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, std::nullopt, goal_choice::leftmost), 2000u);
-    EXPECT_FALSE(h.choose_step(original, std::nullopt, goal_choice::leftmost).has_value());
-    EXPECT_FALSE(h.choose_step(resumed, std::nullopt, goal_choice::leftmost).has_value());
+    std::mt19937 rng(21);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 4; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 2000 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_LT(lockstep_taken, 2000u);
+    std::vector<pud_global_node_id> unfoldable;
+    for (pud_global_node_id leaf : live) {
+        const std::optional<pud_module_id> only = std::nullopt;
+        if (only.has_value() && leaf.module != only.value())
+            continue;
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            continue;
+        unfoldable.push_back(leaf);
+    }
+    EXPECT_TRUE(unfoldable.empty());
+    std::vector<pud_global_node_id> resumed_unfoldable;
+    for (pud_global_node_id leaf : resumed_live) {
+        const std::optional<pud_module_id> only = std::nullopt;
+        if (only.has_value() && leaf.module != only.value())
+            continue;
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : resumed_modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            continue;
+        resumed_unfoldable.push_back(leaf);
+    }
+    EXPECT_TRUE(resumed_unfoldable.empty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedArithmeticUnfoldsLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(22);
-    auto& original = h.build(h.arithmetic());
-    h.unfold_randomly(original, 20, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 30, std::nullopt, goal_choice::random), 30u);
+    std::mt19937 rng(22);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 30 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 30u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedListsUnfoldLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(23);
-    auto& original = h.build(h.lists());
-    h.unfold_randomly(original, 15, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 30, std::nullopt, goal_choice::random), 30u);
+    std::mt19937 rng(23);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 15; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 30 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 30u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustionLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(24);
-    auto& original = h.build(h.graph());
-    h.unfold_randomly(original, 10, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, 4002, goal_choice::leftmost), 2000u);
-    EXPECT_FALSE(h.choose_step(original, 4002, goal_choice::leftmost).has_value());
-    EXPECT_FALSE(h.choose_step(resumed, 4002, goal_choice::leftmost).has_value());
+    std::mt19937 rng(24);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 10; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 2000 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 4002;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_LT(lockstep_taken, 2000u);
+    std::vector<pud_global_node_id> unfoldable;
+    for (pud_global_node_id leaf : live) {
+        const std::optional<pud_module_id> only = 4002;
+        if (only.has_value() && leaf.module != only.value())
+            continue;
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            continue;
+        unfoldable.push_back(leaf);
+    }
+    EXPECT_TRUE(unfoldable.empty());
+    std::vector<pud_global_node_id> resumed_unfoldable;
+    for (pud_global_node_id leaf : resumed_live) {
+        const std::optional<pud_module_id> only = 4002;
+        if (only.has_value() && leaf.module != only.value())
+            continue;
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : resumed_modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            continue;
+        resumed_unfoldable.push_back(leaf);
+    }
+    EXPECT_TRUE(resumed_unfoldable.empty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTiersUnfoldLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(25);
-    auto& original = h.build(h.tiers());
-    h.unfold_randomly(original, 3, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, std::nullopt, goal_choice::leftmost), 2000u);
+    std::mt19937 rng(25);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 3; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 2000 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_LT(lockstep_taken, 2000u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedSiblingModulesUnfoldLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(26);
-    auto& original = h.build(h.siblings());
-    h.unfold_randomly(original, 20, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 30, std::nullopt, goal_choice::random), 30u);
+    std::mt19937 rng(26);
+    std::deque<pud_module> modules;
+    modules.emplace_back(6001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6002, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("even", {this->atom("z")}), {}, 0),
+        rule(this->functor("even", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("even", {this->var(0)})}, 1),
+    });
+    const expr* peano_1 = this->functor("s", {this->atom("z")});
+    modules.emplace_back(6003, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("odd", {peano_1}), {}, 0),
+        rule(this->functor("odd", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("odd", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6004, std::vector<pud_module_id>{6002, 6003}, std::vector<rule>{
+        rule(this->functor("even_nat", {this->var(0)}), {this->functor("even", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("odd_nat", {this->var(0)}), {this->functor("odd", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 30 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 30u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedRefutationsCascadeLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(27);
-    auto& original = h.build(h.refutations());
-    h.unfold_randomly(original, 2, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, std::nullopt, goal_choice::leftmost), 2000u);
+    std::mt19937 rng(27);
+    std::deque<pud_module> modules;
+    modules.emplace_back(7001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("a", {this->atom("one")}), {}, 0),
+        rule(this->functor("a", {this->atom("two")}), {}, 0),
+        rule(this->functor("b", {this->atom("two")}), {}, 0),
+        rule(this->functor("d", {this->atom("one")}), {}, 0),
+        rule(this->functor("c", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("b", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+        rule(this->functor("e", {this->var(0)}), {this->functor("c", {this->var(0)})}, 1),
+        rule(this->atom("f"), {this->atom("missing")}, 0),
+        rule(this->functor("g", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("missing", {this->var(0)})}, 1),
+        rule(this->functor("h", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 2; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 2000 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_LT(lockstep_taken, 2000u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyRefutesTheDependentsLeavesLikeTheOriginal) {
-    auto& h = this->h;
-    auto& original = h.build(h.cascade());
-    auto& resumed = h.expect_faithful_reload(original);
+    std::deque<pud_module> modules;
+    modules.emplace_back(8001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("base", {this->atom("c")}), {}, 0),
+        rule(this->functor("check", {this->atom("a")}), {}, 0),
+        rule(this->functor("mid", {this->var(0)}), {this->functor("base", {this->var(0)}), this->functor("check", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(8002, std::vector<pud_module_id>{8001}, std::vector<rule>{
+        rule(this->atom("top"), {this->functor("mid", {this->atom("c")})}, 0),
+        rule(this->atom("other"), {this->functor("check", {this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+
     const pud_global_node_id mid{.module = 8001, .node = 2};
-    const pud_frontier_change expected = original.unfold(mid, 0);
-    const pud_frontier_change actual = resumed.unfold(mid, 0);
+    const pud_frontier_change expected = runtime.unfold(mid, 0);
+    live.erase(mid);
+    live.insert(expected.offspring.begin(), expected.offspring.end());
+    for (pud_global_node_id refuted : expected.refuted)
+        live.erase(refuted);
+    const pud_frontier_change actual = resumed_runtime.unfold(mid, 0);
+    resumed_live.erase(mid);
+    resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+    for (pud_global_node_id refuted : actual.refuted)
+        resumed_live.erase(refuted);
     EXPECT_EQ(actual.offspring, expected.offspring);
     EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
-    EXPECT_TRUE(resumed.module_of(8002).check_refuted(0));
-    h.expect_same_modules(original, resumed);
+    const pud_module* dep_module = nullptr;
+    for (const pud_module& module : resumed_modules) {
+        if (module.get_module_id() == 8002)
+            dep_module = &module;
+    }
+    EXPECT_TRUE(dep_module->check_refuted(0));
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyKeepsADependentsQueryResolvable) {
-    auto& h = this->h;
-    auto& original = h.build({
-        module_spec{.id = 1, .dependencies = {}, .axioms = h.nat_axioms()},
-        module_spec{.id = 2, .dependencies = {1}, .axioms = {rule(h.atom("q"), {h.functor("nat", {h.peano(3)})}, 0)}},
+    const expr* peano_3 = this->atom("z");
+    for (uint32_t step = 0; step < 3; ++step)
+        peano_3 = this->functor("s", {peano_3});
+    std::deque<pud_module> modules;
+    modules.emplace_back(1, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
     });
-    auto& resumed = h.expect_faithful_reload(original);
-    const pud_global_node_id step{.module = 1, .node = 1};
-    original.unfold(step, 0);
-    resumed.unfold(step, 0);
+    modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
+        rule(this->atom("q"), {this->functor("nat", {peano_3})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+
+    const pud_global_node_id step_id{.module = 1, .node = 1};
+    const pud_frontier_change step_orig = runtime.unfold(step_id, 0);
+    live.erase(step_id);
+    live.insert(step_orig.offspring.begin(), step_orig.offspring.end());
+    for (pud_global_node_id refuted : step_orig.refuted)
+        live.erase(refuted);
+    const pud_frontier_change step_res = resumed_runtime.unfold(step_id, 0);
+    resumed_live.erase(step_id);
+    resumed_live.insert(step_res.offspring.begin(), step_res.offspring.end());
+    for (pud_global_node_id refuted : step_res.refuted)
+        resumed_live.erase(refuted);
     const pud_global_node_id query{.module = 2, .node = 0};
-    const pud_frontier_change expected = original.unfold(query, 0);
-    const pud_frontier_change actual = resumed.unfold(query, 0);
+    const pud_frontier_change expected = runtime.unfold(query, 0);
+    live.erase(query);
+    live.insert(expected.offspring.begin(), expected.offspring.end());
+    for (pud_global_node_id refuted : expected.refuted)
+        live.erase(refuted);
+    const pud_frontier_change actual = resumed_runtime.unfold(query, 0);
+    resumed_live.erase(query);
+    resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+    for (pud_global_node_id refuted : actual.refuted)
+        resumed_live.erase(refuted);
     ASSERT_EQ(actual.offspring.size(), 1u);
     EXPECT_EQ(actual.offspring, expected.offspring);
     EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
-    h.expect_same_modules(original, resumed);
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfoldingLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(28);
-    auto& original = h.build(h.arithmetic());
-    auto* resumed = &h.expect_faithful_reload(original);
-    for (int unfold_index = 0; unfold_index < 20 && !this->HasFailure(); ++unfold_index) {
-        ASSERT_TRUE(h.unfold_in_lockstep(original, *resumed, std::nullopt, goal_choice::random)) << "unfold " << unfold_index;
-        resumed = &h.expect_faithful_reload(*resumed);
+    std::mt19937 rng(28);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
     }
-    h.expect_same_modules(original, *resumed);
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module> resumed_modules(reloaded_modules.begin(), reloaded_modules.end());
+    auto resumed_runtime = std::make_unique<TypeParam>(this->exprs);
+    std::set<pud_global_node_id> resumed_live = reloaded_live;
+    for (pud_module& copy : resumed_modules)
+        resumed_runtime->register_module(copy);
+
+    for (int unfold_index = 0; unfold_index < 20 && !this->HasFailure(); ++unfold_index) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty()) {
+            ASSERT_TRUE(false) << "unfold " << unfold_index;
+            break;
+        }
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime->unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+
+        std::deque<pud_module> next_modules(resumed_modules.begin(), resumed_modules.end());
+        TypeParam next_runtime(this->exprs);
+        std::set<pud_global_node_id> next_live;
+        std::vector<pud_global_node_id> refuted_on_next;
+        for (pud_module& copy : next_modules) {
+            const pud_frontier_change change = next_runtime.register_module(copy);
+            refuted_on_next.insert(refuted_on_next.end(), change.refuted.begin(), change.refuted.end());
+            next_live.insert(change.offspring.begin(), change.offspring.end());
+            for (pud_global_node_id refuted : change.refuted)
+                next_live.erase(refuted);
+        }
+        EXPECT_EQ(next_live, resumed_live);
+        EXPECT_EQ(next_live, reference_pud_frontier(next_modules));
+        EXPECT_THAT(reference_pud_stranded_nodes(next_modules), IsEmpty());
+        EXPECT_THAT(refuted_on_next, IsEmpty());
+        EXPECT_THAT(reference_pud_module_differences(resumed_modules, next_modules), IsEmpty());
+        resumed_modules = std::move(next_modules);
+        resumed_live = std::move(next_live);
+        resumed_runtime = std::make_unique<TypeParam>(this->exprs);
+        for (pud_module& copy : resumed_modules)
+            resumed_runtime->register_module(copy);
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldingLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(29);
-    auto& original = h.build(h.lists());
-    auto* resumed = &h.expect_faithful_reload(original);
-    for (int generation = 0; generation < 6 && !this->HasFailure(); ++generation) {
-        h.resume_in_lockstep(original, *resumed, 6, std::nullopt, goal_choice::random);
-        resumed = &h.expect_faithful_reload(*resumed);
+    std::mt19937 rng(29);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
     }
-    EXPECT_EQ(resumed->live, original.live);
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module> resumed_modules(reloaded_modules.begin(), reloaded_modules.end());
+    auto resumed_runtime = std::make_unique<TypeParam>(this->exprs);
+    std::set<pud_global_node_id> resumed_live = reloaded_live;
+    for (pud_module& copy : resumed_modules)
+        resumed_runtime->register_module(copy);
+
+    for (int generation = 0; generation < 6 && !this->HasFailure(); ++generation) {
+        size_t lockstep_taken = 0;
+        while (lockstep_taken < 6 && !this->HasFailure()) {
+            EXPECT_EQ(resumed_live, live);
+            std::vector<pud_global_node_id> unfoldable;
+            for (pud_global_node_id leaf : live) {
+                const std::optional<pud_module_id> only = std::nullopt;
+                if (only.has_value() && leaf.module != only.value())
+                    continue;
+                const pud_module* leaf_module = nullptr;
+                for (const pud_module& module : modules) {
+                    if (module.get_module_id() == leaf.module)
+                        leaf_module = &module;
+                }
+                if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                    continue;
+                unfoldable.push_back(leaf);
+            }
+            if (unfoldable.empty())
+                break;
+            const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            std::vector<pud_body_goal_id> goal_ids;
+            for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+                goal_ids.push_back(goal_id);
+            std::sort(goal_ids.begin(), goal_ids.end());
+            const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+            const pud_frontier_change expected = runtime.unfold(leaf, goal);
+            live.erase(leaf);
+            live.insert(expected.offspring.begin(), expected.offspring.end());
+            for (pud_global_node_id refuted : expected.refuted)
+                live.erase(refuted);
+            const pud_frontier_change actual = resumed_runtime->unfold(leaf, goal);
+            resumed_live.erase(leaf);
+            resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+            for (pud_global_node_id refuted : actual.refuted)
+                resumed_live.erase(refuted);
+            EXPECT_EQ(actual.offspring, expected.offspring)
+                << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+            EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+            ++lockstep_taken;
+        }
+        EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+        EXPECT_EQ(live, reference_pud_frontier(modules));
+        EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+        EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+        EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        std::deque<pud_module> next_modules(resumed_modules.begin(), resumed_modules.end());
+        TypeParam next_runtime(this->exprs);
+        std::set<pud_global_node_id> next_live;
+        std::vector<pud_global_node_id> refuted_on_next;
+        for (pud_module& copy : next_modules) {
+            const pud_frontier_change change = next_runtime.register_module(copy);
+            refuted_on_next.insert(refuted_on_next.end(), change.refuted.begin(), change.refuted.end());
+            next_live.insert(change.offspring.begin(), change.offspring.end());
+            for (pud_global_node_id refuted : change.refuted)
+                next_live.erase(refuted);
+        }
+        EXPECT_EQ(next_live, resumed_live);
+        EXPECT_EQ(next_live, reference_pud_frontier(next_modules));
+        EXPECT_THAT(reference_pud_stranded_nodes(next_modules), IsEmpty());
+        EXPECT_THAT(refuted_on_next, IsEmpty());
+        EXPECT_THAT(reference_pud_module_differences(resumed_modules, next_modules), IsEmpty());
+        resumed_modules = std::move(next_modules);
+        resumed_live = std::move(next_live);
+        resumed_runtime = std::make_unique<TypeParam>(this->exprs);
+        for (pud_module& copy : resumed_modules)
+            resumed_runtime->register_module(copy);
+    }
+    EXPECT_EQ(resumed_live, live);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAndResumed) {
-    auto& h = this->h;
-    h.rng.seed(30);
-    auto& original = h.build(h.graph());
-    h.unfold_randomly(original, 10, std::nullopt);
-    auto& first = h.expect_faithful_reload(original);
-    h.resume_in_lockstep(original, first, 15, std::nullopt, goal_choice::random);
-    auto& second = h.expect_faithful_reload(first);
-    h.resume_in_lockstep(original, second, 15, std::nullopt, goal_choice::random);
+    std::mt19937 rng(30);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 10; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 15 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    std::deque<pud_module> second_modules(resumed_modules.begin(), resumed_modules.end());
+    TypeParam second_runtime(this->exprs);
+    std::set<pud_global_node_id> second_live;
+    std::vector<pud_global_node_id> refuted_on_second;
+    for (pud_module& copy : second_modules) {
+        const pud_frontier_change change = second_runtime.register_module(copy);
+        refuted_on_second.insert(refuted_on_second.end(), change.refuted.begin(), change.refuted.end());
+        second_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            second_live.erase(refuted);
+    }
+    EXPECT_EQ(second_live, resumed_live);
+    EXPECT_EQ(second_live, reference_pud_frontier(second_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(second_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_second, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(resumed_modules, second_modules), IsEmpty());
+    size_t second_lockstep_taken = 0;
+    while (second_lockstep_taken < 15 && !this->HasFailure()) {
+        EXPECT_EQ(second_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = second_runtime.unfold(leaf, goal);
+        second_live.erase(leaf);
+        second_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            second_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++second_lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, second_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(second_live, reference_pud_frontier(second_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(second_modules), IsEmpty());
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(70);
-    auto& original = h.build(h.peano_mul());
-    h.unfold_randomly(original, 35, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 50, std::nullopt, goal_choice::random), 50u);
+    std::mt19937 rng(70);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 35; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 50 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 50u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(71);
-    auto& original = h.build(h.triple_append());
-    h.unfold_randomly(original, 25, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_EQ(h.resume_in_lockstep(original, resumed, 45, std::nullopt, goal_choice::random), 45u);
+    std::mt19937 rng(71);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 45 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_EQ(lockstep_taken, 45u);
+
 }
 
 TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustionLikeTheOriginal) {
-    auto& h = this->h;
-    h.rng.seed(72);
-    auto& original = h.build(h.mirror_trees());
-    h.unfold_randomly(original, 5, std::nullopt);
-    auto& resumed = h.expect_faithful_reload(original);
-    EXPECT_LT(h.resume_in_lockstep(original, resumed, 2000, 9202, goal_choice::leftmost), 2000u);
+    std::mt19937 rng(72);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 5; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 2000 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = 9202;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(0);
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+    EXPECT_LT(lockstep_taken, 2000u);
+
 }
 
-TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryStressProgramResumesAfterHeavyUnfolds) {
-    auto& h = this->h;
+TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesAfterHeavyUnfolds) {
     for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
-        for (const program_t& program : h.stress_programs()) {
-            h.rng.seed(400 + seed);
-            auto& original = h.build(program);
-            h.unfold_randomly(original, 20 + h.rng() % 30, std::nullopt);
-            auto& resumed = h.expect_faithful_reload(original);
-            h.resume_in_lockstep(original, resumed, 35, std::nullopt, goal_choice::random);
-            if (this->HasFailure()) {
-                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
-                return;
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
             }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9001;
+            return;
         }
     }
+
 }
 
-TYPED_TEST(PudRuntimeReloadIntegrationTest, EveryProgramResumesLikeTheOriginalFromAnyPoint) {
-    auto& h = this->h;
-    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
-        for (const program_t& program : h.every_program()) {
-            h.rng.seed(100 + seed);
-            auto& original = h.build(program);
-            h.unfold_randomly(original, h.rng() % 25, std::nullopt);
-            auto& resumed = h.expect_faithful_reload(original);
-            h.resume_in_lockstep(original, resumed, 20, std::nullopt, goal_choice::random);
-            if (this->HasFailure()) {
-                ADD_FAILURE() << "seed " << seed << ", program of module " << program.front().id;
-                return;
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesAfterHeavyUnfolds) {
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9101, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mem", {this->var(0), this->functor("cons", {this->var(0), this->var(1)})}), {}, 2),
+        rule(
+            this->functor("mem", {this->var(0), this->functor("cons", {this->var(1), this->var(2)})}),
+            {this->functor("mem", {this->var(0), this->var(2)})},
+            3),
+    });
+    const expr* list_xyz = this->atom("nil");
+    list_xyz = this->functor("cons", {this->atom("z"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("y"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("x"), list_xyz});
+    const expr* list_abcd = this->atom("nil");
+    list_abcd = this->functor("cons", {this->atom("d"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("c"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("b"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("a"), list_abcd});
+    const expr* list_bcd = this->functor("cons", {this->atom("b"), this->functor("cons", {this->atom("c"), this->functor("cons", {this->atom("d"), this->atom("nil")})})});
+    modules.emplace_back(9102, std::vector<pud_module_id>{9101}, std::vector<rule>{
+        rule(
+            this->functor("every", {this->var(0)}),
+            {this->functor("mem", {this->var(0), list_xyz})},
+            1),
+        rule(
+            this->functor("pair_mem", {this->var(0), this->var(1)}),
+            {
+                this->functor("mem", {this->var(0), list_abcd}),
+                this->functor("mem", {this->var(1), list_bcd}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
             }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9101;
+            return;
         }
     }
+
 }
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesAfterHeavyUnfolds) {
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9201;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesAfterHeavyUnfolds) {
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    const expr* nested_s8 = this->atom("z");
+    for (uint32_t level = 0; level < 8; ++level)
+        nested_s8 = this->functor("s", {nested_s8});
+    const expr* nested_s3 = this->atom("z");
+    for (uint32_t level = 0; level < 3; ++level)
+        nested_s3 = this->functor("s", {nested_s3});
+    const expr* nested_s2 = this->functor("s", {this->functor("s", {nested_s3})});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9301, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(
+            this->functor("deep_nat", {nested_s8}),
+            {this->functor("nat", {nested_s8})},
+            0),
+        rule(
+            this->functor("shallow", {this->var(0)}),
+            {this->functor("nat", {this->var(0)}), this->functor("add", {this->var(0), peano_2, nested_s2})},
+            1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    const expr* nested_s5 = this->atom("z");
+    for (uint32_t level = 0; level < 5; ++level)
+        nested_s5 = this->functor("s", {nested_s5});
+    modules.emplace_back(9302, std::vector<pud_module_id>{9301}, std::vector<rule>{
+        rule(
+            this->functor("reach", {this->var(0)}),
+            {this->functor("nat", {nested_s5}), this->functor("add", {this->var(0), this->functor("s", {this->atom("z")}), nested_s5})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9301;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesAfterHeavyUnfolds) {
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9401;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesAfterHeavyUnfolds) {
+    for (uint32_t seed = 0; seed < 3 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(400 + seed);
+    std::deque<pud_module> modules;
+    const expr* shared = this->atom("v");
+    for (int level = 0; level < 4; ++level)
+        shared = this->functor("pair", {shared, shared});
+    modules.emplace_back(9501, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("unpack", {shared, this->var(0)}), {this->functor("same", {this->var(0), shared})}, 1),
+        rule(this->functor("same", {this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("both", {this->var(0), this->var(1)}),
+            {this->functor("same", {this->var(0), this->var(1)}), this->functor("nat", {this->var(0)})},
+            2),
+    });
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9502, std::vector<pud_module_id>{9501}, std::vector<rule>{
+        rule(this->functor("grounded", {this->var(0)}), {this->functor("unpack", {shared, this->var(0)})}, 1),
+        rule(this->functor("nat_query", {this->var(0)}), {this->functor("both", {peano_2, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < 20 + rng() % 30; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 35 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9501;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(1001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("color", {this->atom("red")}), {}, 0),
+        rule(this->functor("color", {this->atom("blue")}), {}, 0),
+        rule(this->functor("color", {this->atom("green")}), {}, 0),
+        rule(this->functor("warm", {this->atom("red")}), {}, 0),
+        rule(this->functor("warm", {this->atom("orange")}), {}, 0),
+        rule(
+            this->functor("pair", {this->var(0), this->var(1)}),
+            {this->functor("color", {this->var(0)}), this->functor("color", {this->var(1)})},
+            2),
+        rule(
+            this->functor("warm_color", {this->var(0)}),
+            {this->functor("color", {this->var(0)}), this->functor("warm", {this->var(0)})},
+            1),
+        rule(this->atom("impossible"), {this->functor("color", {this->atom("purple")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 1001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(2001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(2002, std::vector<pud_module_id>{2001}, std::vector<rule>{
+        rule(
+            this->functor("half", {this->var(0)}),
+            {this->functor("add", {this->var(0), this->var(0),
+                this->functor("s", {this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})})})})},
+            1),
+        rule(this->functor("number", {this->var(0)}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 2001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(3001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_a = this->functor("cons", {this->atom("a"), this->atom("nil")});
+    const expr* list_ab = this->functor("cons", {this->atom("a"), this->functor("cons", {this->atom("b"), this->atom("nil")})});
+    modules.emplace_back(3002, std::vector<pud_module_id>{3001}, std::vector<rule>{
+        rule(
+            this->functor("split", {this->var(0), this->var(1)}),
+            {this->functor("app", {this->var(0), this->var(1), list_abc})},
+            2),
+        rule(
+            this->functor("suffix", {this->var(0)}),
+            {this->functor("app", {list_a, this->var(0), list_ab})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 3001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(4001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("edge", {this->atom("a"), this->atom("b")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("c")}), {}, 0),
+        rule(this->functor("edge", {this->atom("c"), this->atom("d")}), {}, 0),
+        rule(this->functor("edge", {this->atom("b"), this->atom("e")}), {}, 0),
+        rule(this->functor("path", {this->var(0), this->var(1)}), {this->functor("edge", {this->var(0), this->var(1)})}, 2),
+        rule(
+            this->functor("path", {this->var(0), this->var(2)}),
+            {this->functor("edge", {this->var(0), this->var(1)}), this->functor("path", {this->var(1), this->var(2)})},
+            3),
+    });
+    modules.emplace_back(4002, std::vector<pud_module_id>{4001}, std::vector<rule>{
+        rule(this->functor("reach", {this->var(0)}), {this->functor("path", {this->atom("a"), this->var(0)})}, 1),
+        rule(this->atom("unreachable"), {this->functor("path", {this->atom("d"), this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 4001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(5001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("p", {this->atom("a")}), {}, 0),
+        rule(this->functor("p", {this->atom("b")}), {}, 0),
+    });
+    modules.emplace_back(5002, std::vector<pud_module_id>{5001}, std::vector<rule>{
+        rule(this->functor("r", {this->var(0)}), {this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("r", {this->atom("c")}), {}, 0),
+    });
+    modules.emplace_back(5003, std::vector<pud_module_id>{5002}, std::vector<rule>{
+        rule(this->functor("q", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("p", {this->var(0)})}, 1),
+        rule(this->functor("only_c", {this->var(0)}), {this->functor("r", {this->var(0)}), this->functor("s", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 5001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(6001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6002, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("even", {this->atom("z")}), {}, 0),
+        rule(this->functor("even", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("even", {this->var(0)})}, 1),
+    });
+    const expr* peano_1 = this->functor("s", {this->atom("z")});
+    modules.emplace_back(6003, std::vector<pud_module_id>{6001}, std::vector<rule>{
+        rule(this->functor("odd", {peano_1}), {}, 0),
+        rule(this->functor("odd", {this->functor("s", {this->functor("s", {this->var(0)})})}), {this->functor("odd", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(6004, std::vector<pud_module_id>{6002, 6003}, std::vector<rule>{
+        rule(this->functor("even_nat", {this->var(0)}), {this->functor("even", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("odd_nat", {this->var(0)}), {this->functor("odd", {this->var(0)}), this->functor("nat", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 6001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(7001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("a", {this->atom("one")}), {}, 0),
+        rule(this->functor("a", {this->atom("two")}), {}, 0),
+        rule(this->functor("b", {this->atom("two")}), {}, 0),
+        rule(this->functor("d", {this->atom("one")}), {}, 0),
+        rule(this->functor("c", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("b", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+        rule(this->functor("e", {this->var(0)}), {this->functor("c", {this->var(0)})}, 1),
+        rule(this->atom("f"), {this->atom("missing")}, 0),
+        rule(this->functor("g", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("missing", {this->var(0)})}, 1),
+        rule(this->functor("h", {this->var(0)}), {this->functor("a", {this->var(0)}), this->functor("d", {this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 7001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(8001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("base", {this->atom("c")}), {}, 0),
+        rule(this->functor("check", {this->atom("a")}), {}, 0),
+        rule(this->functor("mid", {this->var(0)}), {this->functor("base", {this->var(0)}), this->functor("check", {this->var(0)})}, 1),
+    });
+    modules.emplace_back(8002, std::vector<pud_module_id>{8001}, std::vector<rule>{
+        rule(this->atom("top"), {this->functor("mid", {this->atom("c")})}, 0),
+        rule(this->atom("other"), {this->functor("check", {this->atom("a")})}, 0),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 8001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9001, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+        rule(this->functor("mul", {this->atom("z"), this->var(0), this->atom("z")}), {}, 1),
+        rule(
+            this->functor("mul", {this->functor("s", {this->var(0)}), this->var(1), this->var(2)}),
+            {this->functor("mul", {this->var(0), this->var(1), this->var(3)}), this->functor("add", {this->var(3), this->var(1), this->var(2)})},
+            4),
+    });
+    const expr* peano_6 = this->atom("z");
+    for (uint32_t step = 0; step < 6; ++step)
+        peano_6 = this->functor("s", {peano_6});
+    const expr* peano_3 = this->functor("s", {this->functor("s", {this->functor("s", {this->atom("z")})})});
+    const expr* peano_9 = this->atom("z");
+    for (uint32_t step = 0; step < 9; ++step)
+        peano_9 = this->functor("s", {peano_9});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9002, std::vector<pud_module_id>{9001}, std::vector<rule>{
+        rule(this->functor("factor", {this->var(0), this->var(1)}), {this->functor("mul", {this->var(0), this->var(1), peano_6})}, 2),
+        rule(this->functor("triple", {this->var(0)}), {this->functor("mul", {peano_3, this->var(0), peano_9})}, 1),
+        rule(
+            this->functor("add_mul", {this->var(0), this->var(1), this->var(2)}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)}), this->functor("mul", {this->var(0), peano_2, this->var(3)})},
+            4),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9001;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9101, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mem", {this->var(0), this->functor("cons", {this->var(0), this->var(1)})}), {}, 2),
+        rule(
+            this->functor("mem", {this->var(0), this->functor("cons", {this->var(1), this->var(2)})}),
+            {this->functor("mem", {this->var(0), this->var(2)})},
+            3),
+    });
+    const expr* list_xyz = this->atom("nil");
+    list_xyz = this->functor("cons", {this->atom("z"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("y"), list_xyz});
+    list_xyz = this->functor("cons", {this->atom("x"), list_xyz});
+    const expr* list_abcd = this->atom("nil");
+    list_abcd = this->functor("cons", {this->atom("d"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("c"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("b"), list_abcd});
+    list_abcd = this->functor("cons", {this->atom("a"), list_abcd});
+    const expr* list_bcd = this->functor("cons", {this->atom("b"), this->functor("cons", {this->atom("c"), this->functor("cons", {this->atom("d"), this->atom("nil")})})});
+    modules.emplace_back(9102, std::vector<pud_module_id>{9101}, std::vector<rule>{
+        rule(
+            this->functor("every", {this->var(0)}),
+            {this->functor("mem", {this->var(0), list_xyz})},
+            1),
+        rule(
+            this->functor("pair_mem", {this->var(0), this->var(1)}),
+            {
+                this->functor("mem", {this->var(0), list_abcd}),
+                this->functor("mem", {this->var(1), list_bcd}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9101;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    const expr* sample =
+        this->functor("branch", {this->functor("leaf", {this->atom("l")}), this->functor("branch", {this->functor("leaf", {this->atom("m")}), this->functor("leaf", {this->atom("r")})})});
+    modules.emplace_back(9201, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("mirror", {this->functor("leaf", {this->var(0)}), this->functor("leaf", {this->var(0)})}), {}, 1),
+        rule(
+            this->functor("mirror", {this->functor("branch", {this->var(0), this->var(1)}), this->functor("branch", {this->var(2), this->var(3)})}),
+            {this->functor("mirror", {this->var(0), this->var(3)}), this->functor("mirror", {this->var(1), this->var(2)})},
+            4),
+    });
+    modules.emplace_back(9202, std::vector<pud_module_id>{9201}, std::vector<rule>{
+        rule(this->functor("flip", {this->var(0)}), {this->functor("mirror", {sample, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9201;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    const expr* nested_s8 = this->atom("z");
+    for (uint32_t level = 0; level < 8; ++level)
+        nested_s8 = this->functor("s", {nested_s8});
+    const expr* nested_s3 = this->atom("z");
+    for (uint32_t level = 0; level < 3; ++level)
+        nested_s3 = this->functor("s", {nested_s3});
+    const expr* nested_s2 = this->functor("s", {this->functor("s", {nested_s3})});
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9301, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(
+            this->functor("deep_nat", {nested_s8}),
+            {this->functor("nat", {nested_s8})},
+            0),
+        rule(
+            this->functor("shallow", {this->var(0)}),
+            {this->functor("nat", {this->var(0)}), this->functor("add", {this->var(0), peano_2, nested_s2})},
+            1),
+        rule(this->functor("add", {this->atom("z"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("add", {this->functor("s", {this->var(0)}), this->var(1), this->functor("s", {this->var(2)})}),
+            {this->functor("add", {this->var(0), this->var(1), this->var(2)})},
+            3),
+    });
+    const expr* nested_s5 = this->atom("z");
+    for (uint32_t level = 0; level < 5; ++level)
+        nested_s5 = this->functor("s", {nested_s5});
+    modules.emplace_back(9302, std::vector<pud_module_id>{9301}, std::vector<rule>{
+        rule(
+            this->functor("reach", {this->var(0)}),
+            {this->functor("nat", {nested_s5}), this->functor("add", {this->var(0), this->functor("s", {this->atom("z")}), nested_s5})},
+            1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9301;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    modules.emplace_back(9401, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("app", {this->atom("nil"), this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("app", {this->functor("cons", {this->var(0), this->var(1)}), this->var(2), this->functor("cons", {this->var(0), this->var(3)})}),
+            {this->functor("app", {this->var(1), this->var(2), this->var(3)})},
+            4),
+    });
+    const expr* list_abc = this->atom("nil");
+    list_abc = this->functor("cons", {this->atom("c"), list_abc});
+    list_abc = this->functor("cons", {this->atom("b"), list_abc});
+    list_abc = this->functor("cons", {this->atom("a"), list_abc});
+    const expr* list_de = this->functor("cons", {this->atom("d"), this->functor("cons", {this->atom("e"), this->atom("nil")})});
+    const expr* list_pq = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->atom("nil")})});
+    const expr* list_r = this->functor("cons", {this->atom("r"), this->atom("nil")});
+    const expr* list_pqr = this->functor("cons", {this->atom("p"), this->functor("cons", {this->atom("q"), this->functor("cons", {this->atom("r"), this->atom("nil")})})});
+    modules.emplace_back(9402, std::vector<pud_module_id>{9401}, std::vector<rule>{
+        rule(
+            this->atom("triple_split"),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_abc}),
+                this->functor("app", {this->var(1), this->var(2), list_de}),
+                this->functor("app", {this->var(0), this->var(2), this->var(3)}),
+            },
+            4),
+        rule(
+            this->functor("nested_app", {this->var(0)}),
+            {
+                this->functor("app", {this->var(0), this->var(1), list_pq}),
+                this->functor("app", {this->var(1), list_r, list_pqr}),
+            },
+            2),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9401;
+            return;
+        }
+    }
+
+}
+
+TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFromAnyPoint) {
+    for (uint32_t seed = 0; seed < 5 && !this->HasFailure(); ++seed) {
+        std::mt19937 rng(100 + seed);
+    std::deque<pud_module> modules;
+    const expr* shared = this->atom("v");
+    for (int level = 0; level < 4; ++level)
+        shared = this->functor("pair", {shared, shared});
+    modules.emplace_back(9501, std::vector<pud_module_id>{}, std::vector<rule>{
+        rule(this->functor("nat", {this->atom("z")}), {}, 0),
+        rule(this->functor("nat", {this->functor("s", {this->var(0)})}), {this->functor("nat", {this->var(0)})}, 1),
+        rule(this->functor("unpack", {shared, this->var(0)}), {this->functor("same", {this->var(0), shared})}, 1),
+        rule(this->functor("same", {this->var(0), this->var(0)}), {}, 1),
+        rule(
+            this->functor("both", {this->var(0), this->var(1)}),
+            {this->functor("same", {this->var(0), this->var(1)}), this->functor("nat", {this->var(0)})},
+            2),
+    });
+    const expr* peano_2 = this->functor("s", {this->functor("s", {this->atom("z")})});
+    modules.emplace_back(9502, std::vector<pud_module_id>{9501}, std::vector<rule>{
+        rule(this->functor("grounded", {this->var(0)}), {this->functor("unpack", {shared, this->var(0)})}, 1),
+        rule(this->functor("nat_query", {this->var(0)}), {this->functor("both", {peano_2, this->var(0)})}, 1),
+    });
+    TypeParam runtime(this->exprs);
+    std::set<pud_global_node_id> live;
+    for (pud_module& module : modules) {
+        const pud_frontier_change change = runtime.register_module(module);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    size_t taken = 0;
+    for (; taken < rng() % 25; ++taken) {
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change change = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
+    }
+    std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
+    TypeParam reloaded_runtime(this->exprs);
+    std::set<pud_global_node_id> reloaded_live;
+    std::vector<pud_global_node_id> refuted_on_reload;
+    for (pud_module& copy : reloaded_modules) {
+        const pud_frontier_change change = reloaded_runtime.register_module(copy);
+        refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
+        reloaded_live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            reloaded_live.erase(refuted);
+    }
+    EXPECT_EQ(reloaded_live, live);
+    EXPECT_EQ(reloaded_live, reference_pud_frontier(reloaded_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(reloaded_modules), IsEmpty());
+    EXPECT_THAT(refuted_on_reload, IsEmpty());
+    EXPECT_THAT(reference_pud_module_differences(modules, reloaded_modules), IsEmpty());
+    std::deque<pud_module>& resumed_modules = reloaded_modules;
+    TypeParam& resumed_runtime = reloaded_runtime;
+    std::set<pud_global_node_id>& resumed_live = reloaded_live;
+    size_t lockstep_taken = 0;
+    while (lockstep_taken < 20 && !this->HasFailure()) {
+        EXPECT_EQ(resumed_live, live);
+        std::vector<pud_global_node_id> unfoldable;
+        for (pud_global_node_id leaf : live) {
+            const std::optional<pud_module_id> only = std::nullopt;
+            if (only.has_value() && leaf.module != only.value())
+                continue;
+            const pud_module* leaf_module = nullptr;
+            for (const pud_module& module : modules) {
+                if (module.get_module_id() == leaf.module)
+                    leaf_module = &module;
+            }
+            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                continue;
+            unfoldable.push_back(leaf);
+        }
+        if (unfoldable.empty())
+            break;
+        const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
+        const pud_module* leaf_module = nullptr;
+        for (const pud_module& module : modules) {
+            if (module.get_module_id() == leaf.module)
+                leaf_module = &module;
+        }
+        std::vector<pud_body_goal_id> goal_ids;
+        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            goal_ids.push_back(goal_id);
+        std::sort(goal_ids.begin(), goal_ids.end());
+        const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
+        const pud_frontier_change expected = runtime.unfold(leaf, goal);
+        live.erase(leaf);
+        live.insert(expected.offspring.begin(), expected.offspring.end());
+        for (pud_global_node_id refuted : expected.refuted)
+            live.erase(refuted);
+        const pud_frontier_change actual = resumed_runtime.unfold(leaf, goal);
+        resumed_live.erase(leaf);
+        resumed_live.insert(actual.offspring.begin(), actual.offspring.end());
+        for (pud_global_node_id refuted : actual.refuted)
+            resumed_live.erase(refuted);
+        EXPECT_EQ(actual.offspring, expected.offspring)
+            << "unfolding (" << leaf.module << ", " << leaf.node << ") on " << goal;
+        EXPECT_THAT(actual.refuted, UnorderedElementsAreArray(expected.refuted));
+        ++lockstep_taken;
+    }
+    EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
+    EXPECT_EQ(live, reference_pud_frontier(modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
+    EXPECT_EQ(resumed_live, reference_pud_frontier(resumed_modules));
+    EXPECT_THAT(reference_pud_stranded_nodes(resumed_modules), IsEmpty());
+
+        if (this->HasFailure()) {
+            ADD_FAILURE() << "seed " << seed << ", program of module " << 9501;
+            return;
+        }
+    }
+
+}
+

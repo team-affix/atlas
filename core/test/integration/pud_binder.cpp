@@ -36,114 +36,294 @@ struct PudBinderIntegrationTest : public ::testing::Test {
     void SetUp() override {
         modules.register_module(data);
     }
-
-    pud_global_node_id infer(std::vector<pud_substitution> substitutions) {
-        return modules.store_inference(k_module, pud_inference{
-            .parent = 0,
-            .call_site = 0,
-            .substitutions = std::move(substitutions),
-            .body_goals = {},
-            .var_count = 0,
-        });
-    }
-
-    const expr* resolve(const pud_ubs_state& bindings, uint32_t var_index) {
-        const ubs_class var_class = ubs_bind_map{bindings}.find(var_index);
-        if (var_class.value.has_value())
-            return var_class.value->skeleton;
-        return exprs.make_var(var_class.rep);
-    }
 };
 
 TEST_F(PudBinderIntegrationTest, RootHasNoBindings) {
-    EXPECT_EQ(resolve(pud_ubs_state{}, 0), var(0));
-    EXPECT_EQ(resolve(pud_ubs_state{}, 3), var(3));
+    const ubs_class class_zero = ubs_bind_map{pud_ubs_state{}}.find(0);
+    const expr* resolved_zero = class_zero.value.has_value() ? class_zero.value->skeleton : exprs.make_var(class_zero.rep);
+    EXPECT_EQ(resolved_zero, var(0));
+    const ubs_class class_three = ubs_bind_map{pud_ubs_state{}}.find(3);
+    const expr* resolved_three = class_three.value.has_value() ? class_three.value->skeleton : exprs.make_var(class_three.rep);
+    EXPECT_EQ(resolved_three, var(3));
 }
 
 TEST_F(PudBinderIntegrationTest, FunctorSpecInstantiates) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
-    EXPECT_EQ(resolve(binder.bind(pud_ubs_state{}, child), 0), functor("a", {}));
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_ubs_state bound = binder.bind(pud_ubs_state{}, child);
+    const ubs_class var_class = ubs_bind_map{bound}.find(0);
+    if (var_class.value.has_value())
+        EXPECT_EQ(var_class.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class.rep), functor("a", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, VarSpecEquates) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_child = binder.bind(pud_ubs_state{}, child);
-    EXPECT_EQ(resolve(at_child, 0), var(0));
-    EXPECT_EQ(resolve(at_child, 1), var(0));
+    const ubs_class var_class_zero = ubs_bind_map{at_child}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, var(0));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), var(0));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, var(0));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), var(0));
 }
 
 TEST_F(PudBinderIntegrationTest, MultiLevelChainResolves) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
-    const pud_global_node_id grandchild = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_grandchild = binder.bind(binder.bind(pud_ubs_state{}, child), grandchild);
-    EXPECT_EQ(resolve(at_grandchild, 0), functor("a", {}));
-    EXPECT_EQ(resolve(at_grandchild, 1), functor("a", {}));
+    const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, ParentUnchangedByChild) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state root_bindings = pud_ubs_state{};
     binder.bind(root_bindings, child);
-    EXPECT_EQ(resolve(root_bindings, 0), var(0));
+    const ubs_class var_class = ubs_bind_map{root_bindings}.find(0);
+    if (var_class.value.has_value())
+        EXPECT_EQ(var_class.value->skeleton, var(0));
+    else
+        EXPECT_EQ(exprs.make_var(var_class.rep), var(0));
 }
 
 TEST_F(PudBinderIntegrationTest, SiblingsDescendIndependently) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
-    const pud_global_node_id sibling = infer({pud_substitution{.var_idx = 0, .value = functor("b", {})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id sibling = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("b", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state root_bindings = pud_ubs_state{};
-    EXPECT_EQ(resolve(binder.bind(root_bindings, child), 0), functor("a", {}));
-    EXPECT_EQ(resolve(binder.bind(root_bindings, sibling), 0), functor("b", {}));
+    const pud_ubs_state at_child = binder.bind(root_bindings, child);
+    const pud_ubs_state at_sibling = binder.bind(root_bindings, sibling);
+    const ubs_class child_class = ubs_bind_map{at_child}.find(0);
+    const ubs_class sibling_class = ubs_bind_map{at_sibling}.find(0);
+    if (child_class.value.has_value())
+        EXPECT_EQ(child_class.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(child_class.rep), functor("a", {}));
+    if (sibling_class.value.has_value())
+        EXPECT_EQ(sibling_class.value->skeleton, functor("b", {}));
+    else
+        EXPECT_EQ(exprs.make_var(sibling_class.rep), functor("b", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, SeveralSpecsAtOneNodeApplyInOrder) {
-    const pud_global_node_id child = infer({
-        pud_substitution{.var_idx = 1, .value = var(0)},
-        pud_substitution{.var_idx = 0, .value = functor("a", {})},
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {
+            pud_substitution{.var_idx = 1, .value = var(0)},
+            pud_substitution{.var_idx = 0, .value = functor("a", {})},
+        },
+        .body_goals = {},
+        .var_count = 0,
     });
     pud_ubs_state at_child = binder.bind(pud_ubs_state{}, child);
-    EXPECT_EQ(resolve(at_child, 0), functor("a", {}));
-    EXPECT_EQ(resolve(at_child, 1), functor("a", {}));
+    const ubs_class var_class_zero = ubs_bind_map{at_child}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, InstantiationWithVarArgsLeavesTheArgsUnbound) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1), var(2)})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("f", {var(1), var(2)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_child = binder.bind(pud_ubs_state{}, child);
-    EXPECT_EQ(resolve(at_child, 0), functor("f", {var(1), var(2)}));
-    EXPECT_EQ(resolve(at_child, 1), var(1));
-    EXPECT_EQ(resolve(at_child, 2), var(2));
+    const ubs_class var_class_zero = ubs_bind_map{at_child}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
+    const ubs_class var_class_two = ubs_bind_map{at_child}.find(2);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("f", {var(1), var(2)}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("f", {var(1), var(2)}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
+    if (var_class_two.value.has_value())
+        EXPECT_EQ(var_class_two.value->skeleton, var(2));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_two.rep), var(2));
 }
 
 TEST_F(PudBinderIntegrationTest, BindingAnArgLaterIsSeenThroughTheFunctor) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}});
-    const pud_global_node_id grandchild = infer({pud_substitution{.var_idx = 1, .value = functor("b", {})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("f", {var(1)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = functor("b", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_grandchild = binder.bind(binder.bind(pud_ubs_state{}, child), grandchild);
-    EXPECT_EQ(resolve(at_grandchild, 0), functor("f", {var(1)}));
-    EXPECT_EQ(resolve(at_grandchild, 1), functor("b", {}));
+    const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("f", {var(1)}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("f", {var(1)}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, functor("b", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("b", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, EquatedClassKeepsTheSmallestIndexAsRepresentative) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 5, .value = var(3)}});
-    const pud_global_node_id grandchild = infer({pud_substitution{.var_idx = 3, .value = var(1)}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 5, .value = var(3)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_grandchild = binder.bind(binder.bind(pud_ubs_state{}, child), grandchild);
-    EXPECT_EQ(resolve(at_grandchild, 5), var(1));
-    EXPECT_EQ(resolve(at_grandchild, 3), var(1));
-    EXPECT_EQ(resolve(at_grandchild, 1), var(1));
+    const ubs_class var_class_five = ubs_bind_map{at_grandchild}.find(5);
+    const ubs_class var_class_three = ubs_bind_map{at_grandchild}.find(3);
+    const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
+    if (var_class_five.value.has_value())
+        EXPECT_EQ(var_class_five.value->skeleton, var(1));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_five.rep), var(1));
+    if (var_class_three.value.has_value())
+        EXPECT_EQ(var_class_three.value->skeleton, var(1));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_three.rep), var(1));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
 }
 
 TEST_F(PudBinderIntegrationTest, InstantiatingThroughANonRepresentativeBindsTheWholeClass) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 1, .value = var(0)}});
-    const pud_global_node_id grandchild = infer({pud_substitution{.var_idx = 1, .value = functor("a", {})}});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_grandchild = binder.bind(binder.bind(pud_ubs_state{}, child), grandchild);
-    EXPECT_EQ(resolve(at_grandchild, 0), functor("a", {}));
-    EXPECT_EQ(resolve(at_grandchild, 1), functor("a", {}));
+    const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
 
 TEST_F(PudBinderIntegrationTest, NodeWithNoSpecsKeepsTheParentsBindings) {
-    const pud_global_node_id child = infer({pud_substitution{.var_idx = 0, .value = functor("a", {})}});
-    const pud_global_node_id grandchild = infer({});
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = 0,
+        .substitutions = {},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_grandchild = binder.bind(binder.bind(pud_ubs_state{}, child), grandchild);
-    EXPECT_EQ(resolve(at_grandchild, 0), functor("a", {}));
-    EXPECT_EQ(resolve(at_grandchild, 1), var(1));
+    const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
+    const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
+    if (var_class_zero.value.has_value())
+        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
+    if (var_class_one.value.has_value())
+        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+    else
+        EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
 }
 
 TEST_F(PudBinderIntegrationTest, ManySpecsAtOneNode) {
@@ -153,26 +333,64 @@ TEST_F(PudBinderIntegrationTest, ManySpecsAtOneNode) {
         const std::string label = "v" + std::to_string(index);
         substitutions.push_back(pud_substitution{.var_idx = index, .value = functor(label.c_str(), {})});
     }
-    const pud_global_node_id child = infer(std::move(substitutions));
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = std::move(substitutions),
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_child = binder.bind(pud_ubs_state{}, child);
     for (uint32_t index = 0; index < substitution_count; ++index) {
         const std::string label = "v" + std::to_string(index);
-        EXPECT_EQ(resolve(at_child, index), functor(label.c_str(), {}));
+        const ubs_class var_class = ubs_bind_map{at_child}.find(index);
+        if (var_class.value.has_value())
+            EXPECT_EQ(var_class.value->skeleton, functor(label.c_str(), {}));
+        else
+            EXPECT_EQ(exprs.make_var(var_class.rep), functor(label.c_str(), {}));
     }
 }
 
 TEST_F(PudBinderIntegrationTest, DeepEquateChainThenOneInstantiation) {
     const uint32_t depth = 200;
     pud_ubs_state at = pud_ubs_state{};
+    pud_global_node_id prior_node = pud_global_node_id{.module = k_module, .node = 0};
     for (uint32_t level = 1; level <= depth; ++level) {
-        const pud_global_node_id level_node = infer({pud_substitution{.var_idx = level, .value = var(level - 1)}});
+        const pud_global_node_id level_node = modules.store_inference(k_module, pud_inference{
+            .parent = prior_node.node,
+            .call_site = 0,
+            .substitutions = {pud_substitution{.var_idx = level, .value = var(level - 1)}},
+            .body_goals = {},
+            .var_count = 0,
+        });
         at = binder.bind(at, level_node);
+        prior_node = level_node;
     }
-    for (uint32_t index = 0; index <= depth; ++index)
-        EXPECT_EQ(resolve(at, index), var(0)) << "var " << index;
-    const pud_global_node_id bottom = infer({pud_substitution{.var_idx = depth, .value = functor("a", {})}});
+    for (uint32_t index = 0; index <= depth; ++index) {
+        const ubs_class var_class = ubs_bind_map{at}.find(index);
+        if (var_class.value.has_value())
+            EXPECT_EQ(var_class.value->skeleton, var(0)) << "var " << index;
+        else
+            EXPECT_EQ(exprs.make_var(var_class.rep), var(0)) << "var " << index;
+    }
+    const pud_global_node_id bottom = modules.store_inference(k_module, pud_inference{
+        .parent = prior_node.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = depth, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     pud_ubs_state at_bottom = binder.bind(at, bottom);
-    for (uint32_t index = 0; index <= depth; ++index)
-        EXPECT_EQ(resolve(at_bottom, index), functor("a", {})) << "var " << index;
-    EXPECT_EQ(resolve(at, depth), var(0));
+    for (uint32_t index = 0; index <= depth; ++index) {
+        const ubs_class var_class = ubs_bind_map{at_bottom}.find(index);
+        if (var_class.value.has_value())
+            EXPECT_EQ(var_class.value->skeleton, functor("a", {})) << "var " << index;
+        else
+            EXPECT_EQ(exprs.make_var(var_class.rep), functor("a", {})) << "var " << index;
+    }
+    const ubs_class depth_class = ubs_bind_map{at}.find(depth);
+    if (depth_class.value.has_value())
+        EXPECT_EQ(depth_class.value->skeleton, var(0));
+    else
+        EXPECT_EQ(exprs.make_var(depth_class.rep), var(0));
 }

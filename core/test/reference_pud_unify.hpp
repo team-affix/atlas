@@ -44,21 +44,21 @@ inline bool reference_pud_unify_terms(
         return true;
 
     if (lhs_var && rhs_var) {
-        stack.equate(lhs_var->index, rhs_var->index);
+        stack.bind_map.equate(stack.bind_map.find(lhs_var->index), stack.bind_map.find(rhs_var->index));
         return true;
     }
     if (lhs_var) {
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        stack.instantiate(lhs_var->index, framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(lhs_var->index), framed_expr{value, 0u});
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        stack.instantiate(rhs_var->index, framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(rhs_var->index), framed_expr{value, 0u});
         return true;
     }
 
@@ -69,8 +69,8 @@ inline bool reference_pud_unify_terms(
     for (size_t arg_index = 0; arg_index < lf.args.size(); ++arg_index) {
         if (!reference_pud_unify_terms(
                 stack,
-                pud_fe(lf.args[arg_index], lhs.frame_offset),
-                pud_fe(rf.args[arg_index], rhs.frame_offset)))
+                framed_expr{lf.args[arg_index], lhs.frame_offset},
+                framed_expr{rf.args[arg_index], rhs.frame_offset}))
             return false;
     }
     return true;

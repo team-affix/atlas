@@ -94,10 +94,6 @@ struct PudChildActivatorTest : public ::testing::Test {
     pud_active_state parent_state;
     pud_inference child_inference{.parent = 3, .call_site = 0, .substitutions = {}, .body_goals = {&goal_c}, .var_count = 2};
 
-    pud_structure_watch_change changing(std::vector<pud_body_goal_id> changed_goals) {
-        return pud_structure_watch_change{.watch = child_watch, .changed_goals = std::move(changed_goals)};
-    }
-
     void SetUp() override {
         parent_watch.goal_to_reps = parent_watch.goal_to_reps.set(1, {});
         child_watch.goal_to_reps = child_watch.goal_to_reps.set(2, {});
@@ -109,7 +105,8 @@ struct PudChildActivatorTest : public ::testing::Test {
         ON_CALL(get_goals, get(pud_test_node(3))).WillByDefault(ReturnRef(parent_goals));
         ON_CALL(find_goal, find(pud_test_node(4), 1)).WillByDefault(Return(&goal_b));
         ON_CALL(binder, bind(_, pud_test_node(4))).WillByDefault(Return(child_bindings));
-        ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({})));
+        ON_CALL(watcher, descend(_, _, _, _, _))
+            .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {}}));
         ON_CALL(opener, try_open(k_test_module, _, &goal_c, 7)).WillByDefault(Return(70));
         ON_CALL(forker, try_fork(41, _, &goal_b, 7)).WillByDefault(Return(60));
         ON_CALL(exhausted, check_exhausted(_)).WillByDefault(Return(false));
@@ -129,7 +126,8 @@ TEST_F(PudChildActivatorTest, AChildCountsAsOneMoreLiveChildOfItsParent) {
 }
 
 TEST_F(PudChildActivatorTest, AChildsGoalsAreStoredBeforeAnyOfItsQueriesIsForkedOrOpened) {
-    ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({1})));
+    ON_CALL(watcher, descend(_, _, _, _, _))
+        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     InSequence in_order;
     EXPECT_CALL(store_goals, store(pud_test_node(4), child_goals));
     EXPECT_CALL(forker, try_fork(_, _, _, _));
@@ -154,7 +152,8 @@ TEST_F(PudChildActivatorTest, AChildsLvcIsItsParentsPlusItsOwnVariables) {
 }
 
 TEST_F(PudChildActivatorTest, AGoalThatChangedStructureForksTheParentsQueryInTheChildsEnvironment) {
-    ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({1})));
+    ON_CALL(watcher, descend(_, _, _, _, _))
+        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     EXPECT_CALL(forker, try_fork(41, child_bindings, &goal_b, 7u)).WillOnce(Return(60));
     EXPECT_CALL(holders, hold(60u, pud_test_node(4), 1u));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
@@ -164,7 +163,8 @@ TEST_F(PudChildActivatorTest, AGoalThatChangedStructureForksTheParentsQueryInThe
 }
 
 TEST_F(PudChildActivatorTest, AForkWithoutCandidatesDropsTheQueryAndRefutesTheChild) {
-    ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({1})));
+    ON_CALL(watcher, descend(_, _, _, _, _))
+        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     ON_CALL(forker, try_fork(_, _, _, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
     EXPECT_CALL(store_states, store(pud_test_node(4), pud_active_state{
@@ -187,7 +187,8 @@ TEST_F(PudChildActivatorTest, AnInheritedQueryAlreadyExhaustedRefutesTheChildBut
 
 TEST_F(PudChildActivatorTest, AChangedGoalItsParentHoldsNoQueryForIsOpenedInTheChildsEnvironment) {
     parent_state.queries = queries_t{}.set(0, 40);
-    ON_CALL(watcher, descend(_, _, _, _, _)).WillByDefault(Return(changing({1})));
+    ON_CALL(watcher, descend(_, _, _, _, _))
+        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     EXPECT_CALL(forker, try_fork(_, _, _, _)).Times(0);
     EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_b, 7u)).WillOnce(Return(std::nullopt));
     EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_c, 7u)).WillOnce(Return(70));

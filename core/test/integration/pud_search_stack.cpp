@@ -15,6 +15,7 @@
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
+#include "value_objects/rule.hpp"
 
 // Replayer, witness searches, candidate searches and queries over the real modules. Each test builds
 // its modules' axioms up front, registers them, then stores the inferences below them.
@@ -49,223 +50,384 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
         return exprs.make_functor(functors.id(name), std::move(args));
     }
     const expr* atom(const char* name) { return functor(name, {}); }
-
-    // Registers a module whose axioms are facts with these heads, in order: axiom i is local node i.
-    void make_module(pud_module_id module, std::vector<pud_module_id> dependencies, std::vector<const expr*> heads) {
-        std::vector<rule> axioms;
-        for (const expr* head : heads)
-            axioms.push_back(rule(head, {}, 0));
-        module_data.emplace_back(module, std::move(dependencies), std::move(axioms));
-        modules.register_module(module_data.back());
-    }
-
-    pud_global_node_id node(pud_module_id module, pud_node_id local) {
-        return pud_global_node_id{.module = module, .node = local};
-    }
-
-    pud_global_node_id leaf(pud_global_node_id parent, std::vector<pud_substitution> added) {
-        return modules.store_inference(parent.module, pud_inference{
-            .parent = parent.node,
-            .call_site = 0,
-            .substitutions = std::move(added),
-            .body_goals = {},
-            .var_count = 0,
-        });
-    }
-
-    std::vector<pud_global_node_id> roots_of(pud_mhq_head_id query) {
-        std::vector<pud_global_node_id> roots;
-        for (pud_mhcs_head_id candidate : mhq.candidates(query))
-            roots.push_back(mhcs.path(candidate).front());
-        return roots;
-    }
-
-    std::vector<std::vector<pud_global_node_id>> paths_of(pud_mhq_head_id query) {
-        std::vector<std::vector<pud_global_node_id>> paths;
-        for (pud_mhcs_head_id candidate : mhq.candidates(query))
-            paths.push_back(mhcs.path(candidate));
-        return paths;
-    }
-
-    pud_ubs_state replay_path(
-        const pud_ubs_state& caller_state,
-        const expr* goal,
-        uint32_t frame_offset,
-        const std::vector<pud_global_node_id>& path) {
-        pud_replay replay = replayer.enter(caller_state, goal, frame_offset, path.front()).value();
-        for (size_t step = 1; step < path.size(); ++step)
-            replay = replayer.descend(replay, path.at(step)).value();
-        return replay.ubs_state;
-    }
-
-    const expr* resolve(const pud_ubs_state& state, uint32_t index) {
-        ubs_bind_map bind_map{state};
-        return terms.make_normalizer(bind_map).normalize(framed_expr{var(index), 0});
-    }
 };
 
 TEST_F(PudSearchStackIntegrationTest, OnlyAxiomsWhoseHeadsResolveTheGoalBecomeCandidates) {
-    make_module(k_module, {}, {
-        functor("color", {atom("red")}),
-        functor("color", {atom("blue")}),
-        functor("warm", {atom("red")}),
-    });
-    const pud_global_node_id red = node(k_module, 0);
-    const pud_global_node_id blue = node(k_module, 1);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+            rule(functor("warm", {atom("red")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(red, blue));
+    std::vector<pud_global_node_id> roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(roots, ::testing::ElementsAre(red, blue));
 }
 
 TEST_F(PudSearchStackIntegrationTest, AxiomsOfAModuleTheQueryDoesNotDependOnAreNeverCandidates) {
-    make_module(k_module, {}, {functor("color", {atom("red")})});
-    make_module(k_other_module, {}, {functor("color", {atom("blue")})});
-    const pud_global_node_id red = node(k_module, 0);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("red")}), {}, 0)});
+    modules.register_module(module_data.back());
+    module_data.emplace_back(
+        k_other_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("blue")}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_module, .node = 0};
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(red));
+    std::vector<pud_global_node_id> roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(roots, ::testing::ElementsAre(red));
 }
 
 TEST_F(PudSearchStackIntegrationTest, DependencysAxiomsAreCandidatesBeforeTheModulesOwn) {
-    make_module(k_other_module, {}, {functor("color", {atom("red")})});
-    make_module(k_module, {k_other_module}, {functor("color", {atom("blue")})});
-    const pud_global_node_id red = node(k_other_module, 0);
-    const pud_global_node_id blue = node(k_module, 0);
+    module_data.emplace_back(
+        k_other_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("red")}), {}, 0)});
+    modules.register_module(module_data.back());
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{k_other_module},
+        std::vector<rule>{rule(functor("color", {atom("blue")}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_other_module, .node = 0};
+    const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 0};
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(red, blue));
+    std::vector<pud_global_node_id> roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(roots, ::testing::ElementsAre(red, blue));
 }
 
 TEST_F(PudSearchStackIntegrationTest, ModulesWithOverlappingNodeIdsNeverMix) {
-    make_module(k_module, {}, {functor("color", {var(0)})});
-    make_module(k_other_module, {}, {functor("color", {var(0)})});
-    const pud_global_node_id root = node(k_module, 0);
-    const pud_global_node_id other_root = node(k_other_module, 0);
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_global_node_id blue = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
-    const pud_global_node_id other_blue = leaf(other_root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    module_data.emplace_back(
+        k_other_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id root = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id other_root = pud_global_node_id{.module = k_other_module, .node = 0};
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("red")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id blue = modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id other_blue = modules.store_inference(other_root.module, pud_inference{
+        .parent = other_root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     ASSERT_EQ(root.node, other_root.node);
     const expr* goal = functor("color", {atom("blue")});
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 1);
     const std::optional<pud_mhq_head_id> other_query = mhq.try_open(k_other_module, empty_state, goal, 1);
     ASSERT_TRUE(query.has_value());
     ASSERT_TRUE(other_query.has_value());
-    EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
-    EXPECT_THAT(paths_of(other_query.value()), ::testing::ElementsAre(::testing::ElementsAre(other_root, other_blue)));
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
+    std::vector<std::vector<pud_global_node_id>> other_paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(other_query.value()))
+        other_paths.push_back(mhcs.path(candidate));
+    EXPECT_THAT(paths, ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
+    EXPECT_THAT(other_paths, ::testing::ElementsAre(::testing::ElementsAre(other_root, other_blue)));
 }
 
 TEST_F(PudSearchStackIntegrationTest, EachCandidatePathReplaysItsResolution) {
-    make_module(k_module, {}, {functor("color", {atom("red")}), functor("color", {atom("blue")})});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
     const expr* goal = functor("color", {var(0)});
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 1);
     ASSERT_TRUE(query.has_value());
-    const std::vector<std::vector<pud_global_node_id>> paths = paths_of(query.value());
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
     ASSERT_EQ(paths.size(), 2u);
-    EXPECT_EQ(resolve(replay_path(empty_state, goal, 1, paths.at(0)), 0), atom("red"));
-    EXPECT_EQ(resolve(replay_path(empty_state, goal, 1, paths.at(1)), 0), atom("blue"));
+    pud_replay replay0 = replayer.enter(empty_state, goal, 1, paths.at(0).front()).value();
+    for (size_t step = 1; step < paths.at(0).size(); ++step)
+        replay0 = replayer.descend(replay0, paths.at(0).at(step)).value();
+    ubs_bind_map bind_map0{replay0.ubs_state};
+    const expr* resolved0 = terms.make_normalizer(bind_map0).normalize(framed_expr{var(0), 0});
+    EXPECT_EQ(resolved0, atom("red"));
+    pud_replay replay1 = replayer.enter(empty_state, goal, 1, paths.at(1).front()).value();
+    for (size_t step = 1; step < paths.at(1).size(); ++step)
+        replay1 = replayer.descend(replay1, paths.at(1).at(step)).value();
+    ubs_bind_map bind_map1{replay1.ubs_state};
+    const expr* resolved1 = terms.make_normalizer(bind_map1).normalize(framed_expr{var(0), 0});
+    EXPECT_EQ(resolved1, atom("blue"));
 }
 
 TEST_F(PudSearchStackIntegrationTest, CallersBindingsAreRespected) {
-    make_module(k_module, {}, {functor("color", {atom("red")}), functor("color", {atom("blue")})});
-    const pud_global_node_id blue = node(k_module, 1);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
+    const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     ubs_bind_map bind_map{empty_state};
     bind_map.instantiate(bind_map.find(0), framed_expr{atom("blue"), 0});
     const pud_ubs_state caller = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, caller, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(blue));
+    std::vector<pud_global_node_id> roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(roots, ::testing::ElementsAre(blue));
 }
 
 TEST_F(PudSearchStackIntegrationTest, RootHeadIsLiftedToTheFrameOffset) {
-    make_module(k_module, {}, {functor("nat", {functor("s", {var(0)})})});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("nat", {functor("s", {var(0)})}), {}, 0)});
+    modules.register_module(module_data.back());
     const expr* goal = functor("nat", {var(0)});
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 3);
     ASSERT_TRUE(query.has_value());
-    const std::vector<std::vector<pud_global_node_id>> paths = paths_of(query.value());
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
     ASSERT_EQ(paths.size(), 1u);
-    EXPECT_EQ(resolve(replay_path(empty_state, goal, 3, paths.at(0)), 0), functor("s", {var(3)}));
+    pud_replay replay = replayer.enter(empty_state, goal, 3, paths.at(0).front()).value();
+    for (size_t step = 1; step < paths.at(0).size(); ++step)
+        replay = replayer.descend(replay, paths.at(0).at(step)).value();
+    ubs_bind_map bind_map{replay.ubs_state};
+    const expr* resolved = terms.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
+    EXPECT_EQ(resolved, functor("s", {var(3)}));
 }
 
 TEST_F(PudSearchStackIntegrationTest, NoAxiomResolvesTheGoal) {
-    make_module(k_module, {}, {functor("color", {atom("red")})});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("red")}), {}, 0)});
+    modules.register_module(module_data.back());
     EXPECT_FALSE(mhq.try_open(k_module, empty_state, functor("warm", {var(0)}), 1).has_value());
     EXPECT_TRUE(unit_queries.empty());
 }
 
 TEST_F(PudSearchStackIntegrationTest, CallersStateIsLeftUntouched) {
-    make_module(k_module, {}, {functor("color", {atom("red")})});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("red")}), {}, 0)});
+    modules.register_module(module_data.back());
     mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
-    EXPECT_EQ(resolve(empty_state, 0), var(0));
+    ubs_bind_map bind_map{empty_state};
+    const expr* resolved = terms.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
+    EXPECT_EQ(resolved, var(0));
 }
 
 TEST_F(PudSearchStackIntegrationTest, SingleCandidateQueryIsQueuedAsUnit) {
-    make_module(k_module, {}, {functor("color", {atom("red")}), functor("warm", {atom("red")})});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("warm", {atom("red")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     EXPECT_THAT(unit_queries, ::testing::ElementsAre(query.value()));
 }
 
 TEST_F(PudSearchStackIntegrationTest, CandidateSpecializesThroughTheOnlyCompatibleChild) {
-    make_module(k_module, {}, {functor("color", {var(0)})});
-    const pud_global_node_id root = node(k_module, 0);
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_global_node_id blue = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id root = pud_global_node_id{.module = k_module, .node = 0};
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("red")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id blue = modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {atom("blue")}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
+    EXPECT_THAT(paths, ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
 }
 
 TEST_F(PudSearchStackIntegrationTest, TwoCompatibleChildrenMakeAChoicePoint) {
-    make_module(k_module, {}, {functor("color", {var(0)})});
-    const pud_global_node_id root = node(k_module, 0);
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id root = pud_global_node_id{.module = k_module, .node = 0};
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("red")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
-    EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root)));
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
+    EXPECT_THAT(paths, ::testing::ElementsAre(::testing::ElementsAre(root)));
 }
 
 TEST_F(PudSearchStackIntegrationTest, ChoicePointRejustifiesThroughAThirdWitness) {
-    make_module(k_module, {}, {functor("color", {var(0)})});
-    const pud_global_node_id root = node(k_module, 0);
-    const pud_global_node_id red = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("green")}});
-    leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id root = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id red = modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("red")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("green")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     modules.mark_refuted(red);
     EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
-    EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root)));
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
+    EXPECT_THAT(paths, ::testing::ElementsAre(::testing::ElementsAre(root)));
 }
 
 TEST_F(PudSearchStackIntegrationTest, ChoicePointLosingAWitnessSpecializesToTheSurvivor) {
-    make_module(k_module, {}, {functor("color", {var(0)})});
-    const pud_global_node_id root = node(k_module, 0);
-    const pud_global_node_id red = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("red")}});
-    const pud_global_node_id blue = leaf(root, {pud_substitution{.var_idx = 0, .value = atom("blue")}});
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {var(0)}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id root = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id red = modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("red")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_global_node_id blue = modules.store_inference(root.module, pud_inference{
+        .parent = root.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = atom("blue")}},
+        .body_goals = {},
+        .var_count = 0,
+    });
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     modules.mark_refuted(red);
     EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
-    EXPECT_THAT(paths_of(query.value()), ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
+    std::vector<std::vector<pud_global_node_id>> paths;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        paths.push_back(mhcs.path(candidate));
+    EXPECT_THAT(paths, ::testing::ElementsAre(::testing::ElementsAre(root, blue)));
 }
 
 TEST_F(PudSearchStackIntegrationTest, LosingOneOfTwoCandidatesQueuesTheQueryAsUnit) {
-    make_module(k_module, {}, {functor("color", {atom("red")}), functor("color", {atom("blue")})});
-    const pud_global_node_id red = node(k_module, 0);
-    const pud_global_node_id blue = node(k_module, 1);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     ASSERT_TRUE(unit_queries.empty());
     modules.mark_refuted(red);
     EXPECT_TRUE(mhq.invalidate_leaf(red).empty());
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(blue));
+    std::vector<pud_global_node_id> roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(roots, ::testing::ElementsAre(blue));
     EXPECT_THAT(unit_queries, ::testing::ElementsAre(query.value()));
 }
 
 TEST_F(PudSearchStackIntegrationTest, LosingTheLastCandidateRefutesTheQuery) {
-    make_module(k_module, {}, {functor("color", {atom("red")})});
-    const pud_global_node_id red = node(k_module, 0);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("color", {atom("red")}), {}, 0)});
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_module, .node = 0};
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
     modules.mark_refuted(red);
@@ -273,9 +435,16 @@ TEST_F(PudSearchStackIntegrationTest, LosingTheLastCandidateRefutesTheQuery) {
 }
 
 TEST_F(PudSearchStackIntegrationTest, ForkKeepsOnlyCandidatesCompatibleWithTheNewState) {
-    make_module(k_module, {}, {functor("color", {atom("red")}), functor("color", {atom("blue")})});
-    const pud_global_node_id red = node(k_module, 0);
-    const pud_global_node_id blue = node(k_module, 1);
+    module_data.emplace_back(
+        k_module,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+        });
+    modules.register_module(module_data.back());
+    const pud_global_node_id red = pud_global_node_id{.module = k_module, .node = 0};
+    const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     const expr* goal = functor("color", {var(0)});
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 1);
     ASSERT_TRUE(query.has_value());
@@ -284,6 +453,12 @@ TEST_F(PudSearchStackIntegrationTest, ForkKeepsOnlyCandidatesCompatibleWithTheNe
     const pud_ubs_state narrowed = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> forked = mhq.try_fork(query.value(), narrowed, goal, 1);
     ASSERT_TRUE(forked.has_value());
-    EXPECT_THAT(roots_of(forked.value()), ::testing::ElementsAre(blue));
-    EXPECT_THAT(roots_of(query.value()), ::testing::ElementsAre(red, blue));
+    std::vector<pud_global_node_id> forked_roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(forked.value()))
+        forked_roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(forked_roots, ::testing::ElementsAre(blue));
+    std::vector<pud_global_node_id> query_roots;
+    for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
+        query_roots.push_back(mhcs.path(candidate).front());
+    EXPECT_THAT(query_roots, ::testing::ElementsAre(red, blue));
 }

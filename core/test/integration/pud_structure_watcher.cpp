@@ -24,14 +24,6 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
 
     static constexpr pud_module_id k_module = 0;
 
-    struct at_node {
-        pud_ubs_state bindings;
-        pud_goal_list goals;
-        pud_structure_watch watch;
-        pud_body_goal_id call_site;
-        std::vector<pud_body_goal_id> changed_goals;
-    };
-
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
@@ -50,261 +42,766 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     void SetUp() override {
         modules.register_module(data);
     }
-
-    pud_global_node_id infer(std::vector<pud_substitution> substitutions) {
-        return modules.store_inference(k_module, pud_inference{
-            .parent = 0,
-            .call_site = 0,
-            .substitutions = std::move(substitutions),
-            .body_goals = {},
-            .var_count = 0,
-        });
-    }
-
-    pud_substitution rep_instantiated(uint32_t rep, const expr* value) {
-        return pud_substitution{.var_idx = rep, .value = value};
-    }
-
-    pud_substitution rep_updated(uint32_t demoted_rep, uint32_t surviving_rep) {
-        return pud_substitution{.var_idx = demoted_rep, .value = var(surviving_rep)};
-    }
-
-    at_node at_root(const std::vector<const expr*>& watched) {
-        pud_goal_list goals{.goals = {}, .next_id = 0};
-        for (const expr* watched_goal : watched)
-            goals = goals.adding(watched_goal);
-        goals = goals.adding(functor("go", {}));
-        return at_node{
-            .bindings = {},
-            .goals = goals,
-            .watch = watcher.watch_root(pud_ubs_state{}, goals),
-            .call_site = goals.next_id - 1,
-            .changed_goals = {},
-        };
-    }
-
-    at_node descend(const at_node& parent, pud_global_node_id node, const std::vector<const expr*>& added) {
-        pud_goal_list goals = parent.goals.closing(parent.call_site);
-        for (const expr* added_goal : added)
-            goals = goals.adding(added_goal);
-        goals = goals.adding(functor("go", {}));
-        return step(parent, node, parent.call_site, goals, goals.next_id - 1);
-    }
-
-    at_node descend_closing(
-        const at_node& parent, pud_global_node_id node, pud_body_goal_id closed, const std::vector<const expr*>& added) {
-        pud_goal_list goals = parent.goals.closing(closed);
-        for (const expr* added_goal : added)
-            goals = goals.adding(added_goal);
-        return step(parent, node, closed, goals, parent.call_site);
-    }
-
-    at_node step(
-        const at_node& parent,
-        pud_global_node_id node,
-        pud_body_goal_id closed,
-        const pud_goal_list& goals,
-        pud_body_goal_id call_site) {
-        const pud_ubs_state bindings = binder.bind(parent.bindings, node);
-        const pud_structure_watch_change change = watcher.descend(parent.watch, bindings, node, closed, goals);
-        return at_node{
-            .bindings = bindings,
-            .goals = goals,
-            .watch = change.watch,
-            .call_site = call_site,
-            .changed_goals = change.changed_goals,
-        };
-    }
-
-    std::vector<pud_body_goal_id> changes_at(const at_node& parent, pud_global_node_id node) {
-        return descend(parent, node, {}).changed_goals;
-    }
 };
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
-    const pud_global_node_id child = infer({rep_instantiated(0, functor("a", {}))});
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), ElementsAre(0u));
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothing) {
-    const pud_global_node_id child = infer({rep_instantiated(5, functor("a", {}))});
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), IsEmpty());
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 5, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingTheRep) {
-    const pud_global_node_id child = infer({rep_instantiated(0, functor("a", {}))});
-    const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(0), var(1)}), functor("h", {var(1)})});
-    EXPECT_THAT(changes_at(root, child), UnorderedElementsAre(0u, 1u));
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0)}));
+    goals = goals.adding(functor("g", {var(0), var(1)}));
+    goals = goals.adding(functor("h", {var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWatched) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("f", {var(3)}))});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
-    const at_node at_child = descend(at_root({functor("g", {var(0)})}), child, {});
-    ASSERT_THAT(at_child.changed_goals, ElementsAre(0u));
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("g", {var(0)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("f", {var(3)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, ElementsAre(0u));
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatRep) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
-    const pud_global_node_id grandchild = infer( {rep_updated(1, 5)});
-    const at_node at_child = descend(at_root({functor("f", {var(0), var(1)})}), child, {});
-    EXPECT_THAT(changes_at(at_child, grandchild), IsEmpty());
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0), var(1)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(5)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
-    const pud_global_node_id child = infer( {rep_updated(1, 0)});
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), ElementsAre(0u));
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
-    const pud_global_node_id child = infer( {rep_updated(5, 1)});
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), IsEmpty());
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 5, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
-    const pud_global_node_id child = infer( {rep_updated(4, 1)});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(1, functor("a", {}))});
-    const at_node at_child = descend(at_root({functor("f", {var(4)})}), child, {});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(4)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 4, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSurvivingRep) {
-    const pud_global_node_id child = infer( {rep_updated(1, 0)});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(0, functor("a", {}))});
-    const at_node at_child = descend(at_root({functor("f", {var(0)}), functor("g", {var(1)})}), child, {});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), UnorderedElementsAre(0u, 1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0)}));
+    root_goals = root_goals.adding(functor("g", {var(1)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
-    const pud_global_node_id child = infer( {rep_updated(2, 1)});
-    const pud_global_node_id grandchild = infer( {rep_updated(1, 0)});
-    const at_node at_child = descend(at_root({functor("f", {var(0), var(2)})}), child, {});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(0u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0), var(2)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 2, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNodesReps) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("f", {var(3)}))});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
-    const at_node at_child = descend(at_root({}), child, {functor("h", {functor("f", {var(3)})})});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("f", {var(3)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("h", {functor("f", {var(3)})}));
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep) {
-    const pud_global_node_id child = infer( {rep_updated(4, 1)});
-    const pud_global_node_id grandchild = infer( {rep_updated(1, 0)});
-    const at_node at_child = descend(at_root({}), child, {functor("h", {var(4), var(0)})});
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 4, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("h", {var(4), var(0)}));
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("f", {var(5)}))});
-    const pud_global_node_id grandchild = infer( {rep_updated(6, 5)});
-    const pud_global_node_id great_grandchild = infer( {rep_instantiated(5, functor("a", {}))});
-    const at_node at_child = descend_closing(at_root({var(0), var(1)}), child, 1, {functor("g", {var(6)})});
-    EXPECT_THAT(at_child.changed_goals, ElementsAre(0u));
-    const at_node at_grandchild = descend(at_child, grandchild, {var(5)});
-    EXPECT_THAT(at_grandchild.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_grandchild, great_grandchild), UnorderedElementsAre(0u, 3u, 4u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(var(0));
+    root_goals = root_goals.adding(var(1));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 1,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("f", {var(5)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(1);
+    child_goals = child_goals.adding(functor("g", {var(6)}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, 1, child_goals);
+    EXPECT_THAT(child_change.changed_goals, ElementsAre(0u));
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 6, .value = var(5)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(root_call_site);
+    grandchild_goals = grandchild_goals.adding(var(5));
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_body_goal_id grandchild_call_site = grandchild_goals.next_id - 1;
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, root_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, IsEmpty());
+    const pud_global_node_id great_grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = grandchild.node,
+        .call_site = grandchild_call_site,
+        .substitutions = {pud_substitution{.var_idx = 5, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list great_grandchild_goals = grandchild_goals.closing(grandchild_call_site);
+    great_grandchild_goals = great_grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state great_grandchild_bindings = binder.bind(grandchild_bindings, great_grandchild);
+    const pud_structure_watch_change great_grandchild_change = watcher.descend(
+        grandchild_change.watch, great_grandchild_bindings, great_grandchild, grandchild_call_site, great_grandchild_goals);
+    EXPECT_THAT(great_grandchild_change.changed_goals, UnorderedElementsAre(0u, 3u, 4u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
-    const pud_global_node_id child = infer( {
-        rep_updated(3, 2),
-        rep_instantiated(4, functor("a", {})),
-        rep_updated(5, 1),
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {
+            pud_substitution{.var_idx = 3, .value = var(2)},
+            pud_substitution{.var_idx = 4, .value = functor("a", {})},
+            pud_substitution{.var_idx = 5, .value = var(1)},
+        },
+        .body_goals = {},
+        .var_count = 0,
     });
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1)})}), child), IsEmpty());
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOnce) {
-    const pud_global_node_id child = infer( {rep_updated(1, 0), rep_instantiated(2, functor("a", {}))});
-    EXPECT_THAT(changes_at(at_root({functor("f", {var(0), var(1), var(2)})}), child), ElementsAre(0u));
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1), var(2)}));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {
+            pud_substitution{.var_idx = 1, .value = var(0)},
+            pud_substitution{.var_idx = 2, .value = functor("a", {})},
+        },
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodesReps) {
-    const pud_global_node_id child = infer( {rep_updated(3, 1)});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(0, functor("g", {var(1)}))});
-    const pud_global_node_id great_grandchild = infer( {rep_instantiated(1, functor("a", {}))});
-    const at_node at_child = descend(at_root({functor("f", {var(0), var(1)})}), child, {});
-    const at_node at_grandchild = descend(at_child, grandchild, {});
-    ASSERT_THAT(at_grandchild.changed_goals, ElementsAre(0u));
-    EXPECT_THAT(changes_at(at_grandchild, great_grandchild), ElementsAre(0u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0), var(1)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = var(1)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("g", {var(1)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_body_goal_id grandchild_call_site = grandchild_goals.next_id - 1;
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    ASSERT_THAT(grandchild_change.changed_goals, ElementsAre(0u));
+    const pud_global_node_id great_grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = grandchild.node,
+        .call_site = grandchild_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list great_grandchild_goals = grandchild_goals.closing(grandchild_call_site);
+    great_grandchild_goals = great_grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state great_grandchild_bindings = binder.bind(grandchild_bindings, great_grandchild);
+    const pud_structure_watch_change great_grandchild_change = watcher.descend(
+        grandchild_change.watch, great_grandchild_bindings, great_grandchild, grandchild_call_site, great_grandchild_goals);
+    EXPECT_THAT(great_grandchild_change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
-    const pud_global_node_id sibling = infer( {rep_instantiated(1, functor("a", {}))});
-    const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(1)})});
-    EXPECT_THAT(changes_at(root, child), ElementsAre(0u));
-    EXPECT_THAT(changes_at(root, sibling), ElementsAre(1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0)}));
+    root_goals = root_goals.adding(functor("g", {var(1)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_probe_goals = root_goals.closing(root_call_site);
+    child_probe_goals = child_probe_goals.adding(functor("go", {}));
+    const pud_ubs_state child_probe_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_probe_change =
+        watcher.descend(root_watch, child_probe_bindings, child, root_call_site, child_probe_goals);
+    EXPECT_THAT(child_probe_change.changed_goals, ElementsAre(0u));
+    const pud_global_node_id sibling = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list sibling_goals = root_goals.closing(root_call_site);
+    sibling_goals = sibling_goals.adding(functor("go", {}));
+    const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
+    const pud_structure_watch_change sibling_change =
+        watcher.descend(root_watch, sibling_bindings, sibling, root_call_site, sibling_goals);
+    EXPECT_THAT(sibling_change.changed_goals, ElementsAre(1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOther) {
-    const pud_global_node_id child = infer( {rep_updated(1, 0)});
-    const pud_global_node_id sibling = infer( {rep_instantiated(5, functor("a", {}))});
-    const pud_global_node_id grandchild = infer( {rep_updated(1, 0)});
-    const at_node root = at_root({functor("f", {var(0), var(1)})});
-    ASSERT_THAT(changes_at(root, child), ElementsAre(0u));
-    const at_node at_sibling = descend(root, sibling, {});
-    EXPECT_THAT(at_sibling.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_sibling, grandchild), ElementsAre(0u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0), var(1)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_probe_goals = root_goals.closing(root_call_site);
+    child_probe_goals = child_probe_goals.adding(functor("go", {}));
+    const pud_ubs_state child_probe_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_probe_change =
+        watcher.descend(root_watch, child_probe_bindings, child, root_call_site, child_probe_goals);
+    ASSERT_THAT(child_probe_change.changed_goals, ElementsAre(0u));
+    const pud_global_node_id sibling = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 5, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list sibling_goals = root_goals.closing(root_call_site);
+    sibling_goals = sibling_goals.adding(functor("go", {}));
+    const pud_body_goal_id sibling_call_site = sibling_goals.next_id - 1;
+    const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
+    const pud_structure_watch_change sibling_change =
+        watcher.descend(root_watch, sibling_bindings, sibling, root_call_site, sibling_goals);
+    EXPECT_THAT(sibling_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = sibling.node,
+        .call_site = sibling_call_site,
+        .substitutions = {pud_substitution{.var_idx = 1, .value = var(0)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = sibling_goals.closing(sibling_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(sibling_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(sibling_change.watch, grandchild_bindings, grandchild, sibling_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrder) {
-    const pud_global_node_id child = infer( {
-        rep_instantiated(2, functor("a", {})),
-        rep_updated(1, 0),
-        rep_instantiated(3, functor("b", {})),
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(1)}));
+    goals = goals.adding(var(2));
+    goals = goals.adding(var(3));
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {
+            pud_substitution{.var_idx = 2, .value = functor("a", {})},
+            pud_substitution{.var_idx = 1, .value = var(0)},
+            pud_substitution{.var_idx = 3, .value = functor("b", {})},
+        },
+        .body_goals = {},
+        .var_count = 0,
     });
-    const at_node root = at_root({functor("f", {var(0), var(1)}), var(2), var(3)});
-    EXPECT_THAT(changes_at(root, child), ElementsAre(1u, 0u, 2u));
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, ElementsAre(1u, 0u, 2u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSeparately) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
     const expr* first = functor("f", {var(0)});
     const expr* second = functor("f", {var(0)});
     ASSERT_EQ(first, second);
-    EXPECT_THAT(changes_at(at_root({first, second}), child), UnorderedElementsAre(0u, 1u));
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(first);
+    goals = goals.adding(second);
+    goals = goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    EXPECT_THAT(change.changed_goals, UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) {
     const uint32_t chain_length = 200;
-    at_node at = at_root({functor("f", {var(0), var(chain_length)})});
+    pud_goal_list goals{.goals = {}, .next_id = 0};
+    goals = goals.adding(functor("f", {var(0), var(chain_length)}));
+    goals = goals.adding(functor("go", {}));
+    pud_body_goal_id call_site = goals.next_id - 1;
+    pud_ubs_state bindings = pud_ubs_state{};
+    pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, goals);
+    std::vector<pud_body_goal_id> changed_goals;
+    pud_global_node_id tree_node{.module = k_module, .node = 0};
     for (uint32_t step_index = 0; step_index < chain_length; ++step_index) {
         const uint32_t demoted = chain_length - step_index;
-        const pud_global_node_id level_node = infer({rep_updated(demoted, demoted - 1)});
-        at = descend(at, level_node, {});
+        const pud_body_goal_id closed = call_site;
+        const pud_global_node_id level_node = modules.store_inference(k_module, pud_inference{
+            .parent = tree_node.node,
+            .call_site = closed,
+            .substitutions = {pud_substitution{.var_idx = demoted, .value = var(demoted - 1)}},
+            .body_goals = {},
+            .var_count = 0,
+        });
+        pud_goal_list step_goals = goals.closing(closed);
+        step_goals = step_goals.adding(functor("go", {}));
+        call_site = step_goals.next_id - 1;
+        bindings = binder.bind(bindings, level_node);
+        const pud_structure_watch_change change = watcher.descend(watch, bindings, level_node, closed, step_goals);
+        watch = change.watch;
+        goals = step_goals;
+        changed_goals = change.changed_goals;
+        tree_node = level_node;
         const bool last_step = step_index + 1 == chain_length;
-        EXPECT_EQ(at.changed_goals.size(), last_step ? 1u : 0u) << "step " << step_index;
+        EXPECT_EQ(changed_goals.size(), last_step ? 1u : 0u) << "step " << step_index;
     }
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsReplacementIs) {
-    const pud_global_node_id child = infer( {rep_updated(4, 2)});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(2, functor("a", {}))});
-    const at_node at_child = descend_closing(at_root({functor("f", {var(4)})}), child, 0, {functor("f", {var(2)})});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(2u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(4)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 4, .value = var(2)}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(0);
+    child_goals = child_goals.adding(functor("f", {var(2)}));
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, 0, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 2, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(root_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, root_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(2u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOther) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("a", {}))});
-    const pud_global_node_id sibling = infer( {rep_instantiated(0, functor("a", {}))});
-    const at_node root = at_root({functor("f", {var(0)}), functor("g", {var(0)})});
-    EXPECT_THAT(descend_closing(root, child, 0, {}).changed_goals, ElementsAre(1u));
-    EXPECT_THAT(changes_at(root, sibling), UnorderedElementsAre(0u, 1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("f", {var(0)}));
+    root_goals = root_goals.adding(functor("g", {var(0)}));
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id mid = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list mid_goals = root_goals.closing(root_call_site);
+    mid_goals = mid_goals.adding(functor("go", {}));
+    const pud_ubs_state mid_bindings = binder.bind(pud_ubs_state{}, mid);
+    const pud_structure_watch_change mid_change =
+        watcher.descend(root_watch, mid_bindings, mid, root_call_site, mid_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = mid.node,
+        .call_site = 0,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    const pud_goal_list child_closing_goals = mid_goals.closing(0);
+    const pud_ubs_state child_closing_bindings = binder.bind(mid_bindings, child);
+    const pud_structure_watch_change child_closing_change =
+        watcher.descend(mid_change.watch, child_closing_bindings, child, 0, child_closing_goals);
+    EXPECT_THAT(child_closing_change.changed_goals, ElementsAre(1u));
+    const pud_global_node_id sibling = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list sibling_goals = root_goals.closing(root_call_site);
+    sibling_goals = sibling_goals.adding(functor("go", {}));
+    const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
+    const pud_structure_watch_change sibling_change =
+        watcher.descend(root_watch, sibling_bindings, sibling, root_call_site, sibling_goals);
+    EXPECT_THAT(sibling_change.changed_goals, UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThroughItsValue) {
-    const pud_global_node_id child = infer( {rep_instantiated(0, functor("s", {var(3)}))});
-    const pud_global_node_id grandchild = infer( {rep_instantiated(3, functor("a", {}))});
-    const at_node at_child = descend(at_root({}), child, {functor("g", {var(0)})});
-    ASSERT_THAT(at_child.changed_goals, IsEmpty());
-    EXPECT_THAT(changes_at(at_child, grandchild), ElementsAre(1u));
+    pud_goal_list root_goals{.goals = {}, .next_id = 0};
+    root_goals = root_goals.adding(functor("go", {}));
+    const pud_body_goal_id root_call_site = root_goals.next_id - 1;
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
+        .parent = 0,
+        .call_site = root_call_site,
+        .substitutions = {pud_substitution{.var_idx = 0, .value = functor("s", {var(3)})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list child_goals = root_goals.closing(root_call_site);
+    child_goals = child_goals.adding(functor("g", {var(0)}));
+    child_goals = child_goals.adding(functor("go", {}));
+    const pud_body_goal_id child_call_site = child_goals.next_id - 1;
+    const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
+    const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
+    ASSERT_THAT(child_change.changed_goals, IsEmpty());
+    const pud_global_node_id grandchild = modules.store_inference(k_module, pud_inference{
+        .parent = child.node,
+        .call_site = child_call_site,
+        .substitutions = {pud_substitution{.var_idx = 3, .value = functor("a", {})}},
+        .body_goals = {},
+        .var_count = 0,
+    });
+    pud_goal_list grandchild_goals = child_goals.closing(child_call_site);
+    grandchild_goals = grandchild_goals.adding(functor("go", {}));
+    const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
+    const pud_structure_watch_change grandchild_change =
+        watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
+    EXPECT_THAT(grandchild_change.changed_goals, ElementsAre(1u));
 }

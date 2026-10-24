@@ -4,7 +4,12 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "pud_frontier_test_fixture.hpp"
+#include "functor_fixture.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_runtime.hpp"
+#include "value_objects/pud_frontier_change.hpp"
+#include "value_objects/rule.hpp"
 
 using ::testing::Contains;
 using ::testing::ElementsAre;
@@ -14,164 +19,257 @@ using ::testing::IsEmpty;
 // reaching the queries of every module that depends on it. Registering modules that were already
 // worked on puts the same frontier back without re-deriving any refutation.
 struct PudRuntimeIntegrationTest : public ::testing::Test {
-    pud_frontier_test_fixture h;
-    std::set<pud_global_node_id> live;
-    std::deque<pud_module> reloaded;
-    pud_runtime<pud_module, expr_pool> reloaded_runtime{h.exprs};
+    expr_pool exprs;
+    test_functors functors;
+    std::deque<pud_module> modules;
+    pud_runtime<pud_module, expr_pool> runtime{exprs};
 
-    void track(const pud_frontier_change& change) {
-        live.insert(change.offspring.begin(), change.offspring.end());
-        for (pud_global_node_id refuted : change.refuted)
-            live.erase(refuted);
+    const expr* var(uint32_t index) { return exprs.make_var(index); }
+
+    const expr* atom(const std::string& name) {
+        return exprs.make_functor(functors.id(name), {});
     }
 
-    pud_frontier_change register_module() {
-        const pud_frontier_change change = h.register_module();
-        track(change);
-        return change;
-    }
-
-    pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal) {
-        const pud_frontier_change change = h.unfold(leaf, goal);
-        live.erase(leaf);
-        track(change);
-        return change;
-    }
-
-    std::set<pud_global_node_id> reload_everything(std::vector<pud_global_node_id>& refuted_on_reload) {
-        std::set<pud_global_node_id> reloaded_frontier;
-        for (const pud_module& data : h.registered) {
-            const pud_frontier_change change = reloaded_runtime.register_module(reloaded.emplace_back(data));
-            reloaded_frontier.insert(change.offspring.begin(), change.offspring.end());
-            refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
-        }
-        return reloaded_frontier;
-    }
-
-    const pud_module& reloaded_data_of(pud_module_id module) const {
-        for (const pud_module& data : reloaded) {
-            if (data.get_module_id() == module)
-                return data;
-        }
-        throw std::out_of_range("module not reloaded");
+    const expr* functor(const std::string& name, std::vector<const expr*> args) {
+        return exprs.make_functor(functors.id(name), args);
     }
 };
 
 TEST_F(PudRuntimeIntegrationTest, RegisteringAModuleBeforeItsDependencyFails) {
-    h.depend_on(99);
-    h.axiom(h.atom("q"), {}, 0);
-    EXPECT_THROW(h.register_module(), std::logic_error);
+    pud_module& mod = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{99},
+        std::vector<rule>{rule(atom("q"), {}, 0)});
+    EXPECT_THROW(runtime.register_module(mod), std::logic_error);
 }
 
 TEST_F(PudRuntimeIntegrationTest, NodesWithTheSameLocalIdInTwoModulesStayApart) {
-    const pud_global_node_id fact = h.axiom(h.functor("p", {h.atom("a")}), {}, 0);
-    h.register_module();
-    h.depend_on(fact.module);
-    const pud_global_node_id query = h.axiom(h.functor("q", {h.var(0)}), {h.functor("p", {h.var(0)})}, 1);
-    h.register_module();
+    const pud_global_node_id fact = pud_global_node_id{.module = 1, .node = 0};
+    pud_module& base = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    runtime.register_module(base);
+    const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
+    pud_module& dependent = modules.emplace_back(
+        2,
+        std::vector<pud_module_id>{fact.module},
+        std::vector<rule>{rule(functor("q", {var(0)}), {functor("p", {var(0)})}, 1)});
+    runtime.register_module(dependent);
     ASSERT_EQ(fact.node, query.node);
-    const pud_frontier_change change = h.unfold(query, 0);
-    EXPECT_EQ(h.children_of(query), change.offspring);
-    EXPECT_THAT(h.children_of(fact), IsEmpty());
-    EXPECT_TRUE(h.data_of(fact.module).check_leaf(fact.node));
-    EXPECT_FALSE(h.refuted(fact));
+    const pud_frontier_change change = runtime.unfold(query, 0);
+    std::vector<pud_global_node_id> query_children;
+    for (pud_node_id child : dependent.get_children(query.node))
+        query_children.push_back(pud_global_node_id{.module = query.module, .node = child});
+    EXPECT_EQ(query_children, change.offspring);
+    EXPECT_THAT(base.get_children(fact.node), IsEmpty());
+    EXPECT_TRUE(base.check_leaf(fact.node));
+    EXPECT_FALSE(base.check_refuted(fact.node));
 }
 
 TEST_F(PudRuntimeIntegrationTest, UnfoldingADependencysLeafKeepsADependentsQueryResolvable) {
-    h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_global_node_id step =
-        h.axiom(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
-    h.register_module();
-    h.depend_on(step.module);
-    const pud_global_node_id query =
-        h.axiom(h.atom("q"), {h.functor("nat", {h.functor("s", {h.functor("s", {h.atom("z")})})})}, 0);
-    h.register_module();
-    h.unfold(step, 0);
-    EXPECT_FALSE(h.refuted(query));
-    const pud_frontier_change change = h.unfold(query, 0);
+    const pud_global_node_id step = pud_global_node_id{.module = 1, .node = 1};
+    pud_module& nat = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("nat", {atom("z")}), {}, 0),
+            rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
+        });
+    runtime.register_module(nat);
+    const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
+    pud_module& dependent = modules.emplace_back(
+        2,
+        std::vector<pud_module_id>{step.module},
+        std::vector<rule>{
+            rule(atom("q"), {functor("nat", {functor("s", {functor("s", {atom("z")})})})}, 0)});
+    runtime.register_module(dependent);
+    runtime.unfold(step, 0);
+    EXPECT_FALSE(dependent.check_refuted(query.node));
+    const pud_frontier_change change = runtime.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
     EXPECT_EQ(change.offspring.front().module, query.module);
-    EXPECT_EQ(h.unfold(change.offspring.front(), 1).offspring.size(), 1u);
+    EXPECT_EQ(runtime.unfold(change.offspring.front(), 1).offspring.size(), 1u);
 }
 
 TEST_F(PudRuntimeIntegrationTest, ARefutationInADependencyRefutesTheDependentsLeavesThatNeededIt) {
-    h.axiom(h.functor("base", {h.atom("c")}), {}, 0);
-    h.axiom(h.functor("check", {h.atom("a")}), {}, 0);
-    const pud_global_node_id mid =
-        h.axiom(h.functor("mid", {h.var(0)}), {h.functor("base", {h.var(0)}), h.functor("check", {h.var(0)})}, 1);
-    h.register_module();
-    h.depend_on(mid.module);
-    const pud_global_node_id top = h.axiom(h.atom("top"), {h.functor("mid", {h.atom("c")})}, 0);
-    const pud_global_node_id other = h.axiom(h.atom("other"), {h.functor("check", {h.atom("a")})}, 0);
-    h.register_module();
-    const pud_frontier_change change = h.unfold(mid, 0);
+    const pud_global_node_id mid = pud_global_node_id{.module = 1, .node = 2};
+    pud_module& base_mod = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("base", {atom("c")}), {}, 0),
+            rule(functor("check", {atom("a")}), {}, 0),
+            rule(functor("mid", {var(0)}), {functor("base", {var(0)}), functor("check", {var(0)})}, 1),
+        });
+    runtime.register_module(base_mod);
+    const pud_global_node_id top = pud_global_node_id{.module = 2, .node = 0};
+    const pud_global_node_id other = pud_global_node_id{.module = 2, .node = 1};
+    pud_module& dependent = modules.emplace_back(
+        2,
+        std::vector<pud_module_id>{mid.module},
+        std::vector<rule>{
+            rule(atom("top"), {functor("mid", {atom("c")})}, 0),
+            rule(atom("other"), {functor("check", {atom("a")})}, 0),
+        });
+    runtime.register_module(dependent);
+    const pud_frontier_change change = runtime.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
-    EXPECT_TRUE(h.refuted(mid));
-    EXPECT_TRUE(h.refuted(top));
-    EXPECT_FALSE(h.refuted(other));
+    EXPECT_TRUE(base_mod.check_refuted(mid.node));
+    EXPECT_TRUE(dependent.check_refuted(top.node));
+    EXPECT_FALSE(dependent.check_refuted(other.node));
 }
 
 TEST_F(PudRuntimeIntegrationTest, ReloadedModulesPutBackTheSameFrontierWithoutRederivingRefutations) {
-    h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_global_node_id step =
-        h.axiom(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
-    h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
-    h.axiom(h.functor("color", {h.atom("blue")}), {}, 0);
-    h.axiom(h.functor("warm", {h.atom("red")}), {}, 0);
-    register_module();
-    h.depend_on(step.module);
-    const pud_global_node_id warm_color =
-        h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
-    const pud_global_node_id green = h.axiom(h.atom("g"), {h.functor("color", {h.atom("green")})}, 0);
-    const pud_global_node_id number = h.axiom(h.functor("n", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
-    EXPECT_THAT(register_module().refuted, ElementsAre(green));
-    unfold(step, 0);
-    const pud_frontier_change colors = unfold(warm_color, 0);
+    const pud_global_node_id step = pud_global_node_id{.module = 1, .node = 1};
+    pud_module& nat_colors = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("nat", {atom("z")}), {}, 0),
+            rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(functor("color", {atom("blue")}), {}, 0),
+            rule(functor("warm", {atom("red")}), {}, 0),
+        });
+    std::set<pud_global_node_id> live;
+    pud_frontier_change first_register = runtime.register_module(nat_colors);
+    live.insert(first_register.offspring.begin(), first_register.offspring.end());
+    for (pud_global_node_id refuted : first_register.refuted)
+        live.erase(refuted);
+
+    const pud_global_node_id warm_color = pud_global_node_id{.module = 2, .node = 0};
+    const pud_global_node_id green = pud_global_node_id{.module = 2, .node = 1};
+    const pud_global_node_id number = pud_global_node_id{.module = 2, .node = 2};
+    pud_module& mixed = modules.emplace_back(
+        2,
+        std::vector<pud_module_id>{step.module},
+        std::vector<rule>{
+            rule(functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1),
+            rule(atom("g"), {functor("color", {atom("green")})}, 0),
+            rule(functor("n", {var(0)}), {functor("nat", {var(0)})}, 1),
+        });
+    pud_frontier_change second_register = runtime.register_module(mixed);
+    live.insert(second_register.offspring.begin(), second_register.offspring.end());
+    for (pud_global_node_id refuted : second_register.refuted)
+        live.erase(refuted);
+    EXPECT_THAT(second_register.refuted, ElementsAre(green));
+
+    live.erase(step);
+    pud_frontier_change step_unfold = runtime.unfold(step, 0);
+    live.insert(step_unfold.offspring.begin(), step_unfold.offspring.end());
+    for (pud_global_node_id refuted : step_unfold.refuted)
+        live.erase(refuted);
+
+    live.erase(warm_color);
+    const pud_frontier_change colors = runtime.unfold(warm_color, 0);
+    live.insert(colors.offspring.begin(), colors.offspring.end());
+    for (pud_global_node_id refuted : colors.refuted)
+        live.erase(refuted);
     ASSERT_EQ(colors.offspring.size(), 1u);
     ASSERT_EQ(colors.refuted.size(), 1u);
-    const pud_frontier_change numbers = unfold(number, 0);
+
+    live.erase(number);
+    const pud_frontier_change numbers = runtime.unfold(number, 0);
+    live.insert(numbers.offspring.begin(), numbers.offspring.end());
+    for (pud_global_node_id refuted : numbers.refuted)
+        live.erase(refuted);
     ASSERT_EQ(numbers.offspring.size(), 2u);
 
+    std::deque<pud_module> reloaded;
+    pud_runtime<pud_module, expr_pool> reloaded_runtime{exprs};
     std::vector<pud_global_node_id> refuted_on_reload;
-    EXPECT_EQ(reload_everything(refuted_on_reload), live);
+    std::set<pud_global_node_id> reloaded_frontier;
+    for (const pud_module& data : modules) {
+        const pud_frontier_change reload_change = reloaded_runtime.register_module(reloaded.emplace_back(data));
+        reloaded_frontier.insert(reload_change.offspring.begin(), reload_change.offspring.end());
+        refuted_on_reload.insert(refuted_on_reload.end(), reload_change.refuted.begin(), reload_change.refuted.end());
+    }
+    EXPECT_EQ(reloaded_frontier, live);
     EXPECT_THAT(refuted_on_reload, IsEmpty());
 
     const pud_global_node_id red = colors.offspring.front();
-    const pud_frontier_change original = h.unfold(red, 1);
+    const pud_frontier_change original = runtime.unfold(red, 1);
     EXPECT_EQ(reloaded_runtime.unfold(red, 1), original);
-    for (pud_node_id child : h.data_of(red.module).get_children(red.node))
-        EXPECT_EQ(reloaded_data_of(red.module).get_inference(child), h.data_of(red.module).get_inference(child));
+    const pud_module& reloaded_mixed = reloaded.at(1);
+    for (pud_node_id child : mixed.get_children(red.node))
+        EXPECT_EQ(reloaded_mixed.get_inference(child), mixed.get_inference(child));
 }
 
 TEST_F(PudRuntimeIntegrationTest, AReloadedTreeKeepsUnfoldingTheWayTheOriginalDoes) {
-    h.axiom(h.functor("nat", {h.atom("z")}), {}, 0);
-    const pud_global_node_id step =
-        h.axiom(h.functor("nat", {h.functor("s", {h.var(0)})}), {h.functor("nat", {h.var(0)})}, 1);
-    register_module();
-    h.depend_on(step.module);
-    const pud_global_node_id number = h.axiom(h.functor("n", {h.var(0)}), {h.functor("nat", {h.var(0)})}, 1);
-    register_module();
+    const pud_global_node_id step = pud_global_node_id{.module = 1, .node = 1};
+    pud_module& nat = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("nat", {atom("z")}), {}, 0),
+            rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
+        });
+    std::set<pud_global_node_id> live;
+    pud_frontier_change first_register = runtime.register_module(nat);
+    live.insert(first_register.offspring.begin(), first_register.offspring.end());
+    for (pud_global_node_id refuted : first_register.refuted)
+        live.erase(refuted);
+
+    const pud_global_node_id number = pud_global_node_id{.module = 2, .node = 0};
+    pud_module& dependent = modules.emplace_back(
+        2,
+        std::vector<pud_module_id>{step.module},
+        std::vector<rule>{rule(functor("n", {var(0)}), {functor("nat", {var(0)})}, 1)});
+    pud_frontier_change second_register = runtime.register_module(dependent);
+    live.insert(second_register.offspring.begin(), second_register.offspring.end());
+    for (pud_global_node_id refuted : second_register.refuted)
+        live.erase(refuted);
+
     pud_global_node_id deepest = number;
     pud_body_goal_id goal = 0;
     for (int step_index = 0; step_index < 4; ++step_index) {
-        const pud_frontier_change change = unfold(deepest, goal);
+        live.erase(deepest);
+        const pud_frontier_change change = runtime.unfold(deepest, goal);
+        live.insert(change.offspring.begin(), change.offspring.end());
+        for (pud_global_node_id refuted : change.refuted)
+            live.erase(refuted);
         ASSERT_EQ(change.offspring.size(), 2u) << "unfold " << step_index;
         deepest = change.offspring.back();
         ++goal;
     }
+    std::deque<pud_module> reloaded;
+    pud_runtime<pud_module, expr_pool> reloaded_runtime{exprs};
     std::vector<pud_global_node_id> refuted_on_reload;
-    EXPECT_EQ(reload_everything(refuted_on_reload), live);
-    const pud_frontier_change original = h.unfold(deepest, goal);
+    std::set<pud_global_node_id> reloaded_frontier;
+    for (const pud_module& data : modules) {
+        const pud_frontier_change reload_change = reloaded_runtime.register_module(reloaded.emplace_back(data));
+        reloaded_frontier.insert(reload_change.offspring.begin(), reload_change.offspring.end());
+        refuted_on_reload.insert(refuted_on_reload.end(), reload_change.refuted.begin(), reload_change.refuted.end());
+    }
+    EXPECT_EQ(reloaded_frontier, live);
+    const pud_frontier_change original = runtime.unfold(deepest, goal);
     EXPECT_EQ(reloaded_runtime.unfold(deepest, goal), original);
 }
 
 TEST_F(PudRuntimeIntegrationTest, AReloadedRefutedNodeIsNeverActivatedAgain) {
-    h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
-    const pud_global_node_id doomed = h.axiom(h.atom("d"), {h.functor("color", {h.atom("green")})}, 0);
-    const pud_global_node_id fine = h.axiom(h.atom("f"), {h.functor("color", {h.atom("red")})}, 0);
-    EXPECT_THAT(register_module().refuted, ElementsAre(doomed));
+    const pud_global_node_id doomed = pud_global_node_id{.module = 1, .node = 1};
+    const pud_global_node_id fine = pud_global_node_id{.module = 1, .node = 2};
+    pud_module& colors = modules.emplace_back(
+        1,
+        std::vector<pud_module_id>{},
+        std::vector<rule>{
+            rule(functor("color", {atom("red")}), {}, 0),
+            rule(atom("d"), {functor("color", {atom("green")})}, 0),
+            rule(atom("f"), {functor("color", {atom("red")})}, 0),
+        });
+    const pud_frontier_change registered = runtime.register_module(colors);
+    EXPECT_THAT(registered.refuted, ElementsAre(doomed));
+
+    std::deque<pud_module> reloaded;
+    pud_runtime<pud_module, expr_pool> reloaded_runtime{exprs};
     std::vector<pud_global_node_id> refuted_on_reload;
-    const std::set<pud_global_node_id> reloaded_frontier = reload_everything(refuted_on_reload);
+    std::set<pud_global_node_id> reloaded_frontier;
+    for (const pud_module& data : modules) {
+        const pud_frontier_change reload_change = reloaded_runtime.register_module(reloaded.emplace_back(data));
+        reloaded_frontier.insert(reload_change.offspring.begin(), reload_change.offspring.end());
+        refuted_on_reload.insert(refuted_on_reload.end(), reload_change.refuted.begin(), reload_change.refuted.end());
+    }
     EXPECT_FALSE(reloaded_frontier.contains(doomed));
     EXPECT_TRUE(reloaded_frontier.contains(fine));
     EXPECT_THAT(refuted_on_reload, IsEmpty());
