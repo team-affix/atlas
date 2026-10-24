@@ -1,19 +1,19 @@
-#ifndef PUD_EXPANDER_HPP
-#define PUD_EXPANDER_HPP
+#ifndef PUD_UNFOLDER_HPP
+#define PUD_UNFOLDER_HPP
 
 #include <utility>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "debug_assert.hpp"
 
-// Expands a leaf on a goal: resolves it against the goal's candidates and stores a child per candidate
+// Unfolds a leaf on a goal: resolves it against the goal's candidates and stores a child per candidate
 // in the leaf's module, then hands the leaf's place on the frontier to them. Every child is activated
 // while the leaf still holds its queries, so a query the children share is never let go of in between,
 // and none is refuted before all are activated, so the leaf never runs out of live children early. The
-// leaf is deactivated last. A live leaf always has a candidate for the goal, so it never expands into
+// leaf is deactivated last. A live leaf always has a candidate for the goal, so it never unfolds into
 // no children.
 template<
     typename IResolve,
@@ -22,15 +22,15 @@ template<
     typename IRefuteLeaf,
     typename IDeactivateNode,
     typename ICheckNodeRefuted>
-struct pud_expander {
-    pud_expander(
+struct pud_unfolder {
+    pud_unfolder(
         IResolve& resolve,
         IStoreInference& store_inference,
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
         IDeactivateNode& deactivate_node,
         ICheckNodeRefuted& check_node_refuted);
-    pud_frontier_change expand(pud_global_node_id leaf, pud_body_goal_id goal);
+    pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal);
 private:
     IResolve& resolve_;
     IStoreInference& store_inference_;
@@ -40,14 +40,14 @@ private:
     ICheckNodeRefuted& check_node_refuted_;
 };
 
-#define PUD_EXPANDER_TEMPLATE                                                              \
+#define PUD_UNFOLDER_TEMPLATE                                                              \
     template<typename IResolve, typename IStoreInference, typename IActivateChild,        \
              typename IRefuteLeaf, typename IDeactivateNode, typename ICheckNodeRefuted>
-#define PUD_EXPANDER \
-    pud_expander<IResolve, IStoreInference, IActivateChild, IRefuteLeaf, IDeactivateNode, ICheckNodeRefuted>
+#define PUD_UNFOLDER \
+    pud_unfolder<IResolve, IStoreInference, IActivateChild, IRefuteLeaf, IDeactivateNode, ICheckNodeRefuted>
 
-PUD_EXPANDER_TEMPLATE
-PUD_EXPANDER::pud_expander(
+PUD_UNFOLDER_TEMPLATE
+PUD_UNFOLDER::pud_unfolder(
     IResolve& resolve,
     IStoreInference& store_inference,
     IActivateChild& activate_child,
@@ -61,11 +61,11 @@ PUD_EXPANDER::pud_expander(
     , deactivate_node_(deactivate_node)
     , check_node_refuted_(check_node_refuted) {}
 
-PUD_EXPANDER_TEMPLATE
-pud_frontier_change PUD_EXPANDER::expand(pud_global_node_id leaf, pud_body_goal_id goal) {
+PUD_UNFOLDER_TEMPLATE
+pud_frontier_change PUD_UNFOLDER::unfold(pud_global_node_id leaf, pud_body_goal_id goal) {
     std::vector<pud_global_node_id> children;
-    for (pud_node_delta& delta : resolve_.resolve(leaf, goal))
-        children.push_back(store_inference_.store_inference(leaf.module, std::move(delta)));
+    for (pud_inference& inference : resolve_.resolve(leaf, goal))
+        children.push_back(store_inference_.store_inference(leaf.module, std::move(inference)));
     DEBUG_ASSERT(!children.empty());
     std::vector<pud_global_node_id> arrived_refuted;
     for (pud_global_node_id child : children) {
@@ -90,7 +90,7 @@ pud_frontier_change PUD_EXPANDER::expand(pud_global_node_id leaf, pud_body_goal_
     return change;
 }
 
-#undef PUD_EXPANDER
-#undef PUD_EXPANDER_TEMPLATE
+#undef PUD_UNFOLDER
+#undef PUD_UNFOLDER_TEMPLATE
 
 #endif

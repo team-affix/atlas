@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -24,7 +24,7 @@ struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
 
 ubs_class singleton(uint32_t var) {
@@ -47,7 +47,7 @@ struct PudStructureWatcherTest : public ::testing::Test {
     expr k{expr::functor{4, {&x4}}};
     expr ground{expr::functor{5, {}}};
     pud_goal_list root_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&f).adding(&g).adding(&h);
-    pud_node_delta child_inference{.parent = 0, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 0};
+    pud_inference child_inference{.parent = 0, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 0};
 
     void SetUp() override {
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));

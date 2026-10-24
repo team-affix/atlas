@@ -13,8 +13,8 @@
 #include "infrastructure/id_var_printer.hpp"
 #include "infrastructure/named_functor_printer.hpp"
 #include "infrastructure/non_backtracking_var_sequencer.hpp"
-#include "infrastructure/pud_controller.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_runtime.hpp"
 #include "infrastructure/var_names.hpp"
 
 // Loads a CHC database as one PUD module, queries it with goal strings, and prints answers.
@@ -41,8 +41,8 @@ private:
     uint32_t next_functor_id_;
     expr_pool expr_pool_;
     db database_;
-    std::optional<pud_data> database_module_;
-    pud_controller<pud_data, expr_pool> controller_;
+    std::optional<pud_module> database_module_;
+    pud_runtime<pud_module, expr_pool> runtime_;
     size_t max_unfolds_;
     size_t max_answers_;
     std::optional<printer_t> printer_;

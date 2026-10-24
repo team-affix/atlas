@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_binder.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -24,7 +24,7 @@ struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
 
 ubs_class singleton(uint32_t var) {
@@ -38,7 +38,7 @@ struct PudBinderTest : public ::testing::Test {
     pud_binder<NiceMock<MockMakeBindMap>, NiceMock<MockGetInference>> binder{make_bind_map, inferences};
     expr var_one{expr::var{1}};
     expr value{expr::functor{5, {}}};
-    pud_node_delta child_inference{
+    pud_inference child_inference{
         .parent = 0,
         .call_site = 0,
         .substitutions = {pud_substitution{.var_idx = 3, .value = &var_one}, pud_substitution{.var_idx = 4, .value = &value}},

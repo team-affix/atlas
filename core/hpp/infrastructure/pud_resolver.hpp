@@ -6,8 +6,8 @@
 #include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
-#include "value_objects/pud_node_delta.hpp"
 
 // Resolves a leaf's goal against every candidate of the goal's query, in axiom order: one inference
 // per candidate.
@@ -24,7 +24,7 @@ struct pud_resolver {
         IGetQueryCandidates& get_query_candidates,
         IGetCandidatePath& get_candidate_path,
         IAcceptCandidate& accept_candidate);
-    std::vector<pud_node_delta> resolve(pud_global_node_id leaf, pud_body_goal_id goal);
+    std::vector<pud_inference> resolve(pud_global_node_id leaf, pud_body_goal_id goal);
 private:
     IGetActiveState& get_active_state_;
     IFindNodeGoal& find_node_goal_;
@@ -53,15 +53,15 @@ PUD_RESOLVER::pud_resolver(
     , accept_candidate_(accept_candidate) {}
 
 PUD_RESOLVER_TEMPLATE
-std::vector<pud_node_delta> PUD_RESOLVER::resolve(pud_global_node_id leaf, pud_body_goal_id goal) {
+std::vector<pud_inference> PUD_RESOLVER::resolve(pud_global_node_id leaf, pud_body_goal_id goal) {
     const pud_active_state& state = get_active_state_.get(leaf);
     const expr* goal_expr = find_node_goal_.find(leaf, goal);
-    std::vector<pud_node_delta> deltas;
+    std::vector<pud_inference> inferences;
     for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(state.queries.at(goal))) {
-        deltas.push_back(
+        inferences.push_back(
             accept_candidate_.accept(leaf, goal, state.bindings, state.lvc, goal_expr, get_candidate_path_.path(candidate)));
     }
-    return deltas;
+    return inferences;
 }
 
 #undef PUD_RESOLVER

@@ -5,7 +5,7 @@
 #include "functor_fixture.hpp"
 #include "pud_test_node.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_manifest.hpp"
 #include "value_objects/rule.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -18,11 +18,11 @@ using ::testing::UnorderedElementsAre;
 // axiom of its own module and its children are stored straight into that module, so a test states
 // exactly what each node adds. Every node is activated as it is made, which records its goals.
 struct PudAcceptorIntegrationTest : public ::testing::Test {
-    using manifest_t = pud_manifest<pud_data, expr_pool>;
+    using manifest_t = pud_manifest<pud_module, expr_pool>;
 
     test_functors functors;
     expr_pool exprs;
-    std::deque<pud_data> module_data;
+    std::deque<pud_module> module_data;
     manifest_t manifest{exprs};
     manifest_t::acceptor_t& acceptor = manifest.acceptor_;
     pud_ubs_state empty_state;
@@ -49,7 +49,7 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
         pud_body_goal_id parent_call_site,
         std::vector<pud_substitution> child_substitutions,
         std::vector<const expr*> goals) {
-        const pud_global_node_id inference = manifest.modules_.store_inference(parent.module, pud_node_delta{
+        const pud_global_node_id inference = manifest.modules_.store_inference(parent.module, pud_inference{
             .parent = parent.node,
             .call_site = parent_call_site,
             .substitutions = std::move(child_substitutions),
@@ -69,7 +69,7 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
 
 TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
     const pud_global_node_id fact = root(functor("color", {atom("red")}), {});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 1, functor("color", {var(0)}), {fact});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 1, functor("color", {var(0)}), {fact});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = atom("red")}));
     EXPECT_THAT(delta.body_goals, IsEmpty());
     EXPECT_EQ(delta.var_count, 0u);
@@ -77,7 +77,7 @@ TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
 
 TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitution) {
     const pud_global_node_id fact = root(functor("color", {atom("red")}), {});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 0, functor("color", {atom("red")}), {fact});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 0, functor("color", {atom("red")}), {fact});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(delta.body_goals, IsEmpty());
     EXPECT_EQ(delta.var_count, 0u);
@@ -85,7 +85,7 @@ TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitu
 
 TEST_F(PudAcceptorIntegrationTest, RuleCandidateAddsItsBodyOverFreshVariables) {
     const pud_global_node_id rule_root = root(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 1, functor("nat", {var(0)}), {rule_root});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 1, functor("nat", {var(0)}), {rule_root});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = functor("s", {var(1)})}));
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("nat", {var(1)})));
     EXPECT_EQ(delta.var_count, 1u);
@@ -95,7 +95,7 @@ TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVari
     const pud_global_node_id rule_root = root(
         functor("p", {functor("f", {var(0), var(1)})}),
         {functor("q", {var(1), var(0)})});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 5, functor("p", {var(0)}), {rule_root});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 5, functor("p", {var(0)}), {rule_root});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 0, .value = functor("f", {var(5), var(6)})}));
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("q", {var(6), var(5)})));
     EXPECT_EQ(delta.var_count, 2u);
@@ -103,7 +103,7 @@ TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVari
 
 TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedAway) {
     const pud_global_node_id rule_root = root(functor("p", {var(0)}), {functor("q", {var(0)})});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 0, functor("p", {atom("a")}), {rule_root});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 0, functor("p", {atom("a")}), {rule_root});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("q", {atom("a")})));
     EXPECT_EQ(delta.var_count, 0u);
@@ -111,21 +111,21 @@ TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedA
 
 TEST_F(PudAcceptorIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAVariableSubstitution) {
     const pud_global_node_id same = root(functor("eq", {var(0), var(0)}), {});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 2, functor("eq", {var(0), var(1)}), {same});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 2, functor("eq", {var(0), var(1)}), {same});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = var(0)}));
     EXPECT_EQ(delta.var_count, 0u);
 }
 
 TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
     const pud_global_node_id same = root(functor("eq", {var(0), var(0)}), {});
-    const pud_node_delta delta = acceptor.accept(
+    const pud_inference delta = acceptor.accept(
         caller, call_site, bound(0, atom("a")), 2, functor("eq", {var(0), var(1)}), {same});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = var(0)}));
 }
 
 TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) {
     const pud_global_node_id fact = root(functor("p", {atom("a")}), {});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 3, functor("p", {var(2)}), {fact});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 3, functor("p", {var(2)}), {fact});
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 2, .value = atom("a")}));
 }
 
@@ -133,7 +133,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
     const pud_global_node_id rule_root = root(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})});
     const pud_global_node_id deeper = child(
         rule_root, 0, {pud_substitution{.var_idx = 0, .value = functor("s", {var(1)})}}, {functor("nat", {var(1)})});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 1, functor("nat", {var(0)}), {rule_root, deeper});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 1, functor("nat", {var(0)}), {rule_root, deeper});
     EXPECT_THAT(
         delta.substitutions,
         ElementsAre(pud_substitution{.var_idx = 0, .value = functor("s", {functor("s", {var(1)})})}));
@@ -146,7 +146,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal
         functor("p", {var(0)}),
         {functor("q", {var(0)}), functor("r", {var(0)})});
     const pud_global_node_id deeper = child(rule_root, 0, {pud_substitution{.var_idx = 0, .value = atom("a")}}, {});
-    const pud_node_delta delta = acceptor.accept(caller, call_site, empty_state, 0, functor("p", {atom("a")}), {rule_root, deeper});
+    const pud_inference delta = acceptor.accept(caller, call_site, empty_state, 0, functor("p", {atom("a")}), {rule_root, deeper});
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("r", {atom("a")})));
 }
 
@@ -154,7 +154,7 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
     const pud_global_node_id rule_root = root(
         functor("p", {var(0), var(1)}),
         {functor("q", {var(1)}), functor("r", {var(1), var(0)})});
-    const pud_node_delta delta = acceptor.accept(
+    const pud_inference delta = acceptor.accept(
         caller, call_site, empty_state, 1, functor("p", {var(0), functor("g", {var(0)})}), {rule_root});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(
@@ -165,7 +165,7 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
 
 TEST_F(PudAcceptorIntegrationTest, CallerVarsAreExportedWithoutBeingLookedUp) {
     const pud_global_node_id rule = root(functor("q", {var(0)}), {functor("r", {var(0)})});
-    const pud_node_delta delta = acceptor.accept(
+    const pud_inference delta = acceptor.accept(
         caller, call_site, bound(0, functor("s", {var(1)})), 2, functor("q", {var(0)}), {rule});
     EXPECT_THAT(delta.substitutions, IsEmpty());
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("r", {var(0)})));

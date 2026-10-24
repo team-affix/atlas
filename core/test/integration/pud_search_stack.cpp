@@ -7,7 +7,7 @@
 #include "pud_test_node.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -21,7 +21,7 @@
 struct PudSearchStackIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
-    using modules_t = pud_modules<pud_data>;
+    using modules_t = pud_modules<pud_module>;
     using replayer_t = pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
     using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
     using mhcs_t =
@@ -35,7 +35,7 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    std::deque<pud_data> module_data;
+    std::deque<pud_module> module_data;
     modules_t modules;
     unit_queries_t unit_queries;
     replayer_t replayer{modules, modules, exprs, terms, terms, terms};
@@ -64,7 +64,7 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     }
 
     pud_global_node_id leaf(pud_global_node_id parent, std::vector<pud_substitution> added) {
-        return modules.store_inference(parent.module, pud_node_delta{
+        return modules.store_inference(parent.module, pud_inference{
             .parent = parent.node,
             .call_site = 0,
             .substitutions = std::move(added),

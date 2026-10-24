@@ -7,7 +7,6 @@
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_child_activator.hpp"
-#include "infrastructure/pud_expander.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
@@ -24,15 +23,16 @@
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 
-// Composition root of the controller: every infrastructure that works on the registered modules.
-// The modules and the expression pool are the caller's; every expression the controller makes goes
+// Composition root of the runtime: every infrastructure that works on the registered modules.
+// The modules and the expression pool are the caller's; every expression the runtime makes goes
 // into that pool.
-template<typename IModuleData, typename IExprPool>
+template<typename IModule, typename IExprPool>
 struct pud_manifest {
     using term_factory_t = pud_term_factory<globalizer, IExprPool, IExprPool>;
-    using modules_t = pud_modules<IModuleData>;
+    using modules_t = pud_modules<IModule>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
     using refutation_propagator_t = pud_refutation_propagator<modules_t, pud_node_live_child_counts, modules_t>;
@@ -58,8 +58,8 @@ struct pud_manifest {
         pud_node_goals, modules_t, modules_t, IExprPool, term_factory_t, term_factory_t, term_factory_t,
         term_factory_t>;
     using resolver_t = pud_resolver<pud_active_states, pud_node_goals, mhq_t, mhcs_t, acceptor_t>;
-    using expander_t =
-        pud_expander<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>;
+    using unfolder_t =
+        pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>;
     using module_activator_t = pud_module_activator<
         modules_t, modules_t, modules_t, root_activator_t, child_activator_t, leaf_refuter_t, node_deactivator_t>;
 
@@ -89,12 +89,12 @@ struct pud_manifest {
 
     acceptor_t                 acceptor_;
     resolver_t                 resolver_;
-    expander_t                 expander_;
+    unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 };
 
-template<typename IModuleData, typename IExprPool>
-pud_manifest<IModuleData, IExprPool>::pud_manifest(IExprPool& expr_pool)
+template<typename IModule, typename IExprPool>
+pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     : globalizer_()
     , term_factory_(globalizer_, expr_pool, expr_pool)
     , modules_()
@@ -118,7 +118,7 @@ pud_manifest<IModuleData, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , acceptor_(node_goals_, modules_, modules_, expr_pool, term_factory_, term_factory_, term_factory_, term_factory_)
     , resolver_(active_states_, node_goals_, mhq_, mhcs_, acceptor_)
-    , expander_(resolver_, modules_, child_activator_, leaf_refuter_, node_deactivator_, modules_)
+    , unfolder_(resolver_, modules_, child_activator_, leaf_refuter_, node_deactivator_, modules_)
     , module_activator_(
           modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_) {}
 

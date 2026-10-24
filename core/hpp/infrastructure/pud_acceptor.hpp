@@ -10,7 +10,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/ubs_class.hpp"
@@ -41,7 +41,7 @@ struct pud_acceptor {
         IMakeCycleDetector& make_cycle_detector,
         IMakeUnifier& make_unifier,
         IMakeExporter& make_exporter);
-    pud_node_delta accept(
+    pud_inference accept(
         pud_global_node_id acceptor,
         pud_body_goal_id call_site,
         const pud_ubs_state& acceptor_ubs_state,
@@ -92,7 +92,7 @@ PUD_ACCEPTOR::pud_acceptor(
     , make_exporter_(make_exporter) {}
 
 PUD_ACCEPTOR_TEMPLATE
-pud_node_delta PUD_ACCEPTOR::accept(
+pud_inference PUD_ACCEPTOR::accept(
     pud_global_node_id acceptor,
     pud_body_goal_id call_site,
     const pud_ubs_state& acceptor_ubs_state,
@@ -115,14 +115,14 @@ pud_node_delta PUD_ACCEPTOR::accept(
 
     std::unordered_map<uint32_t, uint32_t> translations;
     auto&& exporter = make_exporter_.make_exporter(accepted, acceptor_lvc, translations);
-    pud_node_delta delta{
+    pud_inference inference{
         .parent = acceptor.node, .call_site = call_site, .substitutions = {}, .body_goals = {}, .var_count = 0};
     for (uint32_t caller_rep : touched_caller_reps) {
         const ubs_class accepted_class = accepted.find(caller_rep);
         const bool unchanged = accepted_class.rep == caller_rep && !accepted_class.value.has_value();
         if (unchanged)
             continue;
-        delta.substitutions.push_back(pud_substitution{
+        inference.substitutions.push_back(pud_substitution{
             .var_idx = caller_rep,
             .value = accepted_class.rep != caller_rep
                 ? make_var_.make_var(accepted_class.rep)
@@ -130,9 +130,9 @@ pud_node_delta PUD_ACCEPTOR::accept(
         });
     }
     for (const auto& [id, callee_goal] : get_node_goals_.get(candidate_path.back()).goals)
-        delta.body_goals.push_back(exporter.export_expr(framed_expr{callee_goal, acceptor_lvc}));
-    delta.var_count = static_cast<uint32_t>(translations.size());
-    return delta;
+        inference.body_goals.push_back(exporter.export_expr(framed_expr{callee_goal, acceptor_lvc}));
+    inference.var_count = static_cast<uint32_t>(translations.size());
+    return inference;
 }
 
 // The candidate is the query's, so every unification along its path succeeds.

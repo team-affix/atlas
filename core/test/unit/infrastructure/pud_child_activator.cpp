@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_child_activator.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "pud_test_node.hpp"
@@ -24,7 +24,7 @@ struct MockStoreActiveState {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_active_state));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id));
@@ -92,7 +92,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     pud_structure_watch child_watch;
     pud_ubs_state child_bindings;
     pud_active_state parent_state;
-    pud_node_delta child_inference{.parent = 3, .call_site = 0, .substitutions = {}, .body_goals = {&goal_c}, .var_count = 2};
+    pud_inference child_inference{.parent = 3, .call_site = 0, .substitutions = {}, .body_goals = {&goal_c}, .var_count = 2};
 
     pud_structure_watch_change changing(std::vector<pud_body_goal_id> changed_goals) {
         return pud_structure_watch_change{.watch = child_watch, .changed_goals = std::move(changed_goals)};

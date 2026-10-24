@@ -11,7 +11,7 @@
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
 #include "infrastructure/pud_root_activator.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -34,7 +34,7 @@ using ::testing::UnorderedElementsAre;
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
-    using modules_t = pud_modules<pud_data>;
+    using modules_t = pud_modules<pud_module>;
     using replayer_t = pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
     using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
     using mhcs_t =
@@ -57,7 +57,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    std::deque<pud_data> module_data;
+    std::deque<pud_module> module_data;
     modules_t modules;
     pud_node_goals node_goals;
     pud_node_live_child_counts live_child_counts;
@@ -110,7 +110,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         std::vector<const expr*> body_goals,
         uint32_t var_count,
         std::vector<pud_substitution> substitutions) {
-        return modules.store_inference(parent.module, pud_node_delta{
+        return modules.store_inference(parent.module, pud_inference{
             .parent = parent.node,
             .call_site = call_site,
             .substitutions = std::move(substitutions),

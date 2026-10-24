@@ -37,7 +37,7 @@ pud_command_handler::pud_command_handler(
     , expr_pool_()
     , database_()
     , database_module_()
-    , controller_(expr_pool_)
+    , runtime_(expr_pool_)
     , max_unfolds_(max_unfolds)
     , max_answers_(max_answers)
     , printer_() {
@@ -52,7 +52,7 @@ pud_command_handler::pud_command_handler(
         next_functor_id_);
     const pud_module_id module_id = std::mt19937_64{seed}();
     database_module_.emplace(module_id, std::vector<pud_module_id>{}, list_rules(database_));
-    controller_.register_module(database_module_.value());
+    runtime_.register_module(database_module_.value());
 }
 
 void pud_command_handler::operator()() {

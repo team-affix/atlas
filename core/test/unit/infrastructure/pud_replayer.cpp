@@ -4,7 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_replayer.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_node_delta.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/rule.hpp"
 #include "pud_test_node.hpp"
 
@@ -20,7 +20,7 @@ struct MockGetAxiom {
     MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -69,7 +69,7 @@ struct PudReplayerTest : public ::testing::Test {
     expr value{expr::functor{5, {}}};
     expr other_value{expr::functor{6, {}}};
     rule axiom{&head, {}, 0};
-    pud_node_delta child_inference{
+    pud_inference child_inference{
         .parent = 8,
         .call_site = 0,
         .substitutions = {pud_substitution{.var_idx = 3, .value = &value}, pud_substitution{.var_idx = 4, .value = &other_value}},

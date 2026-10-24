@@ -43,29 +43,29 @@ TEST_F(PudFrontierChangesIntegrationTest, ARuleWithAnUnprovableGoalOpensRefuted)
     EXPECT_TRUE(h.refuted(rule));
 }
 
-TEST_F(PudFrontierChangesIntegrationTest, ExpandingReportsTheChildrenButNeverTheExpandedLeaf) {
+TEST_F(PudFrontierChangesIntegrationTest, UnfoldingReportsTheChildrenButNeverTheUnfoldedLeaf) {
     h.add_colors();
     const pud_global_node_id rule =
         h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("color", {h.var(0)})}, 1);
     h.register_module();
-    const pud_frontier_change change = h.expand(rule, 0);
+    const pud_frontier_change change = h.unfold(rule, 0);
     EXPECT_EQ(change.offspring, h.children_of(rule));
     EXPECT_THAT(change.offspring, Not(Contains(rule)));
 }
 
-TEST_F(PudFrontierChangesIntegrationTest, ExpandingTheLastGoalLeavesGoallessChildrenInOffspring) {
+TEST_F(PudFrontierChangesIntegrationTest, UnfoldingTheLastGoalLeavesGoallessChildrenInOffspring) {
     h.add_colors();
     const pud_global_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.register_module();
-    const pud_frontier_change change = h.expand(rule, 0);
+    const pud_frontier_change change = h.unfold(rule, 0);
     EXPECT_EQ(change.offspring, h.children_of(rule));
 }
 
-TEST_F(PudFrontierChangesIntegrationTest, ChildrenAreStoredInTheExpandedLeafsModule) {
+TEST_F(PudFrontierChangesIntegrationTest, ChildrenAreStoredInTheUnfoldedLeafsModule) {
     h.add_colors();
     const pud_global_node_id rule = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.register_module();
-    for (pud_global_node_id child : h.expand(rule, 0).offspring)
+    for (pud_global_node_id child : h.unfold(rule, 0).offspring)
         EXPECT_EQ(child.module, rule.module);
 }
 
@@ -74,7 +74,7 @@ TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefute
     const pud_global_node_id rule =
         h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     h.register_module();
-    const pud_frontier_change change = h.expand(rule, 0);
+    const pud_frontier_change change = h.unfold(rule, 0);
     ASSERT_EQ(h.children_of(rule).size(), 2u);
     const pud_global_node_id red = h.children_of(rule).at(0);
     const pud_global_node_id blue = h.children_of(rule).at(1);
@@ -91,7 +91,7 @@ TEST_F(PudFrontierChangesIntegrationTest, SiblingsRefutedOnArrivalThatShareAnExh
     h.axiom(h.functor("s", {h.atom("c")}), {}, 0);
     const pud_global_node_id rule = h.axiom(h.atom("p"), {h.atom("p"), h.functor("q", {h.atom("d")})}, 0);
     h.register_module();
-    const pud_frontier_change change = h.expand(rule, 1);
+    const pud_frontier_change change = h.unfold(rule, 1);
     ASSERT_EQ(h.children_of(rule).size(), 2u);
     EXPECT_THAT(change.refuted, UnorderedElementsAre(h.children_of(rule).at(0), h.children_of(rule).at(1)));
     EXPECT_THAT(change.offspring, IsEmpty());
@@ -104,7 +104,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ARefutationIsReportedInEveryTreeItReac
         h.axiom(h.functor("mid", {h.var(0)}), {h.functor("base", {h.var(0)}), h.functor("check", {h.var(0)})}, 1);
     const pud_global_node_id top = h.axiom(h.atom("top"), {h.functor("mid", {h.atom("c")})}, 0);
     h.register_module();
-    const pud_frontier_change change = h.expand(mid, 0);
+    const pud_frontier_change change = h.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
     EXPECT_TRUE(h.refuted(mid));
     EXPECT_TRUE(h.refuted(top));

@@ -9,7 +9,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_term_factory.hpp"
@@ -20,7 +20,7 @@
 // the replayer only reads a child's substitutions.
 struct PudReplayerIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using modules_t = pud_modules<pud_data>;
+    using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_scratch_module = 0;
 
@@ -28,8 +28,8 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_data scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
-    std::deque<pud_data> opened_modules;
+    pud_module scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
+    std::deque<pud_module> opened_modules;
     modules_t modules;
     pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t> replayer{
         modules, modules, exprs, terms, terms, terms};
@@ -47,7 +47,7 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     }
 
     pud_global_node_id infer(std::vector<pud_substitution> substitutions) {
-        return modules.store_inference(k_scratch_module, pud_node_delta{
+        return modules.store_inference(k_scratch_module, pud_inference{
             .parent = 0,
             .call_site = 0,
             .substitutions = std::move(substitutions),

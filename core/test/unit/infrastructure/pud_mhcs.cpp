@@ -153,7 +153,7 @@ TEST_F(PudMhcsTest, ACandidateThatStepsOntoARefutedNodeReleasesItsWitness) {
     EXPECT_FALSE(mhcs.try_add(pud_replay_at(0, 0)).has_value());
 }
 
-TEST_F(PudMhcsTest, AnExpandedSelfWitnessIsJustifiedAgainBelowIt) {
+TEST_F(PudMhcsTest, AnUnfoldedSelfWitnessIsJustifiedAgainBelowIt) {
     tree.leaf(1);
     const pud_mhcs_head_id head = mhcs.try_add(pud_replay_at(1, 0)).value();
     tree.branch(1, {2, 3});

@@ -11,7 +11,7 @@
 
 // Puts a registered module on the frontier by descending its stored tree. Every axiom not already
 // refuted is activated. Then each node reached hands its place on the frontier to its children not
-// already refuted, the way an expansion hands a leaf's place to its new children: every child is
+// already refuted, the way unfolding hands a leaf's place to its new children: every child is
 // activated, then those refuted on arrival are refuted, then the node is deactivated. The descent
 // stops at the leaves, which stay active. A node already refuted is skipped with everything below it.
 template<

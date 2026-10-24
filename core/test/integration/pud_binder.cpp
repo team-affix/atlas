@@ -6,7 +6,7 @@
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -15,7 +15,7 @@
 // axiom of the test's module.
 struct PudBinderIntegrationTest : public ::testing::Test {
     using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
-    using modules_t = pud_modules<pud_data>;
+    using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_module = 0;
 
@@ -23,7 +23,7 @@ struct PudBinderIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     term_factory_t terms{globalize, exprs, exprs};
-    pud_data data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
+    pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
 
@@ -38,7 +38,7 @@ struct PudBinderIntegrationTest : public ::testing::Test {
     }
 
     pud_global_node_id infer(std::vector<pud_substitution> substitutions) {
-        return modules.store_inference(k_module, pud_node_delta{
+        return modules.store_inference(k_module, pud_inference{
             .parent = 0,
             .call_site = 0,
             .substitutions = std::move(substitutions),

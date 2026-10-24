@@ -28,7 +28,7 @@ struct MockGetAxiom {
     MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
 };
 struct MockGetInference {
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_global_node_id));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
@@ -93,7 +93,7 @@ struct PudAcceptorTest : public ::testing::Test {
     pud_ubs_state caller_state;
     pud_goal_list callee_goals = pud_goal_list{.goals = {}, .next_id = 0}.adding(&callee_goal);
     rule axiom{&axiom_head, {}, 0};
-    pud_node_delta node_inference{
+    pud_inference node_inference{
         .parent = 2,
         .call_site = 0,
         .substitutions = {pud_substitution{.var_idx = 1, .value = &substituted_value}},
@@ -133,7 +133,7 @@ struct PudAcceptorTest : public ::testing::Test {
         ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::move(edited)}));
     }
 
-    pud_node_delta accept() {
+    pud_inference accept() {
         return acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path);
     }
 };
@@ -153,7 +153,7 @@ TEST_F(PudAcceptorTest, TheInferenceIsOfTheCallerOnItsCallSiteWithTheCalleesOpen
         .WillOnce(Invoke(this, &PudAcceptorTest::export_three_fresh_variables));
     EXPECT_EQ(
         accept(),
-        (pud_node_delta{.parent = 3, .call_site = 1, .substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
+        (pud_inference{.parent = 3, .call_site = 1, .substitutions = {}, .body_goals = {&exported_goal}, .var_count = 3}));
 }
 
 TEST_F(PudAcceptorTest, TheInferencesParentIsTheAcceptorsLocalId) {

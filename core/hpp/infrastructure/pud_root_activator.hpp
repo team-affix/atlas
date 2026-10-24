@@ -13,7 +13,7 @@
 #include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/rule.hpp"
 
-// Sets up everything the controller keeps for an axiom. Its goals are its body, and are kept for good.
+// Sets up everything the runtime keeps for an axiom. Its goals are its body, and are kept for good.
 // Its active state is its lvc, empty bindings, a structure watch, and a query per goal over the axioms
 // its module sees, each held by the axiom. Returns whether some goal has no candidate, for the caller
 // to refute the axiom.

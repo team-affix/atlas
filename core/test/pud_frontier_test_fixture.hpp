@@ -8,19 +8,19 @@
 #include "functor_fixture.hpp"
 #include "pud_test_node.hpp"
 #include "infrastructure/expr_pool.hpp"
-#include "infrastructure/pud_controller.hpp"
-#include "infrastructure/pud_data.hpp"
+#include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_runtime.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/rule.hpp"
 
-// Builds modules, registers them with a real controller, and expands their leaves. Axioms are
+// Builds modules, registers them with a real runtime, and unfolds their leaves. Axioms are
 // declared into the module being built and registered with it by register_module; the next module
 // is then built. The registered modules' data is the caller's, so tests read it directly.
 struct pud_frontier_test_fixture {
     expr_pool exprs;
     test_functors functors;
-    std::deque<pud_data> registered;
-    pud_controller<pud_data, expr_pool> controller{exprs};
+    std::deque<pud_module> registered;
+    pud_runtime<pud_module, expr_pool> runtime{exprs};
     pud_module_id building = 1;
     std::vector<pud_module_id> building_dependencies;
     std::vector<rule> building_axioms;
@@ -43,19 +43,19 @@ struct pud_frontier_test_fixture {
     void depend_on(pud_module_id dependency) { building_dependencies.push_back(dependency); }
 
     pud_frontier_change register_module() {
-        pud_data& data = registered.emplace_back(building, building_dependencies, building_axioms);
+        pud_module& data = registered.emplace_back(building, building_dependencies, building_axioms);
         building_dependencies.clear();
         building_axioms.clear();
         ++building;
-        return controller.register_module(data);
+        return runtime.register_module(data);
     }
 
-    pud_frontier_change expand(pud_global_node_id leaf, pud_body_goal_id goal) {
-        return controller.expand(leaf, goal);
+    pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal) {
+        return runtime.unfold(leaf, goal);
     }
 
-    const pud_data& data_of(pud_module_id module) const {
-        for (const pud_data& data : registered) {
+    const pud_module& data_of(pud_module_id module) const {
+        for (const pud_module& data : registered) {
             if (data.get_module_id() == module)
                 return data;
         }

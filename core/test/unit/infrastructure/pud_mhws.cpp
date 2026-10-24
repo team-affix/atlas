@@ -92,7 +92,7 @@ TEST_F(PudMhwsTest, ARefutedInteriorNodeHidesItsLeaves) {
     EXPECT_THAT(refute_and_invalidate(2), ElementsAre(head));
 }
 
-TEST_F(PudMhwsTest, AnExpandedWitnessIsSearchedBelow) {
+TEST_F(PudMhwsTest, AnUnfoldedWitnessIsSearchedBelow) {
     tree.branch(0, {1});
     tree.leaf(1);
     const pud_mhws_head_id head = mhws.try_add(pud_replay_at(0, 0)).value();

@@ -26,7 +26,7 @@ struct MockGetCandidatePath {
 };
 struct MockAcceptCandidate {
     MOCK_METHOD(
-        pud_node_delta,
+        pud_inference,
         accept,
         (pud_global_node_id,
          pud_body_goal_id,
@@ -52,8 +52,8 @@ struct PudResolverTest : public ::testing::Test {
         .lvc = 8, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
     std::vector<pud_global_node_id> first_path{pud_test_node(0), pud_test_node(3)};
     std::vector<pud_global_node_id> second_path{pud_test_node(1)};
-    pud_node_delta first_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 1};
-    pud_node_delta second_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 2};
+    pud_inference first_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 1};
+    pud_inference second_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 2};
 
     void SetUp() override {
         ON_CALL(states, get(pud_test_node(5))).WillByDefault(ReturnRef(state));
@@ -72,5 +72,5 @@ TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrderAtTheL
         .WillOnce(Return(first_delta));
     EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
         .WillOnce(Return(second_delta));
-    EXPECT_EQ(resolver.resolve(pud_test_node(5), 2), (std::vector<pud_node_delta>{first_delta, second_delta}));
+    EXPECT_EQ(resolver.resolve(pud_test_node(5), 2), (std::vector<pud_inference>{first_delta, second_delta}));
 }

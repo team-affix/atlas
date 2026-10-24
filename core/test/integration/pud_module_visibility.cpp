@@ -28,7 +28,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, ADependentModulesGoalsResolveAgainstT
     h.depend_on(base);
     const pud_global_node_id query = h.axiom(h.functor("q", {h.var(0)}), {h.functor("p", {h.var(0)})}, 1);
     EXPECT_THAT(h.register_module().offspring, ElementsAre(query));
-    const pud_frontier_change change = h.expand(query, 0);
+    const pud_frontier_change change = h.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
     EXPECT_EQ(change.offspring.front().module, query.module);
     EXPECT_EQ(bound_value(change.offspring.front(), 0), h.atom("a"));
@@ -73,16 +73,16 @@ TEST_F(PudModuleVisibilityIntegrationTest, IndirectDependenciesAreVisible) {
     const pud_global_node_id query =
         h.axiom(h.functor("q", {h.var(0)}), {h.functor("p", {h.var(0)}), h.functor("r", {h.var(0)})}, 1);
     EXPECT_THAT(h.register_module().offspring, ElementsAre(query));
-    const pud_frontier_change change = h.expand(query, 0);
+    const pud_frontier_change change = h.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
-    EXPECT_EQ(h.expand(change.offspring.front(), 1).offspring.size(), 1u);
+    EXPECT_EQ(h.unfold(change.offspring.front(), 1).offspring.size(), 1u);
 }
 
 TEST_F(PudModuleVisibilityIntegrationTest, AxiomsOfTheSameModuleAreCandidatesForEachOther) {
     h.axiom(h.functor("p", {h.atom("a")}), {}, 0);
     const pud_global_node_id query = h.axiom(h.functor("q", {h.var(0)}), {h.functor("p", {h.var(0)})}, 1);
     h.register_module();
-    EXPECT_EQ(h.expand(query, 0).offspring.size(), 1u);
+    EXPECT_EQ(h.unfold(query, 0).offspring.size(), 1u);
 }
 
 TEST_F(PudModuleVisibilityIntegrationTest, CandidatesComeFromDependenciesFirstThenTheModulesOwnAxioms) {
@@ -93,14 +93,14 @@ TEST_F(PudModuleVisibilityIntegrationTest, CandidatesComeFromDependenciesFirstTh
     h.axiom(h.functor("color", {h.atom("green")}), {}, 0);
     const pud_global_node_id query = h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)})}, 1);
     h.register_module();
-    const std::vector<pud_global_node_id> children = h.expand(query, 0).offspring;
+    const std::vector<pud_global_node_id> children = h.unfold(query, 0).offspring;
     ASSERT_EQ(children.size(), 3u);
     EXPECT_EQ(bound_value(children.at(0), 0), h.atom("red"));
     EXPECT_EQ(bound_value(children.at(1), 0), h.atom("blue"));
     EXPECT_EQ(bound_value(children.at(2), 0), h.atom("green"));
 }
 
-TEST_F(PudModuleVisibilityIntegrationTest, AnExpandedChildKeepsItsModulesVisibility) {
+TEST_F(PudModuleVisibilityIntegrationTest, AnUnfoldedChildKeepsItsModulesVisibility) {
     const pud_global_node_id red = h.axiom(h.functor("color", {h.atom("red")}), {}, 0);
     h.axiom(h.functor("color", {h.atom("blue")}), {}, 0);
     h.register_module();
@@ -109,11 +109,11 @@ TEST_F(PudModuleVisibilityIntegrationTest, AnExpandedChildKeepsItsModulesVisibil
     const pud_global_node_id query =
         h.axiom(h.functor("q", {h.var(0)}), {h.functor("color", {h.var(0)}), h.functor("warm", {h.var(0)})}, 1);
     h.register_module();
-    const pud_frontier_change change = h.expand(query, 0);
+    const pud_frontier_change change = h.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
     EXPECT_EQ(bound_value(change.offspring.front(), 0), h.atom("red"));
     EXPECT_EQ(change.refuted.size(), 1u);
-    EXPECT_EQ(h.expand(change.offspring.front(), 1).offspring.size(), 1u);
+    EXPECT_EQ(h.unfold(change.offspring.front(), 1).offspring.size(), 1u);
 }
 
 TEST_F(PudModuleVisibilityIntegrationTest, TwoModulesOnOneDependencyStayIsolated) {

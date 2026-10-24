@@ -16,7 +16,7 @@
 // numbered densely from the lvc. Each fresh variable is recorded in the translations, keyed by the
 // representative it replaces, so the translations' size is the number of fresh variables. The
 // translations and the rebuilt subterms are shared by every export of one exporter, so every term of
-// a child delta is rebuilt in one environment.
+// an inference is rebuilt in one environment.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind>
 struct pud_exporter {
     pud_exporter(

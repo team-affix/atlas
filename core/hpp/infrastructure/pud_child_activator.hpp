@@ -10,12 +10,12 @@
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
-#include "value_objects/pud_node_delta.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// Sets up everything the controller keeps for a child, from its parent's while the parent is still
+// Sets up everything the runtime keeps for a child, from its parent's while the parent is still
 // active. Its goals, kept for good, are its parent's but the call site it was resolved on, under the
 // same ids, then its own. It counts as one more live child of its parent. Its active state is its
 // lvc, its bindings, its watch, and its queries, each held by the child: it inherits every query of
@@ -112,16 +112,16 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
-    const pud_node_delta& delta = get_inference_.get_inference(child);
-    pud_goal_list goals = get_node_goals_.get(parent).closing(delta.call_site);
-    for (const expr* goal : delta.body_goals)
+    const pud_inference& inference = get_inference_.get_inference(child);
+    pud_goal_list goals = get_node_goals_.get(parent).closing(inference.call_site);
+    for (const expr* goal : inference.body_goals)
         goals = goals.adding(goal);
     store_node_goals_.store(child, goals);
     increment_live_child_count_.increment(parent);
-    const uint32_t lvc = parent_state.lvc + delta.var_count;
+    const uint32_t lvc = parent_state.lvc + inference.var_count;
     pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);
-    pud_structure_watch_change watched = watch_descend_.descend(parent_state.watch, bindings, child, delta.call_site, goals);
-    immer::map<pud_body_goal_id, pud_mhq_head_id> queries = parent_state.queries.erase(delta.call_site);
+    pud_structure_watch_change watched = watch_descend_.descend(parent_state.watch, bindings, child, inference.call_site, goals);
+    immer::map<pud_body_goal_id, pud_mhq_head_id> queries = parent_state.queries.erase(inference.call_site);
     bool refuted = false;
     for (pud_body_goal_id goal : watched.changed_goals) {
         if (queries.find(goal) == nullptr)

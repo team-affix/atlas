@@ -19,10 +19,10 @@ struct MockModuleData {
     MOCK_METHOD(pud_module_id, get_module_id, (), (const));
     MOCK_METHOD(const std::vector<pud_module_id>&, get_dependencies, (), (const));
     MOCK_METHOD(size_t, count_axioms, (), (const));
-    MOCK_METHOD(pud_node_id, store_inference, (pud_node_delta));
+    MOCK_METHOD(pud_node_id, store_inference, (pud_inference));
     MOCK_METHOD(void, mark_refuted, (pud_node_id));
     MOCK_METHOD(const rule&, get_axiom, (pud_node_id), (const));
-    MOCK_METHOD(const pud_node_delta&, get_inference, (pud_node_id), (const));
+    MOCK_METHOD(const pud_inference&, get_inference, (pud_node_id), (const));
     MOCK_METHOD(std::optional<pud_node_id>, get_parent, (pud_node_id), (const));
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_node_id), (const));
     MOCK_METHOD(bool, check_leaf, (pud_node_id), (const));
@@ -46,7 +46,7 @@ struct PudModulesTest : public ::testing::Test {
     pud_modules<NiceMock<MockModuleData>> modules;
     expr head{expr::functor{1, {}}};
     rule axiom{&head, {}, 0};
-    pud_node_delta inference{.parent = 0, .call_site = 0, .substitutions = {}, .body_goals = {}, .var_count = 0};
+    pud_inference inference{.parent = 0, .call_site = 0, .substitutions = {}, .body_goals = {}, .var_count = 0};
     std::vector<pud_node_id> children{4, 5};
 };
 
