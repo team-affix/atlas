@@ -26,6 +26,9 @@ struct MockOpenGoals {
 struct MockStoreNodeGoals {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_goal_list));
 };
+struct MockStoreNodeAxiom {
+    MOCK_METHOD(void, store, (pud_global_node_id, pud_global_node_id));
+};
 struct MockStoreActiveState {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_active_state));
 };
@@ -40,19 +43,21 @@ struct MockHoldQuery {
 };
 
 using test_root_activator_t = pud_root_activator<
-    NiceMock<MockGetAxiom>, NiceMock<MockOpenGoals>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreActiveState>,
-    NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
+    NiceMock<MockGetAxiom>, NiceMock<MockOpenGoals>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>,
+    NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
 
 // The axiom at node 2 has the body a, b and three variables.
 struct PudRootActivatorTest : public ::testing::Test {
     NiceMock<MockGetAxiom> axioms;
     NiceMock<MockOpenGoals> open_goals;
     NiceMock<MockStoreNodeGoals> goals;
+    NiceMock<MockStoreNodeAxiom> store_node_axiom;
     NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockWatchRoot> watcher;
     NiceMock<MockOpenQuery> queries;
     NiceMock<MockHoldQuery> holders;
-    test_root_activator_t activator{axioms, open_goals, goals, store_states, watcher, queries, holders};
+    test_root_activator_t activator{
+        axioms, open_goals, goals, store_node_axiom, store_states, watcher, queries, holders};
     expr head{expr::functor{9, {}}};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
@@ -71,6 +76,11 @@ struct PudRootActivatorTest : public ::testing::Test {
     }
 };
 
+}
+
+TEST_F(PudRootActivatorTest, AnAxiomsRootAxiomIsItselfAndIsStoredWithItsGoals) {
+    EXPECT_CALL(store_node_axiom, store(pud_test_node(2), pud_test_node(2)));
+    activator.activate_root(pud_test_node(2));
 }
 
 TEST_F(PudRootActivatorTest, AnAxiomsGoalsAreItsBodyInOrderAndAreStoredBeforeAnyQueryIsOpened) {

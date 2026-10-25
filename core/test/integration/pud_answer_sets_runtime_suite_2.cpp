@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
-#include <map>
 #include <optional>
 #include <random>
 #include <set>
@@ -10,12 +9,10 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
-#include "reference_pud_answer.hpp"
 #include "reference_pud_frontier.hpp"
-#include "reference_pud_goal_list.hpp"
+#include "reference_pud_normalize_with_bindings.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_runtime.hpp"
 
 using ::testing::IsEmpty;
@@ -24,7 +21,6 @@ template<typename IRuntime>
 struct PudAnswerSetsRuntimeSuite2IntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
-    pud_goal_resolver goal_resolver;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
     const expr* atom(const char* name) { return exprs.make_functor(functors.id(name), {}); }
@@ -58,19 +54,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -80,53 +73,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 2000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -135,14 +105,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{
@@ -181,20 +147,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -203,52 +166,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 2000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -257,14 +197,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesTwoPathTwoColori
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -299,19 +235,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -321,53 +254,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 5000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -376,14 +286,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{
@@ -436,20 +342,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -458,52 +361,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 5000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -512,14 +392,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3ThreeColorings
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -556,19 +432,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -578,53 +451,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 8000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -633,14 +483,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{
@@ -707,20 +553,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -729,52 +572,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 8000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -783,14 +603,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesK3TailFourNodeCo
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -833,19 +649,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -855,53 +668,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 10000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -910,14 +700,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{
@@ -976,20 +762,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -998,52 +781,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 10000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1052,14 +812,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourVarSatThreeC
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -1106,19 +862,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
     ASSERT_EQ(expected.size(), 55u);
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -1128,53 +881,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 15000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1183,14 +913,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, expected);
@@ -1240,20 +966,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
             ASSERT_EQ(expected.size(), 55u);
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -1262,52 +985,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 15000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1316,14 +1016,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingL
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -1363,19 +1059,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
     ASSERT_EQ(expected.size(), 11u);
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -1385,53 +1078,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 10000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1440,14 +1110,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, expected);
@@ -1490,20 +1156,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
             ASSERT_EQ(expected.size(), 11u);
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -1512,52 +1175,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 10000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1566,14 +1206,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesAddPairsSummingE
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -1618,19 +1254,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
     };
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -1644,52 +1277,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
-    }
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
     }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1698,14 +1308,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
     EXPECT_EQ(answers, expected);
     EXPECT_EQ(live, reference_pud_frontier(modules));
@@ -1754,20 +1360,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -1776,51 +1379,28 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                    unfoldable.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1829,14 +1409,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesMulPairsProductE
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         for (const expr* answer : answers) {
@@ -1901,19 +1477,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
     ASSERT_EQ(expected.size(), 30u);
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -1923,53 +1496,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 15000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -1978,14 +1528,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, expected);
@@ -2048,20 +1594,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
             ASSERT_EQ(expected.size(), 30u);
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -2070,52 +1613,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 15000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -2124,14 +1644,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesDualBoundedShare
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -2176,19 +1692,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, CatalanMinimalCaseOneNode)
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -2197,55 +1710,33 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, CatalanMinimalCaseOneNode)
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 500u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<const expr*> answers;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
     EXPECT_EQ(answers, (std::set<const expr*>{this->functor("q", {lone})}));
     // No legacy RuntimeParamTest counterpart; smoke coverage for Catalan-shaped rules at n=1.
@@ -2363,19 +1854,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
 
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -2390,13 +1878,8 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!std::holds_alternative<expr::functor>(goal->content)) {
                 if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                     chosen_goal = goal_id;
@@ -2416,7 +1899,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
                 chosen_goal = goal_id;
                 continue;
             }
-            const expr* chosen_expr = leaf_goals.at(chosen_leaf).goals.at(*chosen_goal);
+            const expr* chosen_expr = runtime.get_rule_information(chosen_leaf).body.at(*chosen_goal);
             int chosen_rank = 4;
             if (std::holds_alternative<expr::functor>(chosen_expr->content)) {
                 const expr::functor& chosen_head = std::get<expr::functor>(chosen_expr->content);
@@ -2433,42 +1916,24 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 200000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -2477,14 +1942,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, expected);
@@ -2602,20 +2063,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                    unfoldable.erase(refuted);
             }
         }
 
@@ -2629,13 +2087,8 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::optional<pud_body_goal_id> chosen_goal;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals) {
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body) {
                 if (!std::holds_alternative<expr::functor>(goal->content)) {
                     if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                         chosen_goal = goal_id;
@@ -2655,7 +2108,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
                     chosen_goal = goal_id;
                     continue;
                 }
-                const expr* chosen_expr = leaf_goals.at(leaf).goals.at(*chosen_goal);
+                const expr* chosen_expr = runtime.get_rule_information(leaf).body.at(*chosen_goal);
                 int chosen_rank = 4;
                 if (std::holds_alternative<expr::functor>(chosen_expr->content)) {
                     const expr::functor& chosen_head = std::get<expr::functor>(chosen_expr->content);
@@ -2673,41 +2126,23 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
             }
             const pud_body_goal_id goal = *chosen_goal;
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -2716,14 +2151,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesCatalanTreesWith
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         for (const expr* answer : answers) {
@@ -2748,19 +2179,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -2770,53 +2198,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 2000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -2825,14 +2230,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{this->functor("q", {})}));
@@ -2840,7 +2241,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        if (!leaf_goals.at(leaf).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             continue;
         ++solved_live_leaves;
     }
@@ -2865,20 +2266,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -2887,52 +2285,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 2000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -2941,14 +2316,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -2956,7 +2327,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesFourTwoGoalGroun
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            if (!leaf_goals.at(leaf).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 continue;
             ++solved_live_leaves;
         }
@@ -2979,19 +2350,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -3001,53 +2369,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 2000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -3056,14 +2401,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{this->functor("q", {})}));
@@ -3071,7 +2412,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        if (!leaf_goals.at(leaf).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             continue;
         ++solved_live_leaves;
     }
@@ -3098,20 +2439,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -3120,52 +2458,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 2000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -3174,14 +2489,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);
@@ -3189,7 +2500,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesEightThreeGoalGr
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            if (!leaf_goals.at(leaf).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 continue;
             ++solved_live_leaves;
         }
@@ -3216,19 +2527,16 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
     });
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
-    std::map<pud_global_node_id, pud_goal_list> leaf_goals;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
-            leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-            if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+            if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                 unfoldable.insert(leaf);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
@@ -3238,53 +2546,30 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
         if (unfoldable.empty())
             break;
         const pud_global_node_id chosen_leaf = *unfoldable.begin();
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == chosen_leaf.module)
-                leaf_module = &module;
-        }
         std::optional<pud_body_goal_id> chosen_goal;
-        for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals) {
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body) {
             if (!chosen_goal.has_value() || goal_id < chosen_goal.value())
                 chosen_goal = goal_id;
         }
         const pud_frontier_change change = runtime.unfold(chosen_leaf, *chosen_goal);
-        const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
         live.erase(chosen_leaf);
-        leaf_goals.erase(chosen_leaf);
         unfoldable.erase(chosen_leaf);
         for (pud_global_node_id child : change.offspring) {
-            const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, *chosen_goal, leaf_module->get_inference(child.node).body_goals);
             live.insert(child);
-            leaf_goals.emplace(child, child_goals);
-            if (child.module == 2 && !child_goals.goals.empty())
+            if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                 unfoldable.insert(child);
         }
         for (pud_global_node_id refuted : change.refuted) {
             live.erase(refuted);
-            leaf_goals.erase(refuted);
             unfoldable.erase(refuted);
         }
     }
     EXPECT_LT(steps, 2000u);
-    for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-    }
     std::set<pud_global_node_id> reference_unfoldable;
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (!runtime.get_rule_information(leaf).body.empty())
             reference_unfoldable.insert(leaf);
     }
     EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -3293,14 +2578,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
     for (pud_global_node_id leaf : live) {
         if (leaf.module != 2)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (!leaf_goals.at(leaf).goals.empty())
+        const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+        if (!info.body.empty())
             continue;
-        answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+        answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
     }
 
     EXPECT_EQ(answers, (std::set<const expr*>{
@@ -3342,20 +2623,17 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
             });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
-                if (leaf.module == 2 && !leaf_goals.at(leaf).goals.empty())
+                    if (leaf.module == 2 && !runtime.get_rule_information(leaf).body.empty())
                     unfoldable.insert(leaf);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
 
@@ -3364,52 +2642,29 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = *std::next(unfoldable.begin(), rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
             const pud_frontier_change change = runtime.unfold(leaf, goal);
-            const pud_goal_list parent_goals = leaf_goals.at(leaf);
             live.erase(leaf);
-            leaf_goals.erase(leaf);
             unfoldable.erase(leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(parent_goals, goal, leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
-                if (child.module == 2 && !child_goals.goals.empty())
+                if (child.module == 2 && !runtime.get_rule_information(child).body.empty())
                     unfoldable.insert(child);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                    leaf_goals.erase(refuted);
-                unfoldable.erase(refuted);
+                        unfoldable.erase(refuted);
             }
         }
         EXPECT_LT(steps, 2000u);
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
-        }
         std::set<pud_global_node_id> reference_unfoldable;
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (!runtime.get_rule_information(leaf).body.empty())
                 reference_unfoldable.insert(leaf);
         }
         EXPECT_EQ(unfoldable, reference_unfoldable);
@@ -3418,14 +2673,10 @@ TYPED_TEST(PudAnswerSetsRuntimeSuite2IntegrationTest, EnumeratesManySharedVarGro
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 2)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (!leaf_goals.at(leaf).goals.empty())
+            const pud_unnormalized_rule_information info = runtime.get_rule_information(leaf);
+            if (!info.body.empty())
                 continue;
-            answers.insert(reference_pud_answer(*leaf_module, leaf.node, this->exprs));
+            answers.insert(reference_pud_normalize_with_bindings(info.bindings, this->exprs, info.head));
         }
 
         EXPECT_EQ(answers, expected);

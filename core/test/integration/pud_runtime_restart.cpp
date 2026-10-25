@@ -9,7 +9,6 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "reference_pud_frontier.hpp"
-#include "reference_pud_goal_list.hpp"
 #include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
@@ -200,25 +199,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedArithmeticContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -265,25 +254,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedArithmeticContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -360,25 +339,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListsContinueLikeTheirTwin
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -425,25 +394,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListsContinueLikeTheirTwin
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -514,25 +473,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedGraphQueriesRunOutOfUnfold
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -582,25 +531,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedGraphQueriesRunOutOfUnfold
         for (pud_global_node_id leaf : twin_live) {
             if (leaf.module != 4002)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -629,12 +568,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedGraphQueriesRunOutOfUnfold
     for (pud_global_node_id leaf : restarted_live) {
         if (leaf.module != 4002)
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : restarted_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (restarted_runtime->get_rule_information(leaf).body.empty())
             continue;
         unfoldable.push_back(leaf);
     }
@@ -683,25 +617,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTiersRunOutOfUnfoldsLikeTh
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -747,25 +671,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTiersRunOutOfUnfoldsLikeTh
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -837,25 +751,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSiblingModulesContinueLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -902,25 +806,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSiblingModulesContinueLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -987,25 +881,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedRefutationsCascadeLikeThei
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1051,25 +935,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedRefutationsCascadeLikeThei
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1217,25 +1091,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartedRuntimeStoresNewInference
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1280,12 +1144,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartedRuntimeStoresNewInference
 
     std::vector<pud_global_node_id> unfoldable;
     for (pud_global_node_id leaf : twin_live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (twin_runtime.get_rule_information(leaf).body.empty())
             continue;
         unfoldable.push_back(leaf);
     }
@@ -1297,7 +1156,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartedRuntimeStoresNewInference
             leaf_module = &module;
     }
     std::vector<pud_body_goal_id> goal_ids;
-    for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+    for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
         goal_ids.push_back(goal_id);
     std::sort(goal_ids.begin(), goal_ids.end());
     const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1370,25 +1229,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingNeverStoresAnInferenceOrM
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1487,25 +1336,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingTwiceWithoutUnfoldingChan
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1572,25 +1411,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingTwiceWithoutUnfoldingChan
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1663,25 +1492,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingAfterEveryUnfoldMatchesTh
     EXPECT_EQ(restarted_live, twin_live);
     std::vector<pud_global_node_id> unfoldable;
     for (pud_global_node_id leaf : twin_live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (twin_runtime.get_rule_information(leaf).body.empty())
             continue;
         unfoldable.push_back(leaf);
     }
     const bool had_step = !unfoldable.empty();
     if (had_step) {
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1770,25 +1589,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingEveryFewUnfoldsMatchesThe
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1882,25 +1691,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1963,24 +1762,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
     for (int unfold_index = 0; unfold_index < 15 && !this->HasFailure(); ++unfold_index) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         ASSERT_FALSE(unfoldable.empty());
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2067,25 +1856,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedPeanoMulMatchesTwinUnderHe
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2132,25 +1911,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedPeanoMulMatchesTwinUnderHe
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2226,25 +1995,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListMembersMatchTwinToExha
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2292,25 +2051,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListMembersMatchTwinToExha
         for (pud_global_node_id leaf : twin_live) {
             if (leaf.module != 9102)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -2382,25 +2131,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedMirrorTreesMatchTwin) {
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2449,25 +2188,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedMirrorTreesMatchTwin) {
         for (pud_global_node_id leaf : twin_live) {
             if (leaf.module != 9202)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -2559,25 +2288,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedNestedUnaryChainMatchesTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2624,25 +2343,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedNestedUnaryChainMatchesTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2722,25 +2431,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnd
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2788,25 +2487,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnd
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2901,25 +2590,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSharedBinaryMatchesTwin) {
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2966,25 +2645,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSharedBinaryMatchesTwin) {
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3058,25 +2727,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ColorsRestartsAndContinuesLikeItsTw
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3124,25 +2783,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ColorsRestartsAndContinuesLikeItsTw
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3222,25 +2871,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ArithmeticRestartsAndContinuesLikeI
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3288,25 +2927,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ArithmeticRestartsAndContinuesLikeI
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3386,25 +3015,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListsRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3452,25 +3071,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListsRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3548,25 +3157,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, GraphRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3614,25 +3213,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, GraphRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3707,25 +3296,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TiersRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3773,25 +3352,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TiersRestartsAndContinuesLikeItsTwi
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3870,25 +3439,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SiblingsRestartsAndContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3936,25 +3495,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SiblingsRestartsAndContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4028,25 +3577,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RefutationsRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4094,25 +3633,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RefutationsRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4184,25 +3713,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, CascadeRestartsAndContinuesLikeItsT
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4250,25 +3769,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, CascadeRestartsAndContinuesLikeItsT
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4359,25 +3868,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulRestartsAndContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4425,25 +3924,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulRestartsAndContinuesLikeIts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4526,25 +4015,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4592,25 +4071,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4689,25 +4158,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4755,25 +4214,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesRestartsAndContinuesLike
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4872,25 +4321,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainRestartsAndContinue
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4938,25 +4377,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainRestartsAndContinue
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5043,25 +4472,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendRestartsAndContinuesLik
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5109,25 +4528,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendRestartsAndContinuesLik
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5210,25 +4619,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryRestartsAndContinuesLik
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5276,25 +4675,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryRestartsAndContinuesLik
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5385,25 +4774,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulUnderStressRestartsAndConti
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5451,25 +4830,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulUnderStressRestartsAndConti
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5552,25 +4921,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersUnderStressRestartsAndCo
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5618,25 +4977,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersUnderStressRestartsAndCo
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5715,25 +5064,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesUnderStressRestartsAndCo
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5781,25 +5120,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesUnderStressRestartsAndCo
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5898,25 +5227,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainUnderStressRestarts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5964,25 +5283,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainUnderStressRestarts
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6069,25 +5378,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendUnderStressRestartsAndC
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6135,25 +5434,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendUnderStressRestartsAndC
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6236,25 +5525,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryUnderStressRestartsAndC
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6302,25 +5581,15 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryUnderStressRestartsAndC
         EXPECT_EQ(restarted_live, twin_live);
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : twin_live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : twin_modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (twin_runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : twin_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : twin_runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());

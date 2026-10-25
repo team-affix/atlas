@@ -29,6 +29,9 @@ struct MockGetInference {
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id));
 };
+struct MockGetNodeAxiom {
+    MOCK_METHOD(pud_global_node_id, get, (pud_global_node_id), (const));
+};
 struct MockResolveGoal {
     MOCK_METHOD(
         pud_goal_list,
@@ -41,6 +44,9 @@ struct MockFindNodeGoal {
 };
 struct MockStoreNodeGoals {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_goal_list));
+};
+struct MockStoreNodeAxiom {
+    MOCK_METHOD(void, store, (pud_global_node_id, pud_global_node_id));
 };
 struct MockIncrementLiveChildCount {
     MOCK_METHOD(void, increment, (pud_global_node_id));
@@ -67,9 +73,10 @@ struct MockCheckQueryExhausted {
 
 using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetActiveState>, NiceMock<MockStoreActiveState>, NiceMock<MockGetInference>,
-    NiceMock<MockGetNodeGoals>, NiceMock<MockResolveGoal>, NiceMock<MockFindNodeGoal>, NiceMock<MockStoreNodeGoals>,
-    NiceMock<MockIncrementLiveChildCount>, NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>,
-    NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockResolveGoal>, NiceMock<MockFindNodeGoal>,
+    NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>, NiceMock<MockIncrementLiveChildCount>,
+    NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
+    NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
 
 // The parent, node 3 at lvc 5, has goals a and b, holds queries 40 and 41 for them, and the child,
 // node 4, was resolved on goal 0. The child keeps goal 1, adds goal 2 of its own, and two variables.
@@ -78,9 +85,11 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockGetInference> inferences;
     NiceMock<MockGetNodeGoals> get_goals;
+    NiceMock<MockGetNodeAxiom> get_node_axiom;
     NiceMock<MockResolveGoal> resolve_goal;
     NiceMock<MockFindNodeGoal> find_goal;
     NiceMock<MockStoreNodeGoals> store_goals;
+    NiceMock<MockStoreNodeAxiom> store_node_axiom;
     NiceMock<MockIncrementLiveChildCount> live_child_counts;
     NiceMock<MockBind> binder;
     NiceMock<MockWatchDescend> watcher;
@@ -89,8 +98,8 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockHoldQuery> holders;
     NiceMock<MockCheckQueryExhausted> exhausted;
     test_child_activator_t activator{
-        get_states, store_states, inferences, get_goals, resolve_goal, find_goal, store_goals, live_child_counts,
-        binder, watcher, forker, opener, holders, exhausted};
+        get_states, store_states, inferences, get_goals, get_node_axiom, resolve_goal, find_goal, store_goals,
+        store_node_axiom, live_child_counts, binder, watcher, forker, opener, holders, exhausted};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
     expr goal_c{expr::functor{3, {}}};
@@ -125,6 +134,15 @@ struct PudChildActivatorTest : public ::testing::Test {
     }
 };
 
+}
+
+TEST_F(PudChildActivatorTest, AChildInheritsItsParentsRootAxiom) {
+    const pud_global_node_id parent = pud_test_node(3);
+    const pud_global_node_id child = pud_test_node(4);
+    const pud_global_node_id axiom = pud_test_node(2);
+    EXPECT_CALL(get_node_axiom, get(parent)).WillOnce(Return(axiom));
+    EXPECT_CALL(store_node_axiom, store(child, axiom));
+    activator.activate_child(parent, child);
 }
 
 TEST_F(PudChildActivatorTest, AChildsGoalsAreItsParentsButTheCallSiteThenItsOwn) {

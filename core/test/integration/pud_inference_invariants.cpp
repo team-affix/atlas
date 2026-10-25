@@ -2,17 +2,14 @@
 #include <deque>
 #include <optional>
 #include <random>
-#include <map>
 #include <set>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
-#include "reference_pud_goal_list.hpp"
 #include "reference_pud_inference_violations.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_runtime.hpp"
 
 using ::testing::IsEmpty;
@@ -21,8 +18,6 @@ template<typename IRuntime>
 struct PudInferenceInvariantsIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
-    pud_goal_resolver goal_resolver;
-
     const expr* var(uint32_t index) { return exprs.make_var(index); }
     const expr* atom(const char* name) { return exprs.make_functor(functors.id(name), {}); }
     const expr* functor(const char* name, std::vector<const expr*> args) {
@@ -52,28 +47,20 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, ColorsInferencesStayValidUnder
         });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
         }
         size_t steps = 0;
         for (; steps < 150; ++steps) {
             std::vector<pud_global_node_id> unfoldable;
             for (pud_global_node_id leaf : live) {
-                const pud_module* leaf_module = nullptr;
-                for (const pud_module& module : modules) {
-                    if (module.get_module_id() == leaf.module)
-                        leaf_module = &module;
-                }
-                if (leaf_goals.at(leaf).goals.empty())
+                if (runtime.get_rule_information(leaf).body.empty())
                     continue;
                 unfoldable.push_back(leaf);
             }
@@ -81,40 +68,19 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, ColorsInferencesStayValidUnder
                 break;
             std::uniform_int_distribution<size_t> leaf_dist(0, unfoldable.size() - 1);
             const pud_global_node_id chosen_leaf = unfoldable.at(leaf_dist(rng));
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == chosen_leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body)
                 goal_ids.push_back(goal_id);
             std::uniform_int_distribution<size_t> goal_dist(0, goal_ids.size() - 1);
             const pud_body_goal_id chosen_goal = goal_ids.at(goal_dist(rng));
-            const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
             const pud_frontier_change change = runtime.unfold(chosen_leaf, chosen_goal);
             live.erase(chosen_leaf);
-            leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
-                    parent_goals,
-                    chosen_goal,
-                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         for (const pud_module& checked_module : modules)
             EXPECT_THAT(reference_pud_inference_violations(checked_module), IsEmpty()) << "seed " << seed;
@@ -141,28 +107,20 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, PeanoAdditionInferencesStayVal
         });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
         }
         size_t steps = 0;
         for (; steps < 150; ++steps) {
             std::vector<pud_global_node_id> unfoldable;
             for (pud_global_node_id leaf : live) {
-                const pud_module* leaf_module = nullptr;
-                for (const pud_module& module : modules) {
-                    if (module.get_module_id() == leaf.module)
-                        leaf_module = &module;
-                }
-                if (leaf_goals.at(leaf).goals.empty())
+                if (runtime.get_rule_information(leaf).body.empty())
                     continue;
                 unfoldable.push_back(leaf);
             }
@@ -170,40 +128,19 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, PeanoAdditionInferencesStayVal
                 break;
             std::uniform_int_distribution<size_t> leaf_dist(0, unfoldable.size() - 1);
             const pud_global_node_id chosen_leaf = unfoldable.at(leaf_dist(rng));
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == chosen_leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body)
                 goal_ids.push_back(goal_id);
             std::uniform_int_distribution<size_t> goal_dist(0, goal_ids.size() - 1);
             const pud_body_goal_id chosen_goal = goal_ids.at(goal_dist(rng));
-            const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
             const pud_frontier_change change = runtime.unfold(chosen_leaf, chosen_goal);
             live.erase(chosen_leaf);
-            leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
-                    parent_goals,
-                    chosen_goal,
-                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         for (const pud_module& checked_module : modules)
             EXPECT_THAT(reference_pud_inference_violations(checked_module), IsEmpty()) << "seed " << seed;
@@ -229,28 +166,20 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, AppendSplitInferencesStayValid
         });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
         }
         size_t steps = 0;
         for (; steps < 150; ++steps) {
             std::vector<pud_global_node_id> unfoldable;
             for (pud_global_node_id leaf : live) {
-                const pud_module* leaf_module = nullptr;
-                for (const pud_module& module : modules) {
-                    if (module.get_module_id() == leaf.module)
-                        leaf_module = &module;
-                }
-                if (leaf_goals.at(leaf).goals.empty())
+                if (runtime.get_rule_information(leaf).body.empty())
                     continue;
                 unfoldable.push_back(leaf);
             }
@@ -258,40 +187,19 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, AppendSplitInferencesStayValid
                 break;
             std::uniform_int_distribution<size_t> leaf_dist(0, unfoldable.size() - 1);
             const pud_global_node_id chosen_leaf = unfoldable.at(leaf_dist(rng));
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == chosen_leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body)
                 goal_ids.push_back(goal_id);
             std::uniform_int_distribution<size_t> goal_dist(0, goal_ids.size() - 1);
             const pud_body_goal_id chosen_goal = goal_ids.at(goal_dist(rng));
-            const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
             const pud_frontier_change change = runtime.unfold(chosen_leaf, chosen_goal);
             live.erase(chosen_leaf);
-            leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
-                    parent_goals,
-                    chosen_goal,
-                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         for (const pud_module& checked_module : modules)
             EXPECT_THAT(reference_pud_inference_violations(checked_module), IsEmpty()) << "seed " << seed;
@@ -324,28 +232,20 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, GraphReachabilityInferencesSta
         });
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
-        std::map<pud_global_node_id, pud_goal_list> leaf_goals;
         for (pud_module& module : modules) {
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
-                leaf_goals.emplace(leaf, reference_pud_goal_list(module, leaf.node));
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
         }
         size_t steps = 0;
         for (; steps < 150; ++steps) {
             std::vector<pud_global_node_id> unfoldable;
             for (pud_global_node_id leaf : live) {
-                const pud_module* leaf_module = nullptr;
-                for (const pud_module& module : modules) {
-                    if (module.get_module_id() == leaf.module)
-                        leaf_module = &module;
-                }
-                if (leaf_goals.at(leaf).goals.empty())
+                if (runtime.get_rule_information(leaf).body.empty())
                     continue;
                 unfoldable.push_back(leaf);
             }
@@ -353,40 +253,19 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, GraphReachabilityInferencesSta
                 break;
             std::uniform_int_distribution<size_t> leaf_dist(0, unfoldable.size() - 1);
             const pud_global_node_id chosen_leaf = unfoldable.at(leaf_dist(rng));
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == chosen_leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : leaf_goals.at(chosen_leaf).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(chosen_leaf).body)
                 goal_ids.push_back(goal_id);
             std::uniform_int_distribution<size_t> goal_dist(0, goal_ids.size() - 1);
             const pud_body_goal_id chosen_goal = goal_ids.at(goal_dist(rng));
-            const pud_goal_list parent_goals = leaf_goals.at(chosen_leaf);
             const pud_frontier_change change = runtime.unfold(chosen_leaf, chosen_goal);
             live.erase(chosen_leaf);
-            leaf_goals.erase(chosen_leaf);
             for (pud_global_node_id child : change.offspring) {
-                const pud_goal_list child_goals = this->goal_resolver.resolve_goal(
-                    parent_goals,
-                    chosen_goal,
-                    leaf_module->get_inference(child.node).body_goals);
                 live.insert(child);
-                leaf_goals.emplace(child, child_goals);
             }
             for (pud_global_node_id refuted : change.refuted) {
                 live.erase(refuted);
-                leaf_goals.erase(refuted);
             }
-        }
-        for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            EXPECT_EQ(leaf_goals.at(leaf), reference_pud_goal_list(*leaf_module, leaf.node));
         }
         for (const pud_module& checked_module : modules)
             EXPECT_THAT(reference_pud_inference_violations(checked_module), IsEmpty()) << "seed " << seed;

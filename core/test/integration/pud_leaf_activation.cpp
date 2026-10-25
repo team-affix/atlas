@@ -18,6 +18,7 @@
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_node_axioms.hpp"
 #include "infrastructure/pud_node_goals.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_active_states.hpp"
@@ -46,10 +47,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using binder_t = pud_binder<term_factory_t, modules_t>;
     using watcher_t = pud_structure_watcher<term_factory_t, modules_t>;
     using root_activator_t = pud_root_activator<
-        modules_t, pud_initial_goal_opener, pud_node_goals, pud_active_states, watcher_t, mhq_t, pud_query_holders>;
+        modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, watcher_t, mhq_t,
+        pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_goal_resolver, pud_node_goals,
-        pud_node_goals, pud_node_live_child_counts, binder_t, watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>;
+        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_axioms, pud_goal_resolver,
+        pud_node_goals, pud_node_goals, pud_node_axioms, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
+        mhq_t, pud_query_holders, mhq_t>;
     using node_deactivator_t =
         pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
 
@@ -63,6 +66,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_node_goals node_goals;
+    pud_node_axioms node_axioms;
     pud_goal_resolver goal_resolver;
     pud_initial_goal_opener initial_goal_opener;
     pud_node_live_child_counts live_child_counts;
@@ -76,10 +80,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     binder_t binder{terms, modules};
     watcher_t structure_watcher{terms, modules};
     root_activator_t root_activator{
-        modules, initial_goal_opener, node_goals, active_states, structure_watcher, mhq, query_holders};
+        modules, initial_goal_opener, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{
-        active_states, active_states, modules, node_goals, goal_resolver, node_goals, node_goals, live_child_counts,
-        binder, structure_watcher, mhq, mhq, query_holders, mhq};
+        active_states, active_states, modules, node_goals, node_axioms, goal_resolver, node_goals, node_goals,
+        node_axioms, live_child_counts, binder, structure_watcher, mhq, mhq, query_holders, mhq};
     node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
     pud_global_node_id root{};

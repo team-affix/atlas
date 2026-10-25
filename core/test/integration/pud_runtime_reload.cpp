@@ -11,7 +11,6 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "reference_pud_frontier.hpp"
-#include "reference_pud_goal_list.hpp"
 #include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
@@ -230,25 +229,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFewUnfoldsReload) {
     for (; taken < 3; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -314,25 +303,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AProgramUnfoldedToExhaustionReloads)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -400,25 +379,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFrontierOfOnlySolvedLeavesReloads) 
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -431,13 +400,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFrontierOfOnlySolvedLeavesReloads) 
     EXPECT_LT(taken, 2000u) << "the program did not run out of unfolds";
 
     for (pud_global_node_id leaf : live) {
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         EXPECT_THAT(goal_ids, IsEmpty());
@@ -499,13 +463,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ADeeplyUnfoldedDatabaseReloads) {
             live.erase(refuted);
         ASSERT_FALSE(change.offspring.empty()) << "level " << level;
         deepest = change.offspring.back();
-        const pud_module* deepest_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == deepest.module)
-                deepest_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal_expr] : reference_pud_goal_list(*deepest_module, deepest.node).goals)
+        for (const auto& [goal_id, goal_expr] : runtime.get_rule_information(deepest).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         ASSERT_THAT(goal_ids, Not(IsEmpty())) << "level " << level;
@@ -567,25 +526,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ManyRandomUnfoldsOfArithmeticReload)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -658,25 +607,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, UnfoldingOnlyTheQueriesOfArithmeticR
             const std::optional<pud_module_id> only = 2002;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -748,25 +687,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RandomUnfoldsOfListsReload) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -845,25 +774,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListQueriesUnfoldedToExhaustionReloa
             const std::optional<pud_module_id> only = 3002;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -930,25 +849,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphQueriesUnfoldedToExhaustionRelo
             const std::optional<pud_module_id> only = 4002;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1015,25 +924,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1101,25 +1000,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheBottomModuleRe
             const std::optional<pud_module_id> only = 5002;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1180,25 +1069,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheTopModuleReloa
             const std::optional<pud_module_id> only = 5003;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1260,25 +1139,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedEverywhereReload) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1347,25 +1216,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingModulesOverOneBaseReload) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1432,25 +1291,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadingRefutationsReload) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -1632,25 +1481,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AReloadOfAReloadIsFaithfulToo) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1731,25 +1570,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingTheSameModulesManyTimesNeve
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1808,25 +1637,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ModuleIdsAreOnlyNames) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -1903,25 +1722,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulWithManyRandomUnfoldsReloads
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2007,25 +1816,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersUnfoldedToExhaustionReloa
             const std::optional<pud_module_id> only = 9102;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -2089,25 +1888,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesWithDeepStructureReload) 
             const std::optional<pud_module_id> only = 9202;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -2199,25 +1988,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainUnfoldsDeeplyThenRel
         for (pud_global_node_id leaf : live) {
             if (leaf.module != 9301)
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -2303,25 +2082,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendStressReloads) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2395,25 +2164,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryNestedTermsReload) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2497,25 +2256,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsAfterHeavyRandomUnfol
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2603,25 +2352,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsAfterHeavyRandomUn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2691,25 +2430,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsAfterHeavyRandomUn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2801,25 +2530,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsAfterHeavyRan
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -2909,25 +2628,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsAfterHeavyRandomU
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3003,25 +2712,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsAfterHeavyRandomU
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3093,25 +2792,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsReloadsFaithfullyAfterAnyNumbe
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3184,25 +2873,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticReloadsFaithfullyAfterAnyN
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3281,25 +2960,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsReloadsFaithfullyAfterAnyNumber
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3370,25 +3039,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphReloadsFaithfullyAfterAnyNumber
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3456,25 +3115,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersReloadsFaithfullyAfterAnyNumber
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3547,25 +3196,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsReloadsFaithfullyAfterAnyNum
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3632,25 +3271,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsReloadsFaithfullyAfterAny
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3715,25 +3344,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeReloadsFaithfullyAfterAnyNumb
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3819,25 +3438,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsFaithfullyAfterAnyNum
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -3923,25 +3532,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsFaithfullyAfterAny
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4009,25 +3608,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsFaithfullyAfterAny
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4117,25 +3706,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsFaithfullyAft
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4223,25 +3802,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsFaithfullyAfterAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4315,25 +3884,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsFaithfullyAfterAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4427,25 +3986,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumingFromAxiomsAloneIsLikeNeverHa
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4508,25 +4057,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4563,25 +4102,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -4612,12 +4141,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
         const std::optional<pud_module_id> only = std::nullopt;
         if (only.has_value() && leaf.module != only.value())
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (runtime.get_rule_information(leaf).body.empty())
             continue;
         unfoldable.push_back(leaf);
     }
@@ -4627,12 +4151,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
         const std::optional<pud_module_id> only = std::nullopt;
         if (only.has_value() && leaf.module != only.value())
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : resumed_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (resumed_runtime.get_rule_information(leaf).body.empty())
             continue;
         resumed_unfoldable.push_back(leaf);
     }
@@ -4675,25 +4194,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedArithmeticUnfoldsLikeTheOrigi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4730,25 +4239,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedArithmeticUnfoldsLikeTheOrigi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4818,25 +4317,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedListsUnfoldLikeTheOriginal) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4873,25 +4362,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedListsUnfoldLikeTheOriginal) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -4953,25 +4432,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5008,25 +4477,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
             const std::optional<pud_module_id> only = 4002;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -5057,12 +4516,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
         const std::optional<pud_module_id> only = 4002;
         if (only.has_value() && leaf.module != only.value())
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (runtime.get_rule_information(leaf).body.empty())
             continue;
         unfoldable.push_back(leaf);
     }
@@ -5072,12 +4526,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
         const std::optional<pud_module_id> only = 4002;
         if (only.has_value() && leaf.module != only.value())
             continue;
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : resumed_modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
-        if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+        if (resumed_runtime.get_rule_information(leaf).body.empty())
             continue;
         resumed_unfoldable.push_back(leaf);
     }
@@ -5115,25 +4564,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTiersUnfoldLikeTheOriginal) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5170,25 +4609,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTiersUnfoldLikeTheOriginal) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -5252,25 +4681,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedSiblingModulesUnfoldLikeTheOr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5307,25 +4726,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedSiblingModulesUnfoldLikeTheOr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5383,25 +4792,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedRefutationsCascadeLikeTheOrig
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5438,25 +4837,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedRefutationsCascadeLikeTheOrig
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -5673,12 +5062,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
@@ -5687,13 +5071,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
             break;
         }
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5802,25 +5181,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
                 const std::optional<pud_module_id> only = std::nullopt;
                 if (only.has_value() && leaf.module != only.value())
                     continue;
-                const pud_module* leaf_module = nullptr;
-                for (const pud_module& module : modules) {
-                    if (module.get_module_id() == leaf.module)
-                        leaf_module = &module;
-                }
-                if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+                if (runtime.get_rule_information(leaf).body.empty())
                     continue;
                 unfoldable.push_back(leaf);
             }
             if (unfoldable.empty())
                 break;
             const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
             std::vector<pud_body_goal_id> goal_ids;
-            for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+            for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
                 goal_ids.push_back(goal_id);
             std::sort(goal_ids.begin(), goal_ids.end());
             const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5904,25 +5273,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -5959,25 +5318,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6026,25 +5375,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6119,25 +5458,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOrigi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6174,25 +5503,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOrigi
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6271,25 +5590,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheO
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6326,25 +5635,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheO
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6403,25 +5702,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustion
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6458,25 +5747,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustion
             const std::optional<pud_module_id> only = 9202;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(0);
@@ -6554,25 +5833,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesAfterHeavyUnfolds) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6609,25 +5878,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesAfterHeavyUnfolds) {
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6709,25 +5968,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesAfterHeavyUnfolds)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6764,25 +6013,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesAfterHeavyUnfolds)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6846,25 +6085,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesAfterHeavyUnfolds)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -6901,25 +6130,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesAfterHeavyUnfolds)
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7005,25 +6224,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesAfterHeavyUnf
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7060,25 +6269,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesAfterHeavyUnf
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7162,25 +6361,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesAfterHeavyUnfolds
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7217,25 +6406,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesAfterHeavyUnfolds
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7305,25 +6484,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesAfterHeavyUnfolds
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7360,25 +6529,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesAfterHeavyUnfolds
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7446,25 +6605,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyP
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7501,25 +6650,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyP
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7588,25 +6727,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFrom
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7643,25 +6772,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFrom
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7736,25 +6855,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7791,25 +6900,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7876,25 +6975,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -7931,25 +7020,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8013,25 +7092,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8068,25 +7137,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPo
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8155,25 +7214,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8210,25 +7259,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8291,25 +7330,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8346,25 +7375,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8425,25 +7444,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAny
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8480,25 +7489,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAny
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8580,25 +7579,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8635,25 +7624,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAn
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8735,25 +7714,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8790,25 +7759,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8872,25 +7831,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -8927,25 +7876,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFro
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9031,25 +7970,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOrigin
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9086,25 +8015,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOrigin
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9188,25 +8107,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9243,25 +8152,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9331,25 +8230,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
@@ -9386,25 +8275,15 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFr
             const std::optional<pud_module_id> only = std::nullopt;
             if (only.has_value() && leaf.module != only.value())
                 continue;
-            const pud_module* leaf_module = nullptr;
-            for (const pud_module& module : modules) {
-                if (module.get_module_id() == leaf.module)
-                    leaf_module = &module;
-            }
-            if (reference_pud_goal_list(*leaf_module, leaf.node).goals.empty())
+            if (runtime.get_rule_information(leaf).body.empty())
                 continue;
             unfoldable.push_back(leaf);
         }
         if (unfoldable.empty())
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
-        const pud_module* leaf_module = nullptr;
-        for (const pud_module& module : modules) {
-            if (module.get_module_id() == leaf.module)
-                leaf_module = &module;
-        }
         std::vector<pud_body_goal_id> goal_ids;
-        for (const auto& [goal_id, goal] : reference_pud_goal_list(*leaf_module, leaf.node).goals)
+        for (const auto& [goal_id, goal] : runtime.get_rule_information(leaf).body)
             goal_ids.push_back(goal_id);
         std::sort(goal_ids.begin(), goal_ids.end());
         const pud_body_goal_id goal = goal_ids.at(rng() % goal_ids.size());
