@@ -16,6 +16,7 @@
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Tells which inherited goals of a child changed structure under the child's substitutions. A goal
@@ -84,7 +85,7 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
         if (const expr::var* surviving = std::get_if<expr::var>(&value->content)) {
             const ubs_class surviving_class = bind_map.find(surviving->index);
             if (surviving_class.value.has_value())
-                value = surviving_class.value->skeleton;
+                value = surviving_class.value->parent;
             else
                 surviving_rep = surviving->index;
         }
@@ -183,7 +184,7 @@ immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, IFin
                 continue;
             }
             if (expanded_roots.insert(var_class.root).second)
-                pending.push_back(var_class.value->skeleton);
+                pending.push_back(var_class.value->parent);
             continue;
         }
         if (!visited_functors.insert(next).second)

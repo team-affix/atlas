@@ -13,6 +13,7 @@
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 #include "debug_assert.hpp"
 
@@ -126,7 +127,7 @@ pud_inference PUD_ACCEPTOR::accept(
             .var_idx = caller_rep,
             .value = accepted_class.rep != caller_rep
                 ? make_var_.make_var(accepted_class.rep)
-                : exporter.export_expr(accepted_class.value.value()),
+                : exporter.export_expr(framed_expr_from_framed_functor(accepted_class.value.value())),
         });
     }
     for (const auto& [id, callee_goal] : get_node_goals_.get(candidate_path.back()).goals)

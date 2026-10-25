@@ -5,6 +5,7 @@
 #include <optional>
 #include "pud_term_stack.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/framed_functor.hpp"
 
 inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
     if (const expr::var* var = std::get_if<expr::var>(&term->content))
@@ -18,8 +19,8 @@ inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
 }
 
 inline framed_expr reference_pud_deref(pud_term_stack& stack, uint32_t global) {
-    if (const std::optional<framed_expr> value = stack.bind_map.find(global).value)
-        return value.value();
+    if (const std::optional<framed_functor> value = stack.bind_map.find(global).value)
+        return framed_expr_from_framed_functor(value.value());
     return framed_expr{stack.pool.make_var(stack.bind_map.find(global).rep), 0u};
 }
 

@@ -12,7 +12,7 @@ inline const expr* reference_pud_normalize(pud_term_stack& stack, const expr* sk
         const ubs_class variable_class = stack.bind_map.find(variable->index);
         if (!variable_class.value.has_value())
             return stack.pool.make_var(variable_class.rep);
-        skeleton = variable_class.value->skeleton;
+        skeleton = variable_class.value->parent;
     }
     const expr::functor& term = std::get<expr::functor>(skeleton->content);
     std::vector<const expr*> args;

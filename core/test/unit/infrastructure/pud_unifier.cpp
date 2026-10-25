@@ -5,6 +5,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_unifier.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 using ::testing::_;
@@ -123,7 +124,7 @@ TEST_F(PudUnifierTest, VarOnEitherSideBindsTheSameWay) {
 
 TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
     ON_CALL(find, find(2)).WillByDefault(Return(ubs_class{
-        .root = 2, .size = 1, .rep = 2, .value = framed_expr{functor(1, {var(0)}), 10}}));
+        .root = 2, .size = 1, .rep = 2, .value = framed_functor_from_framed_expr(framed_expr{functor(1, {var(0)}), 10})}}));
     const expr* five = functor(5, {});
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 10, .size = 1, .rep = 10, .value = std::nullopt},
@@ -135,8 +136,10 @@ TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
 TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
     const framed_expr kept{functor(3, {var(0)}), 20};
     const framed_expr displaced{functor(3, {functor(9, {})}), 0};
-    const ubs_class kept_class = ubs_class{.root = 1, .size = 1, .rep = 1, .value = kept};
-    const ubs_class displaced_class = ubs_class{.root = 2, .size = 1, .rep = 2, .value = displaced};
+    const ubs_class kept_class = ubs_class{
+        .root = 1, .size = 1, .rep = 1, .value = framed_functor_from_framed_expr(kept)};
+    const ubs_class displaced_class = ubs_class{
+        .root = 2, .size = 1, .rep = 2, .value = framed_functor_from_framed_expr(displaced)};
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).WillOnce(Return(kept_class)).WillOnce(Return(kept_class));
     EXPECT_CALL(find, find(2)).WillOnce(Return(displaced_class));

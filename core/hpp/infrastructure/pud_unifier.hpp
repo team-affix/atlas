@@ -11,6 +11,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Unifies two framed terms in place. Terms are hash-consed DAGs, so each functor pair is unified at
@@ -92,7 +93,7 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed
             const framed_expr term = left_is_var ? right : left;
             const ubs_class var_class = find_class(left_is_var ? left : right);
             if (var_class.value.has_value()) {
-                pending.emplace_back(var_class.value.value(), term);
+                pending.emplace_back(framed_expr_from_framed_functor(var_class.value.value()), term);
                 continue;
             }
             instantiate_.instantiate(var_class, term);

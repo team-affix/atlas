@@ -27,7 +27,7 @@ inline void reference_pud_visit_canonical(
             tokens.push_back(k_reference_rep_token_base + number);
             return;
         }
-        reference_pud_visit_canonical(bind_map, var_class.value->skeleton, numbering, tokens);
+        reference_pud_visit_canonical(bind_map, var_class.value->parent, numbering, tokens);
         return;
     }
     const expr::functor& functor = std::get<expr::functor>(visited->content);

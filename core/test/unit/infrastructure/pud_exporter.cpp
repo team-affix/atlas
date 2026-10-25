@@ -7,6 +7,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_exporter.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 using ::testing::_;
@@ -81,7 +82,7 @@ TEST_F(PudExporterTest, AClassRepresentedBelowTheLvcIsTheCallersVariable) {
 
 TEST_F(PudExporterTest, ACallerClassIsKeptEvenWhenBound) {
     const expr* caller_var = var(3);
-    ON_CALL(find, find(3)).WillByDefault(Return(ubs_class{.root = 3, .size = 1, .rep = 3, .value = framed_expr{functor(1, {}), 0}}));
+    ON_CALL(find, find(3)).WillByDefault(Return(ubs_class{.root = 3, .size = 1, .rep = 3, .value = framed_functor_from_framed_expr(framed_expr{functor(1, {}), 0})}}));
     EXPECT_CALL(make_var, make_var(3u)).WillOnce(Return(caller_var));
     EXPECT_CALL(make_functor, make_functor(_, _)).Times(0);
     EXPECT_EQ(exporter.export_expr({var(3), 0}), caller_var);
@@ -113,7 +114,7 @@ TEST_F(PudExporterTest, ATranslationAlreadyGivenIsReusedAndNumberingContinuesAft
 TEST_F(PudExporterTest, ABoundCalleeClassIsReplacedByItsValueReadInItsOwnFrame) {
     const expr* fresh = var(10);
     const expr* rebuilt = functor(2, {fresh});
-    ON_CALL(find, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = framed_expr{functor(2, {var(5)}), 20}}));
+    ON_CALL(find, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = framed_functor_from_framed_expr(framed_expr{functor(2, {var(5)}), 20})}}));
     EXPECT_CALL(make_var, make_var(10u)).WillOnce(Return(fresh));
     EXPECT_CALL(make_functor, make_functor(2u, std::vector<const expr*>{fresh})).WillOnce(Return(rebuilt));
     EXPECT_EQ(exporter.export_expr({var(2), 10}), rebuilt);

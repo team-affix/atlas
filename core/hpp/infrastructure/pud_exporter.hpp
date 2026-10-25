@@ -9,6 +9,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Rebuilds framed terms for a caller: classes represented below the caller's lvc stay the caller's
@@ -97,7 +98,7 @@ std::optional<const expr*> PUD_EXPORTER::enter(framed_expr framed, std::vector<f
             const uint32_t next_fresh = caller_lvc_ + static_cast<uint32_t>(translations_.size());
             return make_var_.make_var(translations_.try_emplace(var_class.rep, next_fresh).first->second);
         }
-        framed = var_class.value.value();
+        framed = framed_expr_from_framed_functor(var_class.value.value());
     }
     if (const auto known = exported_.find(framed); known != exported_.end())
         return known->second;

@@ -9,6 +9,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Rebuilds a framed term with every bound class resolved and every unbound variable named by its
@@ -73,7 +74,7 @@ std::optional<const expr*> PUD_NORMALIZER::enter(framed_expr framed, const memo_
         const ubs_class var_class = find_.find(globalize_.globalize(framed.frame_offset, var->index));
         if (!var_class.value.has_value())
             return make_var_.make_var(var_class.rep);
-        framed = var_class.value.value();
+        framed = framed_expr_from_framed_functor(var_class.value.value());
     }
     if (const auto known = normalized.find(framed); known != normalized.end())
         return known->second;

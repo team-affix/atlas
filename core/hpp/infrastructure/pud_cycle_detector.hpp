@@ -7,6 +7,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Depth-first search over bind-map values from one equivalence-class root. A class or framed
@@ -97,7 +98,7 @@ bool pud_cycle_detector<IG, IF>::enter_class(
         return !mark->second;
     frame class_frame{&mark->second, {}};
     if (entered.value.has_value())
-        class_frame.pending.push_back(entered.value.value());
+        class_frame.pending.push_back(framed_expr_from_framed_functor(entered.value.value()));
     path.push_back(std::move(class_frame));
     return false;
 }
