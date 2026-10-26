@@ -45,7 +45,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
-    pud_structure_watcher<term_factory_t, modules_t, term_factory_t> watcher{terms, modules, terms};
+    pud_structure_watcher<term_factory_t, modules_t, expr_pool> watcher{terms, modules, exprs};
     pud_goal_resolver goal_resolver;
     pud_initial_goal_opener initial_goal_opener;
     std::mt19937 rng{0};

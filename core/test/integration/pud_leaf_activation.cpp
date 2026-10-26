@@ -45,7 +45,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
         pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
     using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
     using binder_t = pud_binder<term_factory_t, modules_t>;
-    using watcher_t = pud_structure_watcher<term_factory_t, modules_t, term_factory_t>;
+    using watcher_t = pud_structure_watcher<term_factory_t, modules_t, expr_pool>;
     using root_activator_t = pud_root_activator<
         modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, watcher_t, mhq_t,
         pud_query_holders>;
@@ -78,7 +78,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, modules, modules, modules};
     mhq_t mhq{replayer, modules, mhcs, mhcs, mhcs, mhcs, unit_queries};
     binder_t binder{terms, modules};
-    watcher_t structure_watcher{terms, modules, terms};
+    watcher_t structure_watcher{terms, modules, exprs};
     root_activator_t root_activator{
         modules, initial_goal_opener, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{
