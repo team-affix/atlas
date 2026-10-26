@@ -7,7 +7,6 @@
 #include "value_objects/framed_expr.hpp"
 
 struct framed_functor {
-    const expr* parent;
     const expr::functor* functor;
     uint32_t frame_offset;
     auto operator<=>(const framed_functor&) const = default;

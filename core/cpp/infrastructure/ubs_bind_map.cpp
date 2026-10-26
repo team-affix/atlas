@@ -45,7 +45,7 @@ void ubs_bind_map::instantiate(const ubs_class& unbound, framed_expr value) {
         .root = unbound.root,
         .size = unbound.size,
         .rep = unbound.rep,
-        .value = framed_functor{value.skeleton, functor, value.frame_offset},
+        .value = framed_functor{functor, value.frame_offset},
     });
 }
 
