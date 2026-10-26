@@ -98,7 +98,9 @@ std::optional<const expr*> PUD_EXPORTER::enter(framed_expr framed, std::vector<f
             const uint32_t next_fresh = caller_lvc_ + static_cast<uint32_t>(translations_.size());
             return make_var_.make_var(translations_.try_emplace(var_class.rep, next_fresh).first->second);
         }
-        framed = framed_expr_from_framed_functor(var_class.value.value());
+        const expr::functor& f = *var_class.value->functor;
+        const expr* reconstructed = make_functor_.make_functor(f.id, f.args);
+        framed = framed_expr{reconstructed, var_class.value->frame_offset};
     }
     if (const auto known = exported_.find(framed); known != exported_.end())
         return known->second;

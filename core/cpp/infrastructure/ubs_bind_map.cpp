@@ -1,7 +1,6 @@
 #include "infrastructure/ubs_bind_map.hpp"
 #include <algorithm>
 #include <utility>
-#include "value_objects/framed_functor.hpp"
 #include "debug_assert.hpp"
 
 ubs_bind_map::ubs_bind_map(const pud_ubs_state& state)
@@ -16,7 +15,7 @@ ubs_class ubs_bind_map::find(uint32_t var) const {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-std::optional<framed_expr> ubs_bind_map::equate(const ubs_class& class_a, const ubs_class& class_b) {
+std::optional<framed_functor> ubs_bind_map::equate(const ubs_class& class_a, const ubs_class& class_b) {
     DEBUG_ASSERT(class_a.root != class_b.root);
     const bool a_survives = class_a.size >= class_b.size;
     const ubs_class& survivor = a_survives ? class_a : class_b;
@@ -34,7 +33,7 @@ std::optional<framed_expr> ubs_bind_map::equate(const ubs_class& class_a, const 
     });
     if (!both_bound)
         return std::nullopt;
-    return framed_expr_from_framed_functor(absorbed.value.value());
+    return absorbed.value;
 }
 
 void ubs_bind_map::instantiate(const ubs_class& unbound, framed_expr value) {

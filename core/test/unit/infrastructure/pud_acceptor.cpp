@@ -33,6 +33,9 @@ struct MockGetInference {
 struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
+};
 struct MockBindMap {
     MOCK_METHOD(ubs_class, find, (uint32_t));
 };
@@ -62,8 +65,8 @@ ubs_class singleton(uint32_t var) {
 
 using test_acceptor_t = pud_acceptor<
     NiceMock<MockGetNodeGoals>, NiceMock<MockGetAxiom>, NiceMock<MockGetInference>,
-    NiceMock<MockMakeVar>, NiceMock<MockMakeBindMap>, NiceMock<MockMakeCycleDetector>, NiceMock<MockMakeUnifier>,
-    NiceMock<MockMakeExporter>>;
+    NiceMock<MockMakeVar>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeBindMap>, NiceMock<MockMakeCycleDetector>,
+    NiceMock<MockMakeUnifier>, NiceMock<MockMakeExporter>>;
 
 // Caller 3 has lvc 10 and resolves its goal 1 against the candidate path 2 -> 6; node 6 replays one
 // substitution of its variable 1.
@@ -72,6 +75,7 @@ struct PudAcceptorTest : public ::testing::Test {
     NiceMock<MockGetAxiom> axioms;
     NiceMock<MockGetInference> inferences;
     NiceMock<MockMakeVar> make_var;
+    NiceMock<MockMakeFunctor> make_functor;
     NiceMock<MockBindMap> accepted;
     NiceMock<MockMakeBindMap> make_bind_map;
     MockCycleDetector cycle_detector;
@@ -81,7 +85,8 @@ struct PudAcceptorTest : public ::testing::Test {
     NiceMock<MockExporter> exporter;
     NiceMock<MockMakeExporter> make_exporter;
     test_acceptor_t acceptor{
-        goals, axioms, inferences, make_var, make_bind_map, make_cycle_detector, make_unifier, make_exporter};
+        goals, axioms, inferences, make_var, make_functor, make_bind_map, make_cycle_detector, make_unifier,
+        make_exporter};
     expr call_site{expr::functor{1, {}}};
     expr axiom_head{expr::functor{1, {}}};
     expr callee_goal{expr::functor{2, {}}};
@@ -128,6 +133,7 @@ struct PudAcceptorTest : public ::testing::Test {
         ON_CALL(exporter, export_expr((framed_expr{&callee_goal, 10}))).WillByDefault(Return(&exported_goal));
         ON_CALL(exporter, export_expr((framed_expr{&value, 10}))).WillByDefault(Return(&exported_value));
         ON_CALL(make_var, make_var(1)).WillByDefault(Return(&var_one));
+        ON_CALL(make_functor, make_functor(_, _)).WillByDefault(Return(&value));
     }
 };
 

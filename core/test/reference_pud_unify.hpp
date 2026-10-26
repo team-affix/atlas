@@ -19,8 +19,11 @@ inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
 }
 
 inline framed_expr reference_pud_deref(pud_term_stack& stack, uint32_t global) {
-    if (const std::optional<framed_functor> value = stack.bind_map.find(global).value)
-        return framed_expr_from_framed_functor(value.value());
+    if (const std::optional<framed_functor> value = stack.bind_map.find(global).value) {
+        const expr::functor& f = *value->functor;
+        const expr* reconstructed = stack.pool.make_functor(f.id, f.args);
+        return framed_expr{reconstructed, value->frame_offset};
+    }
     return framed_expr{stack.pool.make_var(stack.bind_map.find(global).rep), 0u};
 }
 

@@ -1,7 +1,6 @@
 #ifndef REFERENCE_PUD_NORMALIZE_HPP
 #define REFERENCE_PUD_NORMALIZE_HPP
 
-#include <cstddef>
 #include <variant>
 #include <vector>
 #include "pud_term_stack.hpp"
@@ -13,8 +12,8 @@ inline const expr* reference_pud_normalize(pud_term_stack& stack, const expr* sk
         const ubs_class variable_class = stack.bind_map.find(variable->index);
         if (!variable_class.value.has_value())
             return stack.pool.make_var(variable_class.rep);
-        skeleton = reinterpret_cast<const expr*>(
-            reinterpret_cast<const char*>(variable_class.value->functor) - offsetof(expr, content));
+        const expr::functor& f = *variable_class.value->functor;
+        skeleton = stack.pool.make_functor(f.id, f.args);
     }
     const expr::functor& term = std::get<expr::functor>(skeleton->content);
     std::vector<const expr*> args;

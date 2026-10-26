@@ -15,8 +15,8 @@
 // be replaced by a mock.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar>
 struct pud_term_factory {
-    using cycle_detector_t = pud_cycle_detector<IGlobalize, ubs_bind_map>;
-    using unifier_t = pud_unifier<IGlobalize, ubs_bind_map, ubs_bind_map, ubs_bind_map, cycle_detector_t>;
+    using cycle_detector_t = pud_cycle_detector<IGlobalize, ubs_bind_map, IMakeFunctor>;
+    using unifier_t = pud_unifier<IGlobalize, ubs_bind_map, ubs_bind_map, ubs_bind_map, cycle_detector_t, IMakeFunctor>;
     using normalizer_t = pud_normalizer<IGlobalize, IMakeFunctor, IMakeVar, ubs_bind_map>;
     using exporter_t = pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, ubs_bind_map>;
 
@@ -51,13 +51,13 @@ ubs_bind_map PUD_TERM_FACTORY::make_bind_map(const pud_ubs_state& state) const {
 
 PUD_TERM_FACTORY_TEMPLATE
 typename PUD_TERM_FACTORY::cycle_detector_t PUD_TERM_FACTORY::make_cycle_detector(ubs_bind_map& bind_map) const {
-    return cycle_detector_t{globalize_, bind_map};
+    return cycle_detector_t{globalize_, bind_map, make_functor_};
 }
 
 PUD_TERM_FACTORY_TEMPLATE
 typename PUD_TERM_FACTORY::unifier_t PUD_TERM_FACTORY::make_unifier(
     ubs_bind_map& bind_map, cycle_detector_t& cycle_detector) const {
-    return unifier_t{globalize_, bind_map, bind_map, bind_map, cycle_detector};
+    return unifier_t{globalize_, bind_map, bind_map, bind_map, cycle_detector, make_functor_};
 }
 
 PUD_TERM_FACTORY_TEMPLATE

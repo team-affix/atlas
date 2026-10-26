@@ -28,7 +28,10 @@ struct MockFind {
     MOCK_METHOD(ubs_class, find, (uint32_t));
 };
 struct MockEquate {
-    MOCK_METHOD(std::optional<framed_expr>, equate, (const ubs_class&, const ubs_class&));
+    MOCK_METHOD(std::optional<framed_functor>, equate, (const ubs_class&, const ubs_class&));
+};
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
 };
 struct MockInstantiate {
     MOCK_METHOD(void, instantiate, (const ubs_class&, framed_expr));
@@ -48,7 +51,7 @@ ubs_class singleton(uint32_t var) {
 
 using test_unifier_t = pud_unifier<
     NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockEquate>,
-    NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>>;
+    NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>, NiceMock<MockMakeFunctor>>;
 
 struct PudUnifierTest : public ::testing::Test {
     NiceMock<MockGlobalize> globalize;
@@ -56,7 +59,8 @@ struct PudUnifierTest : public ::testing::Test {
     NiceMock<MockEquate> equate;
     NiceMock<MockInstantiate> instantiate;
     NiceMock<MockDetectCycle> detect_cycle;
-    test_unifier_t unifier{globalize, find, equate, instantiate, detect_cycle};
+    NiceMock<MockMakeFunctor> make_functor;
+    test_unifier_t unifier{globalize, find, equate, instantiate, detect_cycle, make_functor};
     std::deque<expr> owned;
 
     void SetUp() override {
@@ -64,6 +68,9 @@ struct PudUnifierTest : public ::testing::Test {
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(equate, equate(_, _)).WillByDefault(Return(std::nullopt));
         ON_CALL(detect_cycle, find_cycle_from_class(_, _)).WillByDefault(Return(false));
+        ON_CALL(make_functor, make_functor(_, _)).WillByDefault([this](uint32_t id, const std::vector<const expr*>& args) {
+            return functor(id, args);
+        });
     }
 
     const expr* var(uint32_t index) {
@@ -144,7 +151,8 @@ TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
     EXPECT_CALL(find, find(1)).WillOnce(Return(kept_class)).WillOnce(Return(kept_class));
     EXPECT_CALL(find, find(2)).WillOnce(Return(displaced_class));
     InSequence in_order;
-    EXPECT_CALL(equate, equate(kept_class, displaced_class)).WillOnce(Return(displaced));
+    EXPECT_CALL(equate, equate(kept_class, displaced_class))
+        .WillOnce(Return(framed_functor_from_framed_expr(displaced)));
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 20, .size = 1, .rep = 20, .value = std::nullopt}, _));
     EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));

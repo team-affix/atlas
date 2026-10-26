@@ -28,6 +28,7 @@ template<
     typename IGetAxiom,
     typename IGetInference,
     typename IMakeVar,
+    typename IMakeFunctor,
     typename IMakeBindMap,
     typename IMakeCycleDetector,
     typename IMakeUnifier,
@@ -38,6 +39,7 @@ struct pud_acceptor {
         IGetAxiom& get_axiom,
         IGetInference& get_inference,
         IMakeVar& make_var,
+        IMakeFunctor& make_functor,
         IMakeBindMap& make_bind_map,
         IMakeCycleDetector& make_cycle_detector,
         IMakeUnifier& make_unifier,
@@ -59,6 +61,7 @@ private:
     IGetAxiom& get_axiom_;
     IGetInference& get_inference_;
     IMakeVar& make_var_;
+    IMakeFunctor& make_functor_;
     IMakeBindMap& make_bind_map_;
     IMakeCycleDetector& make_cycle_detector_;
     IMakeUnifier& make_unifier_;
@@ -67,10 +70,10 @@ private:
 
 #define PUD_ACCEPTOR_TEMPLATE                                                              \
     template<typename IGetNodeGoals, typename IGetAxiom, typename IGetInference, typename IMakeVar, \
-             typename IMakeBindMap, typename IMakeCycleDetector, typename IMakeUnifier,    \
+             typename IMakeFunctor, typename IMakeBindMap, typename IMakeCycleDetector, typename IMakeUnifier,    \
              typename IMakeExporter>
 #define PUD_ACCEPTOR                                                                       \
-    pud_acceptor<IGetNodeGoals, IGetAxiom, IGetInference, IMakeVar, IMakeBindMap,          \
+    pud_acceptor<IGetNodeGoals, IGetAxiom, IGetInference, IMakeVar, IMakeFunctor, IMakeBindMap,          \
         IMakeCycleDetector, IMakeUnifier, IMakeExporter>
 
 PUD_ACCEPTOR_TEMPLATE
@@ -79,6 +82,7 @@ PUD_ACCEPTOR::pud_acceptor(
     IGetAxiom& get_axiom,
     IGetInference& get_inference,
     IMakeVar& make_var,
+    IMakeFunctor& make_functor,
     IMakeBindMap& make_bind_map,
     IMakeCycleDetector& make_cycle_detector,
     IMakeUnifier& make_unifier,
@@ -87,6 +91,7 @@ PUD_ACCEPTOR::pud_acceptor(
     , get_axiom_(get_axiom)
     , get_inference_(get_inference)
     , make_var_(make_var)
+    , make_functor_(make_functor)
     , make_bind_map_(make_bind_map)
     , make_cycle_detector_(make_cycle_detector)
     , make_unifier_(make_unifier)
@@ -127,7 +132,10 @@ pud_inference PUD_ACCEPTOR::accept(
             .var_idx = caller_rep,
             .value = accepted_class.rep != caller_rep
                 ? make_var_.make_var(accepted_class.rep)
-                : exporter.export_expr(framed_expr_from_framed_functor(accepted_class.value.value())),
+                : exporter.export_expr(framed_expr{
+                      make_functor_.make_functor(
+                          accepted_class.value->functor->id, accepted_class.value->functor->args),
+                      accepted_class.value->frame_offset}),
         });
     }
     for (const auto& [id, callee_goal] : get_node_goals_.get(candidate_path.back()).goals)

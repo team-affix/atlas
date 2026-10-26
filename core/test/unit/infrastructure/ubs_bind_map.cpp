@@ -17,7 +17,7 @@ struct UbsBindMapTest : public ::testing::Test {
     expr leaf{expr::functor{7, {}}};
     expr other_leaf{expr::functor{8, {}}};
 
-    std::optional<framed_expr> equate(uint32_t var_a, uint32_t var_b) {
+    std::optional<framed_functor> equate(uint32_t var_a, uint32_t var_b) {
         return bind_map.equate(bind_map.find(var_a), bind_map.find(var_b));
     }
 
@@ -78,13 +78,15 @@ TEST_F(UbsBindMapTest, EquatingALargerUnboundClassIntoABoundOneKeepsTheValue) {
 TEST_F(UbsBindMapTest, EquatingTwoBoundClassesReturnsTheValueTheMergedClassDoesNotKeep) {
     instantiate(1, framed_expr{&leaf, 0});
     instantiate(2, framed_expr{&other_leaf, 0});
-    const std::optional<framed_expr> displaced = equate(1, 2);
+    const std::optional<framed_functor> displaced = equate(1, 2);
     const std::optional<framed_functor> kept = bind_map.find(2).value;
     ASSERT_TRUE(displaced.has_value());
     ASSERT_TRUE(kept.has_value());
     EXPECT_NE(displaced, kept);
-    EXPECT_TRUE(displaced == (framed_expr{&leaf, 0}) || displaced == (framed_expr{&other_leaf, 0}));
-    EXPECT_TRUE(kept == (framed_expr{&leaf, 0}) || kept == (framed_expr{&other_leaf, 0}));
+    const framed_functor leaf_bound = framed_functor_from_framed_expr(framed_expr{&leaf, 0});
+    const framed_functor other_bound = framed_functor_from_framed_expr(framed_expr{&other_leaf, 0});
+    EXPECT_TRUE(displaced == leaf_bound || displaced == other_bound);
+    EXPECT_TRUE(kept == leaf_bound || kept == other_bound);
 }
 
 TEST_F(UbsBindMapTest, InstantiateBindsEveryMemberOfTheClass) {
@@ -164,7 +166,7 @@ TEST_F(UbsBindMapTest, RandomEditsAgreeWithAReferenceUnionFind) {
         if (!bind_left && !classes.same_class(left, right)) {
             const uint32_t left_rep = classes.min_index(left);
             const uint32_t right_rep = classes.min_index(right);
-            const std::optional<framed_expr> displaced = equate(left, right);
+            const std::optional<framed_functor> displaced = equate(left, right);
             classes.equate(left, right);
             const std::optional<framed_functor> kept = bind_map.find(left).value;
             const bool any_bound = bound_by_rep.contains(left_rep) || bound_by_rep.contains(right_rep);

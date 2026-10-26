@@ -3,6 +3,7 @@
 
 #include <compare>
 #include <cstdint>
+#include <variant>
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 
@@ -12,6 +13,9 @@ struct framed_functor {
     auto operator<=>(const framed_functor&) const = default;
 };
 
-framed_expr framed_expr_from_framed_functor(const framed_functor& bound);
+inline framed_functor framed_functor_from_framed_expr(const framed_expr& value) {
+    const expr::functor* functor = std::get_if<expr::functor>(&value.skeleton->content);
+    return framed_functor{functor, value.frame_offset};
+}
 
 #endif

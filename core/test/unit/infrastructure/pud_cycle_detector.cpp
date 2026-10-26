@@ -22,6 +22,9 @@ struct MockGlobalize {
 struct MockFind {
     MOCK_METHOD(ubs_class, find, (uint32_t));
 };
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
+};
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
     return frame_offset + index;
@@ -31,17 +34,21 @@ ubs_class singleton(uint32_t var) {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-using test_cycle_detector_t = pud_cycle_detector<NiceMock<MockGlobalize>, NiceMock<MockFind>>;
+using test_cycle_detector_t = pud_cycle_detector<NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockMakeFunctor>>;
 
 struct PudCycleDetectorTest : public ::testing::Test {
     std::deque<expr> owned;
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockFind> find;
-    test_cycle_detector_t detector{globalize, find};
+    NiceMock<MockMakeFunctor> make_functor;
+    test_cycle_detector_t detector{globalize, find, make_functor};
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
+        ON_CALL(make_functor, make_functor(_, _)).WillByDefault([this](uint32_t id, const std::vector<const expr*>& args) {
+            return functor(id, args);
+        });
     }
 
     const expr* var(uint32_t index) {

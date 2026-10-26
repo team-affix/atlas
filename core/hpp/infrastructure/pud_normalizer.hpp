@@ -74,7 +74,9 @@ std::optional<const expr*> PUD_NORMALIZER::enter(framed_expr framed, const memo_
         const ubs_class var_class = find_.find(globalize_.globalize(framed.frame_offset, var->index));
         if (!var_class.value.has_value())
             return make_var_.make_var(var_class.rep);
-        framed = framed_expr_from_framed_functor(var_class.value.value());
+        const expr::functor& f = *var_class.value->functor;
+        const expr* reconstructed = make_functor_.make_functor(f.id, f.args);
+        framed = framed_expr{reconstructed, var_class.value->frame_offset};
     }
     if (const auto known = normalized.find(framed); known != normalized.end())
         return known->second;
