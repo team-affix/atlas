@@ -11,20 +11,22 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Unifies two framed terms in place. Terms are hash-consed DAGs, so each functor pair is unified at
 // most once per call; cycles are looked for once, after every pair has been unified. Returns every
 // class the unification edited, each as it was just before its edit, or none when the terms do not
 // unify.
-template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle>
+template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle, typename IMakeFunctor>
 struct pud_unifier {
     pud_unifier(
         IGlobalize& globalize,
         IFind& find,
         IEquate& equate,
         IInstantiate& instantiate,
-        IDetectCycle& detect_cycle);
+        IDetectCycle& detect_cycle,
+        IMakeFunctor& make_functor);
     std::optional<std::vector<ubs_class>> unify(framed_expr lhs, framed_expr rhs);
 private:
     using pair_t = std::pair<framed_expr, framed_expr>;
@@ -39,12 +41,13 @@ private:
     IEquate& equate_;
     IInstantiate& instantiate_;
     IDetectCycle& detect_cycle_;
+    IMakeFunctor& make_functor_;
 };
 
 #define PUD_UNIFIER_TEMPLATE                                                                     \
     template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate,      \
-             typename IDetectCycle>
-#define PUD_UNIFIER pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle>
+             typename IDetectCycle, typename IMakeFunctor>
+#define PUD_UNIFIER pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle, IMakeFunctor>
 
 PUD_UNIFIER_TEMPLATE
 PUD_UNIFIER::pud_unifier(
@@ -52,12 +55,14 @@ PUD_UNIFIER::pud_unifier(
     IFind& find,
     IEquate& equate,
     IInstantiate& instantiate,
-    IDetectCycle& detect_cycle)
+    IDetectCycle& detect_cycle,
+    IMakeFunctor& make_functor)
     : globalize_(globalize)
     , find_(find)
     , equate_(equate)
     , instantiate_(instantiate)
-    , detect_cycle_(detect_cycle) {}
+    , detect_cycle_(detect_cycle)
+    , make_functor_(make_functor) {}
 
 PUD_UNIFIER_TEMPLATE
 std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed_expr rhs) {
@@ -79,12 +84,15 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed
             const ubs_class right_class = find_class(right);
             if (left_class.root == right_class.root)
                 continue;
-            const std::optional<framed_expr> displaced = equate_.equate(left_class, right_class);
+            const std::optional<framed_functor> displaced = equate_.equate(left_class, right_class);
             edited.push_back(left_class);
             edited.push_back(right_class);
             touched_class_roots.push_back(left_class.root);
-            if (displaced.has_value())
-                pending.emplace_back(left, displaced.value());
+            if (displaced.has_value()) {
+                const expr::functor& f = *displaced->functor;
+                const expr* reconstructed = make_functor_.make_functor(f.id, f.args);
+                pending.emplace_back(left, framed_expr{reconstructed, displaced->frame_offset});
+            }
             continue;
         }
 
@@ -92,10 +100,12 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed
             const framed_expr term = left_is_var ? right : left;
             const ubs_class var_class = find_class(left_is_var ? left : right);
             if (var_class.value.has_value()) {
-                pending.emplace_back(var_class.value.value(), term);
+                const expr::functor& f = *var_class.value->functor;
+                const expr* reconstructed = make_functor_.make_functor(f.id, f.args);
+                pending.emplace_back(framed_expr{reconstructed, var_class.value->frame_offset}, term);
                 continue;
             }
-            instantiate_.instantiate(var_class, term);
+            instantiate_.instantiate(var_class, framed_functor{std::get_if<expr::functor>(&term.skeleton->content), term.frame_offset});
             edited.push_back(var_class);
             touched_class_roots.push_back(var_class.root);
             continue;

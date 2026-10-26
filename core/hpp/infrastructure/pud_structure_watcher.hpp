@@ -16,14 +16,15 @@
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
+#include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 // Tells which inherited goals of a child changed structure under the child's substitutions. A goal
 // changes when one of its representatives is instantiated or merged with another of its own; merging
 // it with a representative it does not mention only renames it.
-template<typename IMakeBindMap, typename IGetInference>
+template<typename IMakeBindMap, typename IGetInference, typename IMakeFunctor>
 struct pud_structure_watcher {
-    pud_structure_watcher(IMakeBindMap& make_bind_map, IGetInference& get_inference);
+    pud_structure_watcher(IMakeBindMap& make_bind_map, IGetInference& get_inference, IMakeFunctor& make_functor);
     pud_structure_watch watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const;
     pud_structure_watch_change descend(
         const pud_structure_watch& parent_watch,
@@ -45,16 +46,18 @@ private:
 
     IMakeBindMap& make_bind_map_;
     IGetInference& get_inference_;
+    IMakeFunctor& make_functor_;
 };
 
-#define PUD_STRUCTURE_WATCHER_TEMPLATE template<typename IMakeBindMap, typename IGetInference>
-#define PUD_STRUCTURE_WATCHER pud_structure_watcher<IMakeBindMap, IGetInference>
+#define PUD_STRUCTURE_WATCHER_TEMPLATE template<typename IMakeBindMap, typename IGetInference, typename IMakeFunctor>
+#define PUD_STRUCTURE_WATCHER pud_structure_watcher<IMakeBindMap, IGetInference, IMakeFunctor>
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 PUD_STRUCTURE_WATCHER::pud_structure_watcher(
-    IMakeBindMap& make_bind_map, IGetInference& get_inference)
+    IMakeBindMap& make_bind_map, IGetInference& get_inference, IMakeFunctor& make_functor)
     : make_bind_map_(make_bind_map)
-    , get_inference_(get_inference) {}
+    , get_inference_(get_inference)
+    , make_functor_(make_functor) {}
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const {
@@ -83,8 +86,10 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
         std::optional<uint32_t> surviving_rep;
         if (const expr::var* surviving = std::get_if<expr::var>(&value->content)) {
             const ubs_class surviving_class = bind_map.find(surviving->index);
-            if (surviving_class.value.has_value())
-                value = surviving_class.value->skeleton;
+            if (surviving_class.value.has_value()) {
+                const expr::functor& f = *surviving_class.value->functor;
+                value = make_functor_.make_functor(f.id, f.args);
+            }
             else
                 surviving_rep = surviving->index;
         }
@@ -182,8 +187,10 @@ immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, IFin
                 reps = reps.insert(var_class.rep);
                 continue;
             }
-            if (expanded_roots.insert(var_class.root).second)
-                pending.push_back(var_class.value->skeleton);
+            if (expanded_roots.insert(var_class.root).second) {
+                const expr::functor& f = *var_class.value->functor;
+                pending.push_back(make_functor_.make_functor(f.id, f.args));
+            }
             continue;
         }
         if (!visited_functors.insert(next).second)

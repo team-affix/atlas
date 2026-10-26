@@ -45,7 +45,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
-    pud_structure_watcher<term_factory_t, modules_t> watcher{terms, modules};
+    pud_structure_watcher<term_factory_t, modules_t, term_factory_t> watcher{terms, modules, terms};
     pud_goal_resolver goal_resolver;
     pud_initial_goal_opener initial_goal_opener;
     std::mt19937 rng{0};
@@ -124,7 +124,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
             if (std::holds_alternative<expr::var>(value->content))
                 value = exprs.make_functor(functors.id("w"), {value});
             substitutions.push_back({.var_idx = rep, .value = value});
-            bind_map.instantiate(bind_map.find(rep), framed_expr{value, 0});
+            bind_map.instantiate(bind_map.find(rep), framed_functor{std::get_if<expr::functor>(&(value)->content), 0});
         }
         return substitutions;
     }
@@ -159,8 +159,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         for (const auto& [inherited_id, inherited_goal] : parent.goals.goals) {
             if (inherited_id == call_site)
                 continue;
-            const bool changed = reference_pud_canonical(parent.bindings, inherited_goal)
-                != reference_pud_canonical(child_bindings, inherited_goal);
+            const bool changed = reference_pud_canonical(parent.bindings, exprs, inherited_goal)
+                != reference_pud_canonical(child_bindings, exprs, inherited_goal);
             if (changed)
                 expected.insert(inherited_id);
         }

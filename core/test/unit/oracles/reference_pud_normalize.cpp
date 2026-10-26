@@ -29,19 +29,19 @@ TEST_F(ReferencePudNormalizeTest, AnUnboundVariableIsItsRepresentative) {
 }
 
 TEST_F(ReferencePudNormalizeTest, ABoundVariableIsReplacedByItsValue) {
-    stack.bind_map.instantiate(stack.bind_map.find(0), framed_expr{atom("a"), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(0), framed_functor{std::get_if<expr::functor>(&(atom("a"))->content), 0});
     EXPECT_EQ(reference_pud_normalize(stack, functor("f", {var(0), var(1)})), functor("f", {atom("a"), var(1)}));
 }
 
 TEST_F(ReferencePudNormalizeTest, ChainsOfBoundVariablesAreFollowedToTheEnd) {
-    stack.bind_map.instantiate(stack.bind_map.find(0), framed_expr{functor("s", {var(1)}), 0});
-    stack.bind_map.instantiate(stack.bind_map.find(1), framed_expr{functor("s", {var(2)}), 0});
-    stack.bind_map.instantiate(stack.bind_map.find(2), framed_expr{atom("z"), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(0), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(1)}))->content), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(1), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(2)}))->content), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(2), framed_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0});
     EXPECT_EQ(reference_pud_normalize(stack, var(0)), functor("s", {functor("s", {atom("z")})}));
 }
 
 TEST_F(ReferencePudNormalizeTest, AVariableBoundToAMergedClassReadsAsItsRepresentative) {
     stack.bind_map.equate(stack.bind_map.find(3), stack.bind_map.find(4));
-    stack.bind_map.instantiate(stack.bind_map.find(0), framed_expr{functor("g", {var(4)}), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(0), framed_functor{std::get_if<expr::functor>(&(functor("g", {var(4)}))->content), 0});
     EXPECT_EQ(reference_pud_normalize(stack, var(0)), functor("g", {var(3)}));
 }

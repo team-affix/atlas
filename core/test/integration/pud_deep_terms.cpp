@@ -43,8 +43,8 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepTerm) {
     const expr* deep_bound = var(1);
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_bound = functor("s", {deep_bound});
-    stack.bind_map.instantiate(stack.bind_map.find(0u), framed_expr{deep_bound, 0u});
-    stack.bind_map.instantiate(stack.bind_map.find(1u), framed_expr{atom("z"), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(0u), framed_functor{std::get_if<expr::functor>(&(deep_bound)->content), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(1u), framed_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u});
     const expr* deep_expected = atom("z");
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_expected = functor("s", {deep_expected});
@@ -54,9 +54,7 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepTerm) {
 TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepChainOfBindings) {
     const uint32_t chain = 50000;
     for (uint32_t index = 0; index < chain; ++index)
-        stack.bind_map.instantiate(
-            stack.bind_map.find(index),
-            framed_expr{functor("s", {var(index + 1)}), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(index + 1)}))->content), 0u});
     const expr* deep_chain = var(chain);
     for (uint32_t level = 0; level < chain; ++level)
         deep_chain = functor("s", {deep_chain});
@@ -79,9 +77,7 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterHandlesAVeryDeepTerm) {
 TEST_F(PudDeepTermsIntegrationTest, ExporterFollowsAVeryDeepChainOfCalleeBindings) {
     const uint32_t chain = 50000;
     for (uint32_t index = 0; index < chain; ++index)
-        stack.bind_map.instantiate(
-            stack.bind_map.find(10 + index),
-            framed_expr{functor("s", {var(11 + index)}), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(10 + index), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(11 + index)}))->content), 0u});
     const expr* deep_chain = var(10);
     for (uint32_t level = 0; level < chain; ++level)
         deep_chain = functor("s", {deep_chain});
@@ -187,12 +183,8 @@ TEST_F(PudDeepTermsIntegrationTest, OccursCheckSearchesASharedValueInLinearTime)
 
 TEST_F(PudDeepTermsIntegrationTest, NormalizerResolvesSharedBindingsInLinearTime) {
     for (uint32_t index = 0; index < k_shared_depth; ++index)
-        stack.bind_map.instantiate(
-            stack.bind_map.find(index),
-            framed_expr{functor("f", {var(index + 1), var(index + 1)}), 0u});
-    stack.bind_map.instantiate(
-        stack.bind_map.find(k_shared_depth),
-        framed_expr{atom("z"), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(functor("f", {var(index + 1), var(index + 1)}))->content), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(k_shared_depth), framed_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u});
     const expr* shared_expected = atom("z");
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         shared_expected = functor("f", {shared_expected, shared_expected});
@@ -222,7 +214,7 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerMatchesARecursiveReferenceOnRandom
             const expr* value = random_term(rng, 3, index + 1, 8);
             if (std::holds_alternative<expr::var>(value->content))
                 continue;
-            stack.bind_map.instantiate(stack.bind_map.find(index), framed_expr{value, 0u});
+            stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(value)->content), 0u});
         }
         const expr* term = random_term(rng, 6, 0, 9);
         EXPECT_EQ(

@@ -11,6 +11,11 @@
 #include "infrastructure/pud_term_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
+inline const expr* expr_from_framed_functor(expr_pool& pool, const framed_functor& ff) {
+    const expr::functor& f = *ff.functor;
+    return pool.make_functor(f.id, f.args);
+}
+
 // The binder over the real modules and real bind maps. Every inference hangs under the one dummy
 // axiom of the test's module.
 struct PudBinderIntegrationTest : public ::testing::Test {
@@ -40,10 +45,10 @@ struct PudBinderIntegrationTest : public ::testing::Test {
 
 TEST_F(PudBinderIntegrationTest, RootHasNoBindings) {
     const ubs_class class_zero = ubs_bind_map{pud_ubs_state{}}.find(0);
-    const expr* resolved_zero = class_zero.value.has_value() ? class_zero.value->skeleton : exprs.make_var(class_zero.rep);
+    const expr* resolved_zero = class_zero.value.has_value() ? expr_from_framed_functor(exprs, class_zero.value.value()) : exprs.make_var(class_zero.rep);
     EXPECT_EQ(resolved_zero, var(0));
     const ubs_class class_three = ubs_bind_map{pud_ubs_state{}}.find(3);
-    const expr* resolved_three = class_three.value.has_value() ? class_three.value->skeleton : exprs.make_var(class_three.rep);
+    const expr* resolved_three = class_three.value.has_value() ? expr_from_framed_functor(exprs, class_three.value.value()) : exprs.make_var(class_three.rep);
     EXPECT_EQ(resolved_three, var(3));
 }
 
@@ -58,7 +63,7 @@ TEST_F(PudBinderIntegrationTest, FunctorSpecInstantiates) {
     const pud_ubs_state bound = binder.bind(pud_ubs_state{}, child);
     const ubs_class var_class = ubs_bind_map{bound}.find(0);
     if (var_class.value.has_value())
-        EXPECT_EQ(var_class.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class.rep), functor("a", {}));
 }
@@ -75,11 +80,11 @@ TEST_F(PudBinderIntegrationTest, VarSpecEquates) {
     const ubs_class var_class_zero = ubs_bind_map{at_child}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, var(0));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), var(0));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), var(0));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, var(0));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), var(0));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), var(0));
 }
@@ -103,11 +108,11 @@ TEST_F(PudBinderIntegrationTest, MultiLevelChainResolves) {
     const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
@@ -124,7 +129,7 @@ TEST_F(PudBinderIntegrationTest, ParentUnchangedByChild) {
     binder.bind(root_bindings, child);
     const ubs_class var_class = ubs_bind_map{root_bindings}.find(0);
     if (var_class.value.has_value())
-        EXPECT_EQ(var_class.value->skeleton, var(0));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class.value.value()), var(0));
     else
         EXPECT_EQ(exprs.make_var(var_class.rep), var(0));
 }
@@ -150,11 +155,11 @@ TEST_F(PudBinderIntegrationTest, SiblingsDescendIndependently) {
     const ubs_class child_class = ubs_bind_map{at_child}.find(0);
     const ubs_class sibling_class = ubs_bind_map{at_sibling}.find(0);
     if (child_class.value.has_value())
-        EXPECT_EQ(child_class.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, child_class.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(child_class.rep), functor("a", {}));
     if (sibling_class.value.has_value())
-        EXPECT_EQ(sibling_class.value->skeleton, functor("b", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, sibling_class.value.value()), functor("b", {}));
     else
         EXPECT_EQ(exprs.make_var(sibling_class.rep), functor("b", {}));
 }
@@ -174,11 +179,11 @@ TEST_F(PudBinderIntegrationTest, SeveralSpecsAtOneNodeApplyInOrder) {
     const ubs_class var_class_zero = ubs_bind_map{at_child}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
@@ -196,15 +201,15 @@ TEST_F(PudBinderIntegrationTest, InstantiationWithVarArgsLeavesTheArgsUnbound) {
     const ubs_class var_class_one = ubs_bind_map{at_child}.find(1);
     const ubs_class var_class_two = ubs_bind_map{at_child}.find(2);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("f", {var(1), var(2)}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("f", {var(1), var(2)}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("f", {var(1), var(2)}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), var(1));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
     if (var_class_two.value.has_value())
-        EXPECT_EQ(var_class_two.value->skeleton, var(2));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_two.value.value()), var(2));
     else
         EXPECT_EQ(exprs.make_var(var_class_two.rep), var(2));
 }
@@ -228,11 +233,11 @@ TEST_F(PudBinderIntegrationTest, BindingAnArgLaterIsSeenThroughTheFunctor) {
     const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("f", {var(1)}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("f", {var(1)}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("f", {var(1)}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, functor("b", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), functor("b", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("b", {}));
 }
@@ -257,15 +262,15 @@ TEST_F(PudBinderIntegrationTest, EquatedClassKeepsTheSmallestIndexAsRepresentati
     const ubs_class var_class_three = ubs_bind_map{at_grandchild}.find(3);
     const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
     if (var_class_five.value.has_value())
-        EXPECT_EQ(var_class_five.value->skeleton, var(1));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_five.value.value()), var(1));
     else
         EXPECT_EQ(exprs.make_var(var_class_five.rep), var(1));
     if (var_class_three.value.has_value())
-        EXPECT_EQ(var_class_three.value->skeleton, var(1));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_three.value.value()), var(1));
     else
         EXPECT_EQ(exprs.make_var(var_class_three.rep), var(1));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), var(1));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
 }
@@ -289,11 +294,11 @@ TEST_F(PudBinderIntegrationTest, InstantiatingThroughANonRepresentativeBindsTheW
     const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), functor("a", {}));
 }
@@ -317,11 +322,11 @@ TEST_F(PudBinderIntegrationTest, NodeWithNoSpecsKeepsTheParentsBindings) {
     const ubs_class var_class_zero = ubs_bind_map{at_grandchild}.find(0);
     const ubs_class var_class_one = ubs_bind_map{at_grandchild}.find(1);
     if (var_class_zero.value.has_value())
-        EXPECT_EQ(var_class_zero.value->skeleton, functor("a", {}));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_zero.value.value()), functor("a", {}));
     else
         EXPECT_EQ(exprs.make_var(var_class_zero.rep), functor("a", {}));
     if (var_class_one.value.has_value())
-        EXPECT_EQ(var_class_one.value->skeleton, var(1));
+        EXPECT_EQ(expr_from_framed_functor(exprs, var_class_one.value.value()), var(1));
     else
         EXPECT_EQ(exprs.make_var(var_class_one.rep), var(1));
 }
@@ -345,7 +350,7 @@ TEST_F(PudBinderIntegrationTest, ManySpecsAtOneNode) {
         const std::string label = "v" + std::to_string(index);
         const ubs_class var_class = ubs_bind_map{at_child}.find(index);
         if (var_class.value.has_value())
-            EXPECT_EQ(var_class.value->skeleton, functor(label.c_str(), {}));
+            EXPECT_EQ(expr_from_framed_functor(exprs, var_class.value.value()), functor(label.c_str(), {}));
         else
             EXPECT_EQ(exprs.make_var(var_class.rep), functor(label.c_str(), {}));
     }
@@ -369,7 +374,7 @@ TEST_F(PudBinderIntegrationTest, DeepEquateChainThenOneInstantiation) {
     for (uint32_t index = 0; index <= depth; ++index) {
         const ubs_class var_class = ubs_bind_map{at}.find(index);
         if (var_class.value.has_value())
-            EXPECT_EQ(var_class.value->skeleton, var(0)) << "var " << index;
+            EXPECT_EQ(expr_from_framed_functor(exprs, var_class.value.value()), var(0)) << "var " << index;
         else
             EXPECT_EQ(exprs.make_var(var_class.rep), var(0)) << "var " << index;
     }
@@ -384,13 +389,13 @@ TEST_F(PudBinderIntegrationTest, DeepEquateChainThenOneInstantiation) {
     for (uint32_t index = 0; index <= depth; ++index) {
         const ubs_class var_class = ubs_bind_map{at_bottom}.find(index);
         if (var_class.value.has_value())
-            EXPECT_EQ(var_class.value->skeleton, functor("a", {})) << "var " << index;
+            EXPECT_EQ(expr_from_framed_functor(exprs, var_class.value.value()), functor("a", {})) << "var " << index;
         else
             EXPECT_EQ(exprs.make_var(var_class.rep), functor("a", {})) << "var " << index;
     }
     const ubs_class depth_class = ubs_bind_map{at}.find(depth);
     if (depth_class.value.has_value())
-        EXPECT_EQ(depth_class.value->skeleton, var(0));
+        EXPECT_EQ(expr_from_framed_functor(exprs, depth_class.value.value()), var(0));
     else
         EXPECT_EQ(exprs.make_var(depth_class.rep), var(0));
 }

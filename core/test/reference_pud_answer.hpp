@@ -15,7 +15,8 @@ inline const expr* reference_pud_answer_normalize(const ubs_bind_map& bind_map, 
         const ubs_class variable_class = bind_map.find(variable->index);
         if (!variable_class.value.has_value())
             return pool.make_var(variable_class.rep);
-        return reference_pud_answer_normalize(bind_map, pool, variable_class.value->skeleton);
+        const expr::functor& f = *variable_class.value->functor;
+        return reference_pud_answer_normalize(bind_map, pool, pool.make_functor(f.id, f.args));
     }
     const expr::functor& term = std::get<expr::functor>(skeleton->content);
     std::vector<const expr*> args;
@@ -44,7 +45,7 @@ inline const expr* reference_pud_answer(const pud_module& module, pud_node_id no
                 bind_map.equate(target, bind_map.find(value_var->index));
                 continue;
             }
-            bind_map.instantiate(target, framed_expr{substitution.value, 0});
+            bind_map.instantiate(target, framed_functor{std::get_if<expr::functor>(&(substitution.value)->content), 0});
         }
     }
     return reference_pud_answer_normalize(bind_map, pool, module.get_axiom(axiom).head);

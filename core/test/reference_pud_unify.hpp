@@ -5,6 +5,7 @@
 #include <optional>
 #include "pud_term_stack.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/framed_functor.hpp"
 
 inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
     if (const expr::var* var = std::get_if<expr::var>(&term->content))
@@ -18,8 +19,11 @@ inline bool reference_pud_occurs(uint32_t var_index, const expr* term) {
 }
 
 inline framed_expr reference_pud_deref(pud_term_stack& stack, uint32_t global) {
-    if (const std::optional<framed_expr> value = stack.bind_map.find(global).value)
-        return value.value();
+    if (const std::optional<framed_functor> value = stack.bind_map.find(global).value) {
+        const expr::functor& f = *value->functor;
+        const expr* reconstructed = stack.pool.make_functor(f.id, f.args);
+        return framed_expr{reconstructed, value->frame_offset};
+    }
     return framed_expr{stack.pool.make_var(stack.bind_map.find(global).rep), 0u};
 }
 
@@ -51,14 +55,14 @@ inline bool reference_pud_unify_terms(
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(stack.bind_map.find(lhs_var->index), framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(lhs_var->index), framed_functor{std::get_if<expr::functor>(&(value)->content), 0u});
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(stack.bind_map.find(rhs_var->index), framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(rhs_var->index), framed_functor{std::get_if<expr::functor>(&(value)->content), 0u});
         return true;
     }
 

@@ -10,9 +10,7 @@ struct PudNormalizerBindMapIntegrationTest : public ::testing::Test {
 
 TEST_F(PudNormalizerBindMapIntegrationTest, BoundFunctorNormalizesInnerVariables) {
     const expr* y = stack.pool.make_var(1u);
-    stack.bind_map.instantiate(
-        stack.bind_map.find(1u),
-        framed_expr{stack.pool.make_functor(functors.id("a"), {}), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(1u), framed_functor{std::get_if<expr::functor>(&(stack.pool.make_functor(functors.id("a"), {}))->content), 0u});
     const expr* fx = stack.pool.make_functor(functors.id("wrap"), {y});
     const expr* expected = stack.pool.make_functor(
         functors.id("wrap"), {stack.pool.make_functor(functors.id("a"), {})});
@@ -53,9 +51,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
     const expr* y = stack.pool.make_var(1u);
     const expr* fx = stack.pool.make_functor(functors.id("wrap"), {y});
     const expr* before = stack.normalizer.normalize(framed_expr{fx, 0u});
-    stack.bind_map.instantiate(
-        stack.bind_map.find(1u),
-        framed_expr{stack.pool.make_functor(functors.id("a"), {}), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(1u), framed_functor{std::get_if<expr::functor>(&(stack.pool.make_functor(functors.id("a"), {}))->content), 0u});
     const expr* after = stack.normalizer.normalize(framed_expr{fx, 0u});
     EXPECT_NE(before, after);
     const expr* expected = stack.pool.make_functor(
@@ -66,9 +62,7 @@ TEST_F(PudNormalizerBindMapIntegrationTest, BindingAfterTermBuiltIsVisibleOnNorm
 TEST_F(PudNormalizerBindMapIntegrationTest, UnrelatedBindingDoesNotChangeFramedTermNormalize) {
     const expr* term = stack.pool.make_functor(functors.id("f"), {stack.pool.make_var(0u)});
     const expr* first = stack.normalizer.normalize(framed_expr{term, 0u});
-    stack.bind_map.instantiate(
-        stack.bind_map.find(9u),
-        framed_expr{stack.pool.make_functor(functors.id("z"), {}), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(9u), framed_functor{std::get_if<expr::functor>(&(stack.pool.make_functor(functors.id("z"), {}))->content), 0u});
     const expr* second = stack.normalizer.normalize(framed_expr{term, 0u});
     EXPECT_EQ(first, second);
 }
