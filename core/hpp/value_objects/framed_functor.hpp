@@ -13,7 +13,6 @@ struct framed_functor {
     auto operator<=>(const framed_functor&) const = default;
 };
 
-framed_functor framed_functor_from_framed_expr(framed_expr value);
 framed_expr framed_expr_from_framed_functor(const framed_functor& bound);
 
 #endif

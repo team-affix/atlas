@@ -40,11 +40,12 @@ std::optional<framed_expr> ubs_bind_map::equate(const ubs_class& class_a, const 
 void ubs_bind_map::instantiate(const ubs_class& unbound, framed_expr value) {
     DEBUG_ASSERT(!unbound.value.has_value());
     DEBUG_ASSERT(std::holds_alternative<expr::functor>(value.skeleton->content));
+    const expr::functor* functor = std::get_if<expr::functor>(&value.skeleton->content);
     classes_.set(unbound.root, ubs_class{
         .root = unbound.root,
         .size = unbound.size,
         .rep = unbound.rep,
-        .value = framed_functor_from_framed_expr(value),
+        .value = framed_functor{value.skeleton, functor, value.frame_offset},
     });
 }
 

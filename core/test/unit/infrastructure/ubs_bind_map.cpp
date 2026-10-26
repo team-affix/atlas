@@ -79,7 +79,7 @@ TEST_F(UbsBindMapTest, EquatingTwoBoundClassesReturnsTheValueTheMergedClassDoesN
     instantiate(1, framed_expr{&leaf, 0});
     instantiate(2, framed_expr{&other_leaf, 0});
     const std::optional<framed_expr> displaced = equate(1, 2);
-    const std::optional<framed_expr> kept = bind_map.find(2).value;
+    const std::optional<framed_functor> kept = bind_map.find(2).value;
     ASSERT_TRUE(displaced.has_value());
     ASSERT_TRUE(kept.has_value());
     EXPECT_NE(displaced, kept);
@@ -166,7 +166,7 @@ TEST_F(UbsBindMapTest, RandomEditsAgreeWithAReferenceUnionFind) {
             const uint32_t right_rep = classes.min_index(right);
             const std::optional<framed_expr> displaced = equate(left, right);
             classes.equate(left, right);
-            const std::optional<framed_expr> kept = bind_map.find(left).value;
+            const std::optional<framed_functor> kept = bind_map.find(left).value;
             const bool any_bound = bound_by_rep.contains(left_rep) || bound_by_rep.contains(right_rep);
             const bool both_bound = bound_by_rep.contains(left_rep) && bound_by_rep.contains(right_rep);
             EXPECT_EQ(kept.has_value(), any_bound);
