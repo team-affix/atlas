@@ -5,7 +5,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_cycle_detector.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/framed_functor.hpp"
+#include "pud_framed_functor_helper.hpp"
 #include "value_objects/ubs_class.hpp"
 
 using ::testing::_;
@@ -84,43 +84,43 @@ TEST_F(PudCycleDetectorTest, AnUnboundClassHasNoCycle) {
 TEST_F(PudCycleDetectorTest, AClassBoundToATermWithoutItselfHasNoCycle) {
     ON_CALL(find, find(0)).WillByDefault(
         Return(ubs_class{
-            .root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(1), functor(2, {})}))->content), 0}}}));
+            .root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(1), functor(2, {})}), 0)}));
     test_cycle_detector_t::visitation visitation;
     EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
 }
 
 TEST_F(PudCycleDetectorTest, AClassBoundToATermContainingItselfIsACycle) {
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(0)}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(0)}), 0)}));
     test_cycle_detector_t::visitation visitation;
     EXPECT_TRUE(detector.find_cycle_from_class(0, visitation));
 }
 
 TEST_F(PudCycleDetectorTest, AValueIsReadInItsOwnFrame) {
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(0)}))->content), 5}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(0)}), 5)}));
     test_cycle_detector_t::visitation visitation_first;
     EXPECT_FALSE(detector.find_cycle_from_class(0, visitation_first));
     ON_CALL(find, find(5)).WillByDefault(
-        Return(ubs_class{.root = 5, .size = 1, .rep = 5, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(0)}))->content), 5}}}));
+        Return(ubs_class{.root = 5, .size = 1, .rep = 5, .value = pud_test_framed_functor(functor(1, {var(0)}), 5)}));
     test_cycle_detector_t::visitation visitation_second;
     EXPECT_TRUE(detector.find_cycle_from_class(0, visitation_second));
 }
 
 TEST_F(PudCycleDetectorTest, ACycleThroughTwoClassesIsFound) {
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(1)}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(1)}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
-        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(functor(2, {var(0)}))->content), 0}}}));
+        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_framed_functor(functor(2, {var(0)}), 0)}));
     test_cycle_detector_t::visitation visitation;
     EXPECT_TRUE(detector.find_cycle_from_class(1, visitation));
 }
 
 TEST_F(PudCycleDetectorTest, TwoRoutesToOneClassAreNoCycle) {
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(1), var(1)}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(1), var(1)}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
-        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(functor(2, {}))->content), 0}}}));
+        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_framed_functor(functor(2, {}), 0)}));
     test_cycle_detector_t::visitation visitation;
     EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
 }
@@ -128,7 +128,7 @@ TEST_F(PudCycleDetectorTest, TwoRoutesToOneClassAreNoCycle) {
 TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
     const expr* shared = functor(2, {var(1)});
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {shared, shared}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {shared, shared}), 0)}));
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).Times(1);
     test_cycle_detector_t::visitation visitation;
@@ -138,18 +138,18 @@ TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
 TEST_F(PudCycleDetectorTest, ASharedSubtermReachedFromInsideItselfIsACycle) {
     const expr* shared = functor(2, {var(1)});
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {shared}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {shared}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
-        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(shared)->content), 0}}}));
+        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_framed_functor(shared, 0)}));
     test_cycle_detector_t::visitation visitation;
     EXPECT_TRUE(detector.find_cycle_from_class(0, visitation));
 }
 
 TEST_F(PudCycleDetectorTest, AClassSearchedFromAnEarlierRootIsNotSearchedAgain) {
     ON_CALL(find, find(0)).WillByDefault(
-        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(1)}))->content), 0}}}));
+        Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_framed_functor(functor(1, {var(1)}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
-        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(functor(2, {var(2)}))->content), 0}}}));
+        Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_framed_functor(functor(2, {var(2)}), 0)}));
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(2)).Times(1);
     test_cycle_detector_t::visitation visitation;

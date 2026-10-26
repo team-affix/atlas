@@ -7,6 +7,7 @@
 #include "infrastructure/pud_acceptor.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/rule.hpp"
+#include "pud_framed_functor_helper.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -170,7 +171,7 @@ TEST_F(PudAcceptorTest, ACallerClassMergedUnderASmallerRepresentativeIsSubstitut
 
 TEST_F(PudAcceptorTest, ACallerClassBoundByTheResolutionIsSubstitutedByItsExportedValue) {
     ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}}}));
-    ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = framed_functor{std::get_if<expr::functor>(&(&value)->content), 10}}}));
+    ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = pud_test_framed_functor(&value, 10)}));
     EXPECT_EQ(
         acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions,
         (std::vector<pud_substitution>{{.var_idx = 4, .value = &exported_value}}));
@@ -178,9 +179,9 @@ TEST_F(PudAcceptorTest, ACallerClassBoundByTheResolutionIsSubstitutedByItsExport
 
 TEST_F(PudAcceptorTest, CalleeClassesAndCallerClassesAlreadyBoundWhenEditedAreNotSubstituted) {
     const ubs_class callee{.root = 12, .size = 1, .rep = 12, .value = std::nullopt};
-    const ubs_class bound_before{.root = 3, .size = 1, .rep = 3, .value = framed_functor{std::get_if<expr::functor>(&(&value)->content), 0}}};
+    const ubs_class bound_before{.root = 3, .size = 1, .rep = 3, .value = pud_test_framed_functor(&value, 0)};
     ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{callee, bound_before}}));
-    ON_CALL(accepted, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = framed_functor{std::get_if<expr::functor>(&(&value)->content), 10}}}));
+    ON_CALL(accepted, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = pud_test_framed_functor(&value, 10)}));
     EXPECT_TRUE(acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions.empty());
 }
 

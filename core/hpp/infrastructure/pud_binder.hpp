@@ -5,7 +5,6 @@
 #include <utility>
 #include <variant>
 #include "value_objects/expr.hpp"
-#include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_substitution.hpp"
@@ -35,7 +34,7 @@ pud_ubs_state pud_binder<IMBM, IGI>::bind(const pud_ubs_state& parent_bindings, 
     for (const pud_substitution& substitution : get_inference_.get_inference(child).substitutions) {
         const ubs_class target = bind_map.find(substitution.var_idx);
         if (const expr::var* var = std::get_if<expr::var>(&substitution.value->content)) {
-            [[maybe_unused]] const std::optional<framed_expr> displaced = bind_map.equate(target, bind_map.find(var->index));
+            [[maybe_unused]] const std::optional<framed_functor> displaced = bind_map.equate(target, bind_map.find(var->index));
             DEBUG_ASSERT(!displaced.has_value());
             continue;
         }

@@ -5,6 +5,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_unifier.hpp"
 #include "value_objects/expr.hpp"
+#include "pud_framed_functor_helper.hpp"
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
@@ -117,7 +118,7 @@ TEST_F(PudUnifierTest, AnUnboundVarIsBoundToTheOtherSideAsIsWithItsFrame) {
     const expr* term = functor(1, {var(0)});
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 2, .size = 1, .rep = 2, .value = std::nullopt},
-        (framed_expr{term, 8})));
+        (pud_test_framed_functor(term, 8))));
     EXPECT_TRUE(unifier.unify({var(2), 0}, {term, 8}));
 }
 
@@ -125,17 +126,17 @@ TEST_F(PudUnifierTest, VarOnEitherSideBindsTheSameWay) {
     const expr* term = functor(1, {});
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 2, .size = 1, .rep = 2, .value = std::nullopt},
-        (framed_expr{term, 4})));
+        (pud_test_framed_functor(term, 4))));
     EXPECT_TRUE(unifier.unify({term, 4}, {var(2), 0}));
 }
 
 TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
     ON_CALL(find, find(2)).WillByDefault(Return(ubs_class{
-        .root = 2, .size = 1, .rep = 2, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(0)}))->content), 10}}}));
+        .root = 2, .size = 1, .rep = 2, .value = pud_test_framed_functor(functor(1, {var(0)}), 10)}));
     const expr* five = functor(5, {});
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 10, .size = 1, .rep = 10, .value = std::nullopt},
-        (framed_expr{five, 0})));
+        (pud_test_framed_functor(five, 0))));
     EXPECT_CALL(instantiate, instantiate(Field(&ubs_class::root, 2u), _)).Times(0);
     EXPECT_TRUE(unifier.unify({var(2), 0}, {functor(1, {five}), 0}));
 }
@@ -144,15 +145,15 @@ TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
     const framed_expr kept{functor(3, {var(0)}), 20};
     const framed_expr displaced{functor(3, {functor(9, {})}), 0};
     const ubs_class kept_class = ubs_class{
-        .root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&kept.skeleton->content), kept.frame_offset}};
+        .root = 1, .size = 1, .rep = 1, .value = pud_test_framed_functor(kept.skeleton, kept.frame_offset)};
     const ubs_class displaced_class = ubs_class{
-        .root = 2, .size = 1, .rep = 2, .value = framed_functor{std::get_if<expr::functor>(&displaced.skeleton->content), displaced.frame_offset}};
+        .root = 2, .size = 1, .rep = 2, .value = pud_test_framed_functor(displaced.skeleton, displaced.frame_offset)};
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).WillOnce(Return(kept_class)).WillOnce(Return(kept_class));
     EXPECT_CALL(find, find(2)).WillOnce(Return(displaced_class));
     InSequence in_order;
     EXPECT_CALL(equate, equate(kept_class, displaced_class))
-        .WillOnce(Return(framed_functor{std::get_if<expr::functor>(&displaced.skeleton->content), displaced.frame_offset}));
+        .WillOnce(Return(pud_test_framed_functor(displaced.skeleton, displaced.frame_offset)));
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 20, .size = 1, .rep = 20, .value = std::nullopt}, _));
     EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));

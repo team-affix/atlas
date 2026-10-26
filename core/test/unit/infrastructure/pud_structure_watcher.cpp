@@ -4,6 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "value_objects/pud_inference.hpp"
+#include "pud_framed_functor_helper.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -109,7 +110,7 @@ TEST_F(PudStructureWatcherTest, MergingTwoRepresentativesOfOneGoalChangesIt) {
 }
 
 TEST_F(PudStructureWatcherTest, RenamingToABoundVariableInstantiates) {
-    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(&ground)->content), 0}}}));
+    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = pud_test_framed_functor(&ground, 0)}));
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &x1}};
     const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
     EXPECT_THAT(
