@@ -34,7 +34,7 @@ struct MockMakeFunctor {
     MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
 };
 struct MockInstantiate {
-    MOCK_METHOD(void, instantiate, (const ubs_class&, framed_expr));
+    MOCK_METHOD(void, instantiate, (const ubs_class&, framed_functor));
 };
 struct MockDetectCycle {
     struct visitation {};
