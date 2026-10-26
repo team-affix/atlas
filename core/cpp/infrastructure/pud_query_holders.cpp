@@ -11,7 +11,6 @@ void pud_query_holders::hold(pud_mhq_head_id head_id, pud_global_node_id leaf, p
     DEBUG_ASSERT(inserted);
 }
 
-// Returns whether the leaf was the query's last holder; the query is then forgotten here.
 bool pud_query_holders::release(pud_mhq_head_id head_id, pud_global_node_id leaf) {
     holding& held = holdings_.at(head_id);
     [[maybe_unused]] const size_t erased = held.leaves.erase(leaf);
@@ -29,7 +28,6 @@ std::optional<pud_unfold> pud_query_holders::find_holder(pud_mhq_head_id head_id
     return pud_unfold{.leaf = *held->second.leaves.begin(), .goal = held->second.goal};
 }
 
-// A query nobody holds any more has no holders.
 std::vector<pud_global_node_id> pud_query_holders::get_holders(pud_mhq_head_id head_id) const {
     const auto held = holdings_.find(head_id);
     if (held == holdings_.end())

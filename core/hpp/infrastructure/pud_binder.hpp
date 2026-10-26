@@ -12,8 +12,6 @@
 #include "value_objects/ubs_class.hpp"
 #include "debug_assert.hpp"
 
-// Gives a child the bindings of its rule: its parent's, with the child's substitutions applied. A
-// substitution targets a representative unbound in the parent, so applying it never displaces a value.
 template<typename IMakeBindMap, typename IGetInference>
 struct pud_binder {
     pud_binder(IMakeBindMap& make_bind_map, IGetInference& get_inference);

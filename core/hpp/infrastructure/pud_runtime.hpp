@@ -8,16 +8,12 @@
 #include "value_objects/pud_module_id.hpp"
 #include "value_objects/pud_unnormalized_rule_information.hpp"
 
-// The runtime over any number of modules, each module owned by the caller. A module is registered
-// whole, after every module it depends on, and is put on the frontier as it is registered. Any live
-// leaf of any module can then be unfolded on one of its goals. Every expression the runtime makes goes
-// into the caller's pool.
 template<typename IModule, typename IExprPool>
 struct pud_runtime {
     pud_runtime(IExprPool& expr_pool);
     pud_frontier_change register_module(IModule& module);
     pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal);
-    pud_unnormalized_rule_information get_rule_information(pud_global_node_id node) const; // node must be live
+    pud_unnormalized_rule_information get_rule_information(pud_global_node_id node) const;
 private:
     pud_manifest<IModule, IExprPool> manifest_;
 };

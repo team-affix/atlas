@@ -6,7 +6,6 @@
 #include "value_objects/pud_body_goal_id.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
-// Un-normalized head, open body goals, and bindings for one live node, as the runtime holds them.
 struct pud_unnormalized_rule_information {
     const expr* head;
     immer::map<pud_body_goal_id, const expr*> body;

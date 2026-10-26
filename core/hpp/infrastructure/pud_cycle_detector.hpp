@@ -10,9 +10,6 @@
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-// Depth-first search over bind-map values from one equivalence-class root. A class or framed
-// subterm reached again while still on the path closes a cycle; finished nodes are skipped on later
-// entry roots when visitation is shared across calls in one unify.
 template<typename IGlobalize, typename IFind, typename IMakeFunctor>
 struct pud_cycle_detector {
     struct visitation {

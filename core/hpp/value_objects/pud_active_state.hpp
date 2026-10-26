@@ -8,7 +8,6 @@
 #include "value_objects/pud_structure_watch.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// What a node needs while it is active: its lvc, bindings, structure watch, and query heads.
 struct pud_active_state {
     uint32_t lvc;
     pud_ubs_state bindings;

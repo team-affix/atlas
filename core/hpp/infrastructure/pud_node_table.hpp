@@ -7,7 +7,6 @@
 #include "value_objects/pud_global_node_id_hash.hpp"
 #include "debug_assert.hpp"
 
-// One value per node, stored once. Every stored value stays in place while later nodes are added.
 template<typename T>
 struct pud_node_table {
     pud_node_table();

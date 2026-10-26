@@ -12,12 +12,6 @@
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-// Rebuilds framed terms for a caller: classes represented below the caller's lvc stay the caller's
-// variables, other bound classes are resolved, and other unbound classes become fresh variables
-// numbered densely from the lvc. Each fresh variable is recorded in the translations, keyed by the
-// representative it replaces, so the translations' size is the number of fresh variables. The
-// translations and the rebuilt subterms are shared by every export of one exporter, so every term of
-// an inference is rebuilt in one environment.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind>
 struct pud_exporter {
     pud_exporter(
@@ -87,7 +81,6 @@ const expr* PUD_EXPORTER::export_expr(framed_expr framed) {
     return finished.value();
 }
 
-// Returns the exported term when it is already known, or pushes the functor still to be rebuilt.
 PUD_EXPORTER_TEMPLATE
 std::optional<const expr*> PUD_EXPORTER::enter(framed_expr framed, std::vector<frame>& pending) {
     if (const expr::var* var = std::get_if<expr::var>(&framed.skeleton->content)) {

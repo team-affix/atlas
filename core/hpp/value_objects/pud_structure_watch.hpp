@@ -6,7 +6,6 @@
 #include <immer/set.hpp>
 #include "value_objects/pud_body_goal_id.hpp"
 
-// Which unbound representatives each open goal of a leaf mentions, indexed both ways.
 struct pud_structure_watch {
     immer::map<uint32_t, immer::set<pud_body_goal_id>> rep_to_goals;
     immer::map<pud_body_goal_id, immer::set<uint32_t>> goal_to_reps;

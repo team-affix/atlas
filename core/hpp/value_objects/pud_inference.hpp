@@ -9,8 +9,6 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/pud_substitution.hpp"
 
-// One inference step: its parent resolved on its call site, and what it adds on top of that parent:
-// its substitutions, its body goals and how many fresh variables they introduce.
 struct pud_inference {
     pud_node_id parent;
     pud_body_goal_id call_site;

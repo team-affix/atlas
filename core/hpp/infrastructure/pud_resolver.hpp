@@ -9,8 +9,6 @@
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 
-// Resolves a leaf's goal against every candidate of the goal's query, in axiom order: one inference
-// per candidate.
 template<
     typename IGetActiveState,
     typename IFindNodeGoal,

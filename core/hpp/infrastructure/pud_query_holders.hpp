@@ -10,8 +10,6 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_unfold.hpp"
 
-// Which live nodes hold each query. A query belongs to one goal id, the same at every node holding
-// it, since a child inherits its parent's goal ids. A query lives exactly while some node holds it.
 struct pud_query_holders {
     pud_query_holders();
     void hold(pud_mhq_head_id head_id, pud_global_node_id leaf, pud_body_goal_id goal);

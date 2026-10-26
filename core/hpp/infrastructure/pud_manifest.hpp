@@ -33,9 +33,6 @@
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 
-// Composition root of the runtime: every infrastructure that works on the registered modules.
-// The modules and the expression pool are the caller's; every expression the runtime makes goes
-// into that pool.
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
     using bind_map_factory_t = pud_bind_map_factory;

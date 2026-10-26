@@ -12,9 +12,6 @@
 #include "value_objects/rule.hpp"
 #include "debug_assert.hpp"
 
-// Every registered module by its id, each node reached through the module it belongs to. A module is
-// registered after every module it depends on. A module's queries see the axioms of every module it
-// depends on, directly or not, dependencies before their dependents, then its own.
 template<typename IModule>
 struct pud_modules {
     pud_modules();
@@ -107,7 +104,6 @@ std::optional<pud_global_node_id> pud_modules<IModule>::get_parent(pud_global_no
     return pud_global_node_id{.module = node.module, .node = parent.value()};
 }
 
-// The children's ids within the node's module.
 template<typename IModule>
 const std::vector<pud_node_id>& pud_modules<IModule>::get_children(pud_global_node_id node) const {
     return modules_.at(node.module).data->get_children(node.node);

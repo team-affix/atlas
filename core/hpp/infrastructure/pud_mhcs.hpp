@@ -15,11 +15,6 @@
 #include "value_objects/pud_replay.hpp"
 #include "value_objects/pud_witness_advance.hpp"
 
-// The multi-headed candidate search. Each head specializes its query below one axiom as deep as its
-// witnesses allow: a head on a live leaf is its own witness; otherwise it holds two witness searches
-// under distinct children (a choice point), and when only one survives it steps down toward it.
-// Heads are reactive: invalidating leaves re-justifies every head that relied on them, and a head
-// that can no longer be justified is refuted and dropped.
 template<
     typename IDescendReplay,
     typename ITryAddWitnessSearch,
@@ -47,18 +42,18 @@ struct pud_mhcs {
     std::vector<pud_mhcs_head_id> invalidate_leaf(pud_global_node_id leaf);
     const std::vector<pud_global_node_id>& path(pud_mhcs_head_id head_id) const;
 private:
-    // A witness search and the child of the candidate it searches under.
+
     struct witness {
         pud_mhws_head_id id;
         pud_replay search_root;
     };
-    // The candidate's search for two witnesses among its node's children, the next child to try.
+
     struct witness_pair {
         std::optional<witness> a;
         std::optional<witness> b;
         size_t next_child;
     };
-    // A candidate holding a witness pair is a choice point; one without is its own witness.
+
     struct candidate {
         std::vector<pud_global_node_id> path;
         pud_replay current;
@@ -131,8 +126,6 @@ std::optional<pud_mhcs_head_id> PUD_MHCS::try_add(pud_replay axiom_root) {
     return try_admit(candidate{.path = std::move(path), .current = std::move(axiom_root), .witnesses = std::nullopt});
 }
 
-// Replays the other head's path from the new axiom root; a path that no longer replays refutes the
-// fork. A replayed choice point forks both of its witness searches onto the new environment.
 PUD_MHCS_TEMPLATE
 std::optional<pud_mhcs_head_id> PUD_MHCS::try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root) {
     const candidate& other = candidates_.at(head_id);
@@ -197,7 +190,6 @@ std::vector<pud_mhcs_head_id> PUD_MHCS::invalidate_leaf(pud_global_node_id leaf)
     return refuted;
 }
 
-// Root first, the candidate's node last.
 PUD_MHCS_TEMPLATE
 const std::vector<pud_global_node_id>& PUD_MHCS::path(pud_mhcs_head_id head_id) const {
     return candidates_.at(head_id).path;
@@ -213,7 +205,6 @@ std::optional<pud_mhcs_head_id> PUD_MHCS::try_admit(candidate admitted) {
     return head_id;
 }
 
-// A candidate that fails to be justified releases every witness search it still holds.
 PUD_MHCS_TEMPLATE
 bool PUD_MHCS::try_justify(candidate& justified) {
     while (true) {
@@ -273,8 +264,6 @@ std::optional<typename PUD_MHCS::witness> PUD_MHCS::try_fork_witness(
     return witness{.id = fork.value(), .search_root = std::move(search_root.value())};
 }
 
-// Steps onto the survivor's search root, and the survivor's search moves one level down with it. A
-// survivor whose search root was its witness leaves the candidate on that leaf, its own witness.
 PUD_MHCS_TEMPLATE
 void PUD_MHCS::advance(candidate& advancing, witness& survivor) {
     std::optional<pud_witness_advance> advanced = advance_witness_search_.advance(survivor.id);

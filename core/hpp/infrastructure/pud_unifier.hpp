@@ -14,10 +14,6 @@
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-// Unifies two framed terms in place. Terms are hash-consed DAGs, so each functor pair is unified at
-// most once per call; cycles are looked for once, after every pair has been unified. Returns every
-// class the unification edited, each as it was just before its edit, or none when the terms do not
-// unify.
 template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle, typename IMakeFunctor>
 struct pud_unifier {
     pud_unifier(

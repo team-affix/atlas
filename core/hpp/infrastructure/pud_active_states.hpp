@@ -6,7 +6,6 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_global_node_id_hash.hpp"
 
-// Active state stored per node while it is live on the frontier; erased when the node is unfolded or refuted.
 struct pud_active_states {
     pud_active_states();
     void store(pud_global_node_id id, pud_active_state state);

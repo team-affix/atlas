@@ -6,8 +6,6 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_global_node_id_hash.hpp"
 
-// How many children of each node are alive: each child counts from its activation until it dies. A
-// node none of whose children was activated has none.
 struct pud_node_live_child_counts {
     pud_node_live_child_counts();
     void increment(pud_global_node_id id);

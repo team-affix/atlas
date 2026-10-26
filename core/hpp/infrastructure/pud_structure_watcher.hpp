@@ -19,9 +19,6 @@
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-// Tells which inherited goals of a child changed structure under the child's substitutions. A goal
-// changes when one of its representatives is instantiated or merged with another of its own; merging
-// it with a representative it does not mention only renames it.
 template<typename IMakeBindMap, typename IGetInference, typename IMakeFunctor>
 struct pud_structure_watcher {
     pud_structure_watcher(IMakeBindMap& make_bind_map, IGetInference& get_inference, IMakeFunctor& make_functor);
@@ -68,8 +65,6 @@ pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(const pud_ubs_state& root_
     return watched;
 }
 
-// A substitution onto a variable still unbound in the child only renames a representative; any other
-// substitution instantiates one. The child's own goals are watched after its substitutions.
 PUD_STRUCTURE_WATCHER_TEMPLATE
 pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
     const pud_structure_watch& parent_watch,
@@ -170,7 +165,6 @@ std::vector<pud_body_goal_id> PUD_STRUCTURE_WATCHER::propagate_rep_instantiated(
     return changed;
 }
 
-// Terms are hash-consed DAGs, so each functor subterm and each bound class is visited once.
 PUD_STRUCTURE_WATCHER_TEMPLATE
 template<typename IFind>
 immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, IFind& bind_map) const {

@@ -15,9 +15,6 @@
 #include "value_objects/pud_replay.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// The multi-headed query. Each head is a goal's query: at most one candidate under each axiom its
-// module sees, kept in axiom order. A head is admitted only with a candidate, and is reported as unit once it is down
-// to one. A head whose last candidate is refuted is reported as refuted; it stays until removed.
 template<
     typename IEnterReplay,
     typename IListVisibleAxioms,
@@ -121,8 +118,6 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
     return head_id;
 }
 
-// A fork only looks under the axioms the forked head still has a candidate under: a specialization
-// never reaches a node the general query could not.
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_fork(
     pud_mhq_head_id head_id,

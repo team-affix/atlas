@@ -17,12 +17,6 @@
 #include "value_objects/ubs_class.hpp"
 #include "debug_assert.hpp"
 
-// Accepts a candidate into an inference of the caller on its call site, in the caller's module. The call-site goal enters the
-// candidate's axiom and the candidate's path is replayed below it, the callee framed at the caller's
-// lvc, in one environment on top of the caller's. Every caller class that was unbound when a
-// unification edited it is noted as it is edited; one that ends up bound, or merged under another
-// representative, becomes a substitution. The callee's open goals are exported as the inference's
-// body goals.
 template<
     typename IGetNodeGoals,
     typename IGetAxiom,
@@ -144,7 +138,6 @@ pud_inference PUD_ACCEPTOR::accept(
     return inference;
 }
 
-// The candidate is the query's, so every unification along its path succeeds.
 PUD_ACCEPTOR_TEMPLATE
 void PUD_ACCEPTOR::note_caller_classes(
     const std::optional<std::vector<ubs_class>>& edited,

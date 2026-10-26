@@ -4,11 +4,6 @@
 #include <vector>
 #include "value_objects/pud_global_node_id.hpp"
 
-// Refutes a leaf and everything that follows from it: the leaf is marked refuted, its death is
-// propagated up the tree, it is deactivated, and every leaf the deactivation stranded on a query
-// without a candidate is refuted in turn. Returns every leaf refuted, the given one first. A leaf
-// already refuted is left alone, and so is an interior node: its children inherit the exhausted query
-// and arrive refuted, or never needed it.
 template<
     typename IMarkLeafRefuted,
     typename IPropagateRefutation,

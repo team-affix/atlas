@@ -10,11 +10,6 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
-// One module's tree, append-only: its axioms, given once at construction, every inference on top of
-// its parent, the children each node was unfolded into, and which nodes are refuted. Nodes are
-// numbered within the module in the order they are stored, the axioms first. A node is a leaf until
-// its first child is stored; every child of a node is resolved on the same call site. A refuted node
-// stays refuted.
 struct pud_module {
     pud_module(pud_module_id module_id, std::vector<pud_module_id> dependencies, std::vector<rule> axioms);
     pud_module_id get_module_id() const;

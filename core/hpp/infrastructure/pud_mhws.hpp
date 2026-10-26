@@ -16,9 +16,6 @@
 #include "value_objects/pud_witness_advance.hpp"
 #include "debug_assert.hpp"
 
-// The multi-headed witness search. Each head searches the subtree under its search root depth first,
-// children in order, for a live leaf its query reaches: its witness. A head whose witness stops being
-// a live leaf resumes from where it stopped; a head that runs out of subtree is exhausted and dropped.
 template<typename IDescendReplay, typename ICheckNodeLeaf, typename ICheckNodeRefuted, typename IGetChildren>
 struct pud_mhws {
     pud_mhws(
@@ -32,8 +29,7 @@ struct pud_mhws {
     void remove(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
 private:
-    // One level below the search root: the node the search stands on, none while it moves on to the
-    // next sibling, and the position of that next sibling among the parent's children.
+
     struct frame {
         std::optional<pud_replay> current;
         size_t next_sibling;
@@ -85,8 +81,6 @@ std::optional<pud_mhws_head_id> PUD_MHWS::try_add(pud_replay search_root) {
     return try_admit(search{.root = std::move(search_root), .frames = {}});
 }
 
-// Replays the other head's path from the new search root. Where the path no longer replays, the
-// search stops there and moves on to that frame's later siblings.
 PUD_MHWS_TEMPLATE
 std::optional<pud_mhws_head_id> PUD_MHWS::try_fork(pud_mhws_head_id head_id, pud_replay search_root) {
     search forked{.root = std::move(search_root), .frames = {}};
@@ -101,7 +95,6 @@ std::optional<pud_mhws_head_id> PUD_MHWS::try_fork(pud_mhws_head_id head_id, pud
     return try_admit(std::move(forked));
 }
 
-// A head whose witness is its own search root has nothing left below it and is dropped.
 PUD_MHWS_TEMPLATE
 std::optional<pud_witness_advance> PUD_MHWS::advance(pud_mhws_head_id head_id) {
     search& advanced = searches_.at(head_id);

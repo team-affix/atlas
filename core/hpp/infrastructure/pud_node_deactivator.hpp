@@ -6,8 +6,6 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 
-// Drops a node's active state and query holds, removes orphan queries, and stops the node witnessing
-// any candidate. Returns the nodes still holding a query that was left without a candidate.
 template<
     typename IGetActiveState,
     typename IEraseActiveState,

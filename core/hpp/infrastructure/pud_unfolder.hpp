@@ -9,12 +9,6 @@
 #include "value_objects/pud_inference.hpp"
 #include "debug_assert.hpp"
 
-// Unfolds a leaf on a goal: resolves it against the goal's candidates and stores a child per candidate
-// in the leaf's module, then hands the leaf's place on the frontier to them. Every child is activated
-// while the leaf still holds its queries, so a query the children share is never let go of in between,
-// and none is refuted before all are activated, so the leaf never runs out of live children early. The
-// leaf is deactivated last. A live leaf always has a candidate for the goal, so it never unfolds into
-// no children.
 template<
     typename IResolve,
     typename IStoreInference,

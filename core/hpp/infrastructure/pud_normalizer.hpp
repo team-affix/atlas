@@ -12,8 +12,6 @@
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-// Rebuilds a framed term with every bound class resolved and every unbound variable named by its
-// global representative. Each functor subterm is rebuilt once per call, so shared terms stay linear.
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind>
 struct pud_normalizer {
     pud_normalizer(IGlobalize& globalize, IMakeFunctor& make_functor, IMakeVar& make_var, IFind& find);
@@ -67,7 +65,6 @@ const expr* PUD_NORMALIZER::normalize(framed_expr framed) {
     return finished.value();
 }
 
-// Returns the rebuilt term when it is already known, or pushes the functor still to be rebuilt.
 PUD_NORMALIZER_TEMPLATE
 std::optional<const expr*> PUD_NORMALIZER::enter(framed_expr framed, const memo_t& normalized, std::vector<frame>& pending) {
     if (const expr::var* var = std::get_if<expr::var>(&framed.skeleton->content)) {

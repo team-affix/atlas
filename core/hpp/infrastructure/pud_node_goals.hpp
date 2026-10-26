@@ -7,7 +7,6 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
 
-// The open goals of every node, stored once when the node is indexed.
 struct pud_node_goals {
     void store(pud_global_node_id id, pud_goal_list goals);
     const pud_goal_list& get(pud_global_node_id id) const;

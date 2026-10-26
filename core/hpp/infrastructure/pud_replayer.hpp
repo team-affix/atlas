@@ -11,8 +11,6 @@
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// Walks a query down the database. Entering an axiom unifies the goal with the axiom's head; stepping
-// to a child replays the child's substitutions. Either fails when a unification fails.
 template<
     typename IGetAxiom,
     typename IGetInference,

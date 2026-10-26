@@ -4,8 +4,6 @@
 #include <optional>
 #include "value_objects/pud_global_node_id.hpp"
 
-// refute() takes a node that has just died. Each ancestor whose last live child dies is marked refuted
-// and dies in turn.
 template<typename IGetNodeParent, typename IDecrementLiveChildCount, typename IMarkNodeRefuted>
 struct pud_refutation_propagator {
     pud_refutation_propagator(

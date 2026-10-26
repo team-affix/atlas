@@ -15,14 +15,6 @@
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
-// Sets up everything the runtime keeps for a child, from its parent's while the parent is still
-// active. Its goals, kept for good, are its parent's but the call site it was resolved on, under the
-// same ids, then its own. It counts as one more live child of its parent. Its active state is its
-// lvc, its bindings, its watch, and its queries, each held by the child: it inherits every query of
-// its parent but the one for the call site, forks the ones whose goal changed structure, and opens one
-// for each goal its parent holds no query for, its own and any the parent found no candidate for.
-// Returns whether some goal has no candidate, an inherited query already exhausted included, for the
-// caller to refute the child once every sibling is activated.
 template<
     typename IGetActiveState,
     typename IStoreActiveState,
