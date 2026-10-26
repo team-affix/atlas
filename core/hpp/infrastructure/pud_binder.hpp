@@ -39,7 +39,7 @@ pud_ubs_state pud_binder<IMBM, IGI>::bind(const pud_ubs_state& parent_bindings, 
             DEBUG_ASSERT(!displaced.has_value());
             continue;
         }
-        bind_map.instantiate(target, framed_functor_from_framed_expr(framed_expr{substitution.value, 0}));
+        bind_map.instantiate(target, framed_functor{std::get_if<expr::functor>(&(substitution.value)->content), 0});
     }
     return std::move(bind_map).persist();
 }

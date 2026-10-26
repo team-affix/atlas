@@ -103,7 +103,7 @@ TEST_F(PudStructureWatcherTest, MergingTwoRepresentativesOfOneGoalChangesIt) {
 }
 
 TEST_F(PudStructureWatcherTest, RenamingToABoundVariableInstantiates) {
-    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = framed_functor_from_framed_expr(framed_expr{&ground, 0})}}));
+    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&(&ground)->content), 0}}}));
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &x1}};
     const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
     EXPECT_THAT(

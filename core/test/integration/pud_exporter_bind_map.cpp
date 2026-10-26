@@ -28,7 +28,7 @@ TEST_F(PudExporterBindMapIntegrationTest, AnUnboundCallerVarIsKept) {
 }
 
 TEST_F(PudExporterBindMapIntegrationTest, ABoundCallerVarIsKeptWithoutLookingItUp) {
-    stack.bind_map.instantiate(stack.bind_map.find(3u), framed_functor_from_framed_expr(framed_expr{functor("s", {var(15)}), 0u}));
+    stack.bind_map.instantiate(stack.bind_map.find(3u), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(15)}))->content), 0u});
     EXPECT_EQ(exporter.export_expr(framed_expr{var(3), 0u}), var(3));
     EXPECT_EQ(translations.size(), 0u);
 }
@@ -48,27 +48,27 @@ TEST_F(PudExporterBindMapIntegrationTest, FreshVarsAreSharedAcrossExports) {
 }
 
 TEST_F(PudExporterBindMapIntegrationTest, ABoundCalleeVarIsReplacedByItsExportedValue) {
-    stack.bind_map.instantiate(stack.bind_map.find(12u), framed_functor_from_framed_expr(framed_expr{functor("s", {var(5)}), 10u}));
+    stack.bind_map.instantiate(stack.bind_map.find(12u), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(5)}))->content), 10u});
     EXPECT_EQ(exporter.export_expr(framed_expr{var(2), 10u}), functor("s", {var(10)}));
 }
 
 TEST_F(PudExporterBindMapIntegrationTest, ACalleeVarMergedIntoACallerClassBecomesTheCallerRep) {
     stack.bind_map.equate(stack.bind_map.find(14u), stack.bind_map.find(3u));
-    stack.bind_map.instantiate(stack.bind_map.find(3u), framed_functor_from_framed_expr(framed_expr{atom("a"), 0u}));
+    stack.bind_map.instantiate(stack.bind_map.find(3u), framed_functor{std::get_if<expr::functor>(&(atom("a"))->content), 0u});
     EXPECT_EQ(exporter.export_expr(framed_expr{var(4), 10u}), var(3));
     EXPECT_EQ(translations.size(), 0u);
 }
 
 TEST_F(PudExporterBindMapIntegrationTest, CalleeBindingsAreFollowedUntilACallerVar) {
-    stack.bind_map.instantiate(stack.bind_map.find(11u), framed_functor_from_framed_expr(framed_expr{functor("s", {var(2)}), 10u}));
-    stack.bind_map.instantiate(stack.bind_map.find(12u), framed_functor_from_framed_expr(framed_expr{functor("s", {var(1)}), 0u}));
+    stack.bind_map.instantiate(stack.bind_map.find(11u), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(2)}))->content), 10u});
+    stack.bind_map.instantiate(stack.bind_map.find(12u), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(1)}))->content), 0u});
     EXPECT_EQ(
         exporter.export_expr(framed_expr{var(1), 10u}),
         functor("s", {functor("s", {var(1)})}));
 }
 
 TEST_F(PudExporterBindMapIntegrationTest, ASharedBoundCalleeClassIsExportedOnce) {
-    stack.bind_map.instantiate(stack.bind_map.find(11u), framed_functor_from_framed_expr(framed_expr{functor("p", {var(4)}), 10u}));
+    stack.bind_map.instantiate(stack.bind_map.find(11u), framed_functor{std::get_if<expr::functor>(&(functor("p", {var(4)}))->content), 10u});
     const expr* first = exporter.export_expr(framed_expr{var(1), 10u});
     const expr* second = exporter.export_expr(framed_expr{functor("h", {var(1), var(1)}), 10u});
     EXPECT_EQ(second, functor("h", {first, first}));

@@ -44,7 +44,7 @@ inline const expr* reference_pud_answer(const pud_module& module, pud_node_id no
                 bind_map.equate(target, bind_map.find(value_var->index));
                 continue;
             }
-            bind_map.instantiate(target, framed_functor_from_framed_expr(framed_expr{substitution.value, 0}));
+            bind_map.instantiate(target, framed_functor{std::get_if<expr::functor>(&(substitution.value)->content), 0});
         }
     }
     return reference_pud_answer_normalize(bind_map, pool, module.get_axiom(axiom).head);

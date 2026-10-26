@@ -131,7 +131,7 @@ TEST_F(PudUnifierTest, VarOnEitherSideBindsTheSameWay) {
 
 TEST_F(PudUnifierTest, ABoundVarUnifiesItsValueInsteadOfBinding) {
     ON_CALL(find, find(2)).WillByDefault(Return(ubs_class{
-        .root = 2, .size = 1, .rep = 2, .value = framed_functor_from_framed_expr(framed_expr{functor(1, {var(0)}), 10})}}));
+        .root = 2, .size = 1, .rep = 2, .value = framed_functor{std::get_if<expr::functor>(&(functor(1, {var(0)}))->content), 10}}}));
     const expr* five = functor(5, {});
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 10, .size = 1, .rep = 10, .value = std::nullopt},
@@ -144,15 +144,15 @@ TEST_F(PudUnifierTest, ADisplacedValueIsUnifiedWithTheMergedClass) {
     const framed_expr kept{functor(3, {var(0)}), 20};
     const framed_expr displaced{functor(3, {functor(9, {})}), 0};
     const ubs_class kept_class = ubs_class{
-        .root = 1, .size = 1, .rep = 1, .value = framed_functor_from_framed_expr(kept)};
+        .root = 1, .size = 1, .rep = 1, .value = framed_functor{std::get_if<expr::functor>(&kept.skeleton->content), kept.frame_offset}};
     const ubs_class displaced_class = ubs_class{
-        .root = 2, .size = 1, .rep = 2, .value = framed_functor_from_framed_expr(displaced)};
+        .root = 2, .size = 1, .rep = 2, .value = framed_functor{std::get_if<expr::functor>(&displaced.skeleton->content), displaced.frame_offset}};
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).WillOnce(Return(kept_class)).WillOnce(Return(kept_class));
     EXPECT_CALL(find, find(2)).WillOnce(Return(displaced_class));
     InSequence in_order;
     EXPECT_CALL(equate, equate(kept_class, displaced_class))
-        .WillOnce(Return(framed_functor_from_framed_expr(displaced)));
+        .WillOnce(Return(framed_functor{std::get_if<expr::functor>(&displaced.skeleton->content), displaced.frame_offset}));
     EXPECT_CALL(instantiate, instantiate(
         ubs_class{.root = 20, .size = 1, .rep = 20, .value = std::nullopt}, _));
     EXPECT_TRUE(unifier.unify({var(1), 0}, {var(2), 0}));

@@ -124,7 +124,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
             if (std::holds_alternative<expr::var>(value->content))
                 value = exprs.make_functor(functors.id("w"), {value});
             substitutions.push_back({.var_idx = rep, .value = value});
-            bind_map.instantiate(bind_map.find(rep), framed_functor_from_framed_expr(framed_expr{value, 0}));
+            bind_map.instantiate(bind_map.find(rep), framed_functor{std::get_if<expr::functor>(&(value)->content), 0});
         }
         return substitutions;
     }

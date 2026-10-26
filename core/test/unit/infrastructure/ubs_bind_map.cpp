@@ -22,7 +22,7 @@ struct UbsBindMapTest : public ::testing::Test {
     }
 
     void instantiate(uint32_t var, framed_expr value) {
-        bind_map.instantiate(bind_map.find(var), framed_functor_from_framed_expr(value));
+        bind_map.instantiate(bind_map.find(var), framed_functor{std::get_if<expr::functor>(&value.skeleton->content), value.frame_offset});
     }
 };
 
@@ -62,7 +62,7 @@ TEST_F(UbsBindMapTest, EquatingClassesSumsTheirSizesAndKeepsTheLeastRepresentati
 TEST_F(UbsBindMapTest, EquatingABoundClassWithAnUnboundOneKeepsTheValue) {
     instantiate(4, framed_expr{&leaf, 3});
     EXPECT_FALSE(equate(1, 4).has_value());
-    EXPECT_EQ(bind_map.find(1).value, framed_functor_from_framed_expr(framed_expr{&leaf, 3}));
+    EXPECT_EQ(bind_map.find(1).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 3});
     EXPECT_EQ(bind_map.find(4).rep, 1u);
 }
 
@@ -71,8 +71,8 @@ TEST_F(UbsBindMapTest, EquatingALargerUnboundClassIntoABoundOneKeepsTheValue) {
     equate(1, 3);
     instantiate(9, framed_expr{&leaf, 0});
     EXPECT_FALSE(equate(1, 9).has_value());
-    EXPECT_EQ(bind_map.find(9).value, framed_functor_from_framed_expr(framed_expr{&leaf, 0}));
-    EXPECT_EQ(bind_map.find(2).value, framed_functor_from_framed_expr(framed_expr{&leaf, 0}));
+    EXPECT_EQ(bind_map.find(9).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 0});
+    EXPECT_EQ(bind_map.find(2).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 0});
 }
 
 TEST_F(UbsBindMapTest, EquatingTwoBoundClassesReturnsTheValueTheMergedClassDoesNotKeep) {
@@ -83,8 +83,8 @@ TEST_F(UbsBindMapTest, EquatingTwoBoundClassesReturnsTheValueTheMergedClassDoesN
     ASSERT_TRUE(displaced.has_value());
     ASSERT_TRUE(kept.has_value());
     EXPECT_NE(displaced, kept);
-    const framed_functor leaf_bound = framed_functor_from_framed_expr(framed_expr{&leaf, 0});
-    const framed_functor other_bound = framed_functor_from_framed_expr(framed_expr{&other_leaf, 0});
+    const framed_functor leaf_bound = framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 0};
+    const framed_functor other_bound = framed_functor{std::get_if<expr::functor>(&(&other_leaf)->content), 0};
     EXPECT_TRUE(displaced == leaf_bound || displaced == other_bound);
     EXPECT_TRUE(kept == leaf_bound || kept == other_bound);
 }
@@ -94,7 +94,7 @@ TEST_F(UbsBindMapTest, InstantiateBindsEveryMemberOfTheClass) {
     equate(1, 3);
     instantiate(3, framed_expr{&leaf, 5});
     for (uint32_t member : {1u, 2u, 3u})
-        EXPECT_EQ(bind_map.find(member).value, framed_functor_from_framed_expr(framed_expr{&leaf, 5})) << member;
+        EXPECT_EQ(bind_map.find(member).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 5}) << member;
 }
 
 TEST_F(UbsBindMapTest, InstantiateKeepsTheRepresentativeAndSize) {
@@ -109,7 +109,7 @@ TEST_F(UbsBindMapTest, AnAbsorbedBoundClassIsReadThroughItsNewRoot) {
     equate(1, 2);
     equate(1, 3);
     equate(1, 4);
-    EXPECT_EQ(bind_map.find(4).value, framed_functor_from_framed_expr(framed_expr{&leaf, 0}));
+    EXPECT_EQ(bind_map.find(4).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 0});
     EXPECT_EQ(bind_map.find(4).rep, 1u);
     EXPECT_EQ(bind_map.find(4).root, bind_map.find(1).root);
 }
@@ -120,7 +120,7 @@ TEST_F(UbsBindMapTest, APersistedStateReadsBackInAFreshBindMap) {
     const pud_ubs_state persisted = std::move(bind_map).persist();
     const ubs_bind_map reader{persisted};
     EXPECT_EQ(reader.find(5).rep, 3u);
-    EXPECT_EQ(reader.find(3).value, framed_functor_from_framed_expr(framed_expr{&leaf, 4}));
+    EXPECT_EQ(reader.find(3).value, framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 4});
     EXPECT_FALSE(reader.find(9).value.has_value());
 }
 
@@ -140,7 +140,7 @@ TEST_F(UbsBindMapTest, EquivalentEditSequencesPersistEqualStates) {
     equate(1, 2);
     instantiate(1, framed_expr{&leaf, 0});
     other.equate(other.find(1), other.find(2));
-    other.instantiate(other.find(2), framed_functor_from_framed_expr(framed_expr{&leaf, 0}));
+    other.instantiate(other.find(2), framed_functor{std::get_if<expr::functor>(&(&leaf)->content), 0});
     EXPECT_EQ(std::move(bind_map).persist(), std::move(other).persist());
 }
 
@@ -161,7 +161,7 @@ TEST_F(UbsBindMapTest, RandomEditsAgreeWithAReferenceUnionFind) {
             values.push_back(expr{expr::functor{100u + step, {}}});
             const framed_expr value{&values.back(), 0u};
             instantiate(left, value);
-            bound_by_rep[classes.min_index(left)] = framed_functor_from_framed_expr(value);
+            bound_by_rep[classes.min_index(left)] = framed_functor{std::get_if<expr::functor>(&value.skeleton->content), value.frame_offset};
         }
         if (!bind_left && !classes.same_class(left, right)) {
             const uint32_t left_rep = classes.min_index(left);
