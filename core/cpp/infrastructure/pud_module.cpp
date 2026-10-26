@@ -22,6 +22,10 @@ size_t pud_module::count_axioms() const {
     return axioms_.size();
 }
 
+size_t pud_module::count_nodes() const {
+    return children_.size();
+}
+
 pud_node_id pud_module::store_inference(pud_inference inference) {
     DEBUG_ASSERT(inference.parent < children_.size());
     const pud_node_id node = children_.size();

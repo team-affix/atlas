@@ -15,6 +15,7 @@ struct pud_module {
     pud_module_id get_module_id() const;
     const std::vector<pud_module_id>& get_dependencies() const;
     size_t count_axioms() const;
+    size_t count_nodes() const;
     pud_node_id store_inference(pud_inference inference);
     void mark_refuted(pud_node_id node);
     const rule& get_axiom(pud_node_id axiom) const;
