@@ -46,7 +46,7 @@ struct pud_manifest {
     using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
     using binder_t = pud_binder<term_factory_t, modules_t>;
-    using structure_watcher_t = pud_structure_watcher<term_factory_t, modules_t>;
+    using structure_watcher_t = pud_structure_watcher<term_factory_t, modules_t, term_factory_t>;
     using root_activator_t = pud_root_activator<
         modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, structure_watcher_t,
         mhq_t, pud_query_holders>;
@@ -118,7 +118,7 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , active_states_()
     , query_holders_()
     , binder_(term_factory_, modules_)
-    , structure_watcher_(term_factory_, modules_)
+    , structure_watcher_(term_factory_, modules_, term_factory_)
     , root_activator_(
           modules_, initial_goal_opener_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
           query_holders_)

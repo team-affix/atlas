@@ -28,12 +28,16 @@ struct MockMakeBindMap {
 struct MockGetInference {
     MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
 };
+struct MockMakeFunctor {
+    MOCK_METHOD(const expr*, make_functor, (uint32_t, (const std::vector<const expr*>&)));
+};
 
 ubs_class singleton(uint32_t var) {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-using test_watcher_t = pud_structure_watcher<NiceMock<MockMakeBindMap>, NiceMock<MockGetInference>>;
+using test_watcher_t = pud_structure_watcher<
+    NiceMock<MockMakeBindMap>, NiceMock<MockGetInference>, NiceMock<MockMakeFunctor>>;
 
 // Goals: 0 = f(X0, X1), 1 = g(X2), 2 = h(X3), with the child adding 3 = k(X4). The child's bindings
 // are drawn on the bind map mock: every var is an unbound singleton unless a test says otherwise.
@@ -41,7 +45,8 @@ struct PudStructureWatcherTest : public ::testing::Test {
     NiceMock<MockBindMap> bind_map;
     NiceMock<MockMakeBindMap> make_bind_map;
     NiceMock<MockGetInference> inferences;
-    test_watcher_t watcher{make_bind_map, inferences};
+    NiceMock<MockMakeFunctor> make_functor;
+    test_watcher_t watcher{make_bind_map, inferences, make_functor};
     expr x0{expr::var{0}}, x1{expr::var{1}}, x2{expr::var{2}}, x3{expr::var{3}}, x4{expr::var{4}};
     expr f{expr::functor{1, {&x0, &x1}}};
     expr g{expr::functor{2, {&x2}}};
@@ -59,6 +64,7 @@ struct PudStructureWatcherTest : public ::testing::Test {
         ON_CALL(make_bind_map, make_bind_map(_)).WillByDefault(ReturnRef(bind_map));
         ON_CALL(bind_map, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(inferences, get_inference(pud_test_node(9))).WillByDefault(ReturnRef(child_inference));
+        ON_CALL(make_functor, make_functor(_, _)).WillByDefault(Return(&ground));
     }
 };
 

@@ -33,7 +33,7 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     modules_t modules;
     pud_binder<term_factory_t, modules_t> binder{terms, modules};
-    pud_structure_watcher<term_factory_t, modules_t> watcher{terms, modules};
+    pud_structure_watcher<term_factory_t, modules_t, term_factory_t> watcher{terms, modules, terms};
     pud_goal_resolver goal_resolver;
     pud_initial_goal_opener initial_goal_opener;
 
