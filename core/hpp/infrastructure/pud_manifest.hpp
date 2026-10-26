@@ -6,7 +6,10 @@
 #include "infrastructure/pud_acceptor.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_binder.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_child_activator.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_exporter_factory.hpp"
 #include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
@@ -19,13 +22,14 @@
 #include "infrastructure/pud_node_deactivator.hpp"
 #include "infrastructure/pud_node_goals.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
+#include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 
@@ -34,19 +38,23 @@
 // into that pool.
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
-    using term_factory_t = pud_term_factory<globalizer, IExprPool, IExprPool>;
+    using bind_map_factory_t = pud_bind_map_factory;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, IExprPool>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, IExprPool>;
+    using exporter_factory_t = pud_exporter_factory<globalizer, IExprPool, IExprPool>;
     using modules_t = pud_modules<IModule>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
     using refutation_propagator_t = pud_refutation_propagator<modules_t, pud_node_live_child_counts, modules_t>;
 
-    using replayer_t = pud_replayer<modules_t, modules_t, IExprPool, term_factory_t, term_factory_t, term_factory_t>;
+    using replayer_t = pud_replayer<
+        modules_t, modules_t, IExprPool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
     using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
     using mhcs_t = pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
     using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
-    using binder_t = pud_binder<term_factory_t, modules_t>;
-    using structure_watcher_t = pud_structure_watcher<term_factory_t, modules_t, IExprPool>;
+    using binder_t = pud_binder<bind_map_factory_t, modules_t>;
+    using structure_watcher_t = pud_structure_watcher<bind_map_factory_t, modules_t, IExprPool>;
     using root_activator_t = pud_root_activator<
         modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, structure_watcher_t,
         mhq_t, pud_query_holders>;
@@ -60,8 +68,8 @@ struct pud_manifest {
         pud_leaf_refuter<modules_t, refutation_propagator_t, node_deactivator_t, modules_t, modules_t>;
 
     using acceptor_t = pud_acceptor<
-        pud_node_goals, modules_t, modules_t, IExprPool, IExprPool, term_factory_t, term_factory_t, term_factory_t,
-        term_factory_t>;
+        pud_node_goals, modules_t, modules_t, IExprPool, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
+        unifier_factory_t, exporter_factory_t>;
     using resolver_t = pud_resolver<pud_active_states, pud_node_goals, mhq_t, mhcs_t, acceptor_t>;
     using unfolder_t =
         pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>;
@@ -71,7 +79,10 @@ struct pud_manifest {
     pud_manifest(IExprPool& expr_pool);
 
     globalizer                 globalizer_;
-    term_factory_t             term_factory_;
+    cycle_detector_factory_t   cycle_detector_factory_;
+    unifier_factory_t          unifier_factory_;
+    exporter_factory_t         exporter_factory_;
+    bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
     pud_node_goals             node_goals_;
     pud_node_axioms            node_axioms_;
@@ -104,21 +115,24 @@ struct pud_manifest {
 template<typename IModule, typename IExprPool>
 pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     : globalizer_()
-    , term_factory_(globalizer_, expr_pool, expr_pool)
+    , cycle_detector_factory_(globalizer_, expr_pool)
+    , unifier_factory_(globalizer_, expr_pool)
+    , exporter_factory_(globalizer_, expr_pool, expr_pool)
+    , bind_map_factory_()
     , modules_()
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()
     , refutation_propagator_(modules_, live_child_counts_, modules_)
     , unit_queries_()
-    , replayer_(modules_, modules_, expr_pool, term_factory_, term_factory_, term_factory_)
+    , replayer_(modules_, modules_, expr_pool, bind_map_factory_, cycle_detector_factory_, unifier_factory_)
     , mhws_(replayer_, modules_, modules_, modules_)
     , mhcs_(replayer_, mhws_, mhws_, mhws_, mhws_, mhws_, modules_, modules_, modules_)
     , mhq_(replayer_, modules_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_)
     , active_states_()
     , query_holders_()
-    , binder_(term_factory_, modules_)
-    , structure_watcher_(term_factory_, modules_, expr_pool)
+    , binder_(bind_map_factory_, modules_)
+    , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
           modules_, initial_goal_opener_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
           query_holders_)
@@ -128,7 +142,9 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
           mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
-    , acceptor_(node_goals_, modules_, modules_, expr_pool, expr_pool, term_factory_, term_factory_, term_factory_, term_factory_)
+    , acceptor_(
+          node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
+          unifier_factory_, exporter_factory_)
     , resolver_(active_states_, node_goals_, mhq_, mhcs_, acceptor_)
     , unfolder_(resolver_, modules_, child_activator_, leaf_refuter_, node_deactivator_, modules_)
     , module_activator_(

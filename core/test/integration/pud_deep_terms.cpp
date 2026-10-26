@@ -69,7 +69,7 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterHandlesAVeryDeepTerm) {
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_exported = functor("s", {deep_exported});
     std::unordered_map<uint32_t, uint32_t> translations;
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
+    auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{deep_term, 10u}), deep_exported);
     EXPECT_EQ(translations.size(), 1u);
 }
@@ -82,7 +82,7 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterFollowsAVeryDeepChainOfCalleeBinding
     for (uint32_t level = 0; level < chain; ++level)
         deep_chain = functor("s", {deep_chain});
     std::unordered_map<uint32_t, uint32_t> translations;
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
+    auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{var(0), 10u}), deep_chain);
 }
 
@@ -199,7 +199,7 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterRebuildsASharedTermInLinearTime) {
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         shared_exported = functor("f", {shared_exported, shared_exported});
     std::unordered_map<uint32_t, uint32_t> translations;
-    auto exporter = stack.terms.make_exporter(stack.bind_map, 10, translations);
+    auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
     EXPECT_EQ(exporter.export_expr(framed_expr{shared_term, 10u}), shared_exported);
 }
 

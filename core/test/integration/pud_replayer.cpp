@@ -11,13 +11,19 @@
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_replayer.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_normalizer_factory.hpp"
+#include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
 // The replayer over the real modules and the real term machinery. Every opened axiom is the only
 // axiom of its own module; inferences are stored under the node each test descends from.
 struct PudReplayerIntegrationTest : public ::testing::Test {
-    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using bind_map_factory_t = pud_bind_map_factory;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool>;
     using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_scratch_module = 0;
@@ -25,13 +31,16 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    term_factory_t terms{globalize, exprs, exprs};
+    pud_bind_map_factory bind_maps;
+    cycle_detector_factory_t cycle_detectors{globalize, exprs};
+    unifier_factory_t unifiers{globalize, exprs};
+    normalizer_factory_t normalizers{globalize, exprs, exprs};
     pud_module scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     std::deque<pud_module> opened_modules;
     modules_t modules;
-    pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t> replayer{
-        modules, modules, exprs, terms, terms, terms};
-    pud_binder<term_factory_t, modules_t> binder{terms, modules};
+    pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>
+        replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
+    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
     pud_global_node_id last_root{.module = k_scratch_module, .node = 0};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
@@ -67,10 +76,10 @@ TEST_F(PudReplayerIntegrationTest, SpecsReplayLiftedToFrameOffset) {
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map_child{at_child->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(frame_offset, 0)), 0}), functor("a", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("b", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(0u, 0)), 0}), functor("a", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(0u, 1)), 0}), functor("b", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(frame_offset, 0)), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("b", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(0u, 0)), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(0u, 1)), 0}), functor("b", {}));
 }
 
 TEST_F(PudReplayerIntegrationTest, DifferentFrameOffsetsStayIndependent) {
@@ -107,13 +116,13 @@ TEST_F(PudReplayerIntegrationTest, DifferentFrameOffsetsStayIndependent) {
     ASSERT_TRUE(replay_child_five.has_value());
     ubs_bind_map bind_map_one{replay_child_one->ubs_state};
     ubs_bind_map bind_map_five{replay_child_five->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map_one).normalize(framed_expr{var(1u), 0}), functor("a", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_five).normalize(framed_expr{var(5u), 0}), functor("a", {}));
-    const expr* resolved_one_at_five = terms.make_normalizer(bind_map_one).normalize(framed_expr{var(5u), 0});
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_one).normalize(framed_expr{var(1u), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_five).normalize(framed_expr{var(5u), 0}), functor("a", {}));
+    const expr* resolved_one_at_five = normalizers.make_normalizer(bind_map_one).normalize(framed_expr{var(5u), 0});
     const expr::var* rep_var_one_at_five = std::get_if<expr::var>(&resolved_one_at_five->content);
     ASSERT_NE(rep_var_one_at_five, nullptr);
     EXPECT_EQ(rep_var_one_at_five->index, 5u);
-    const expr* resolved_five_at_one = terms.make_normalizer(bind_map_five).normalize(framed_expr{var(1u), 0});
+    const expr* resolved_five_at_one = normalizers.make_normalizer(bind_map_five).normalize(framed_expr{var(1u), 0});
     const expr::var* rep_var_five_at_one = std::get_if<expr::var>(&resolved_five_at_one->content);
     ASSERT_NE(rep_var_five_at_one, nullptr);
     EXPECT_EQ(rep_var_five_at_one->index, 1u);
@@ -228,7 +237,7 @@ TEST_F(PudReplayerIntegrationTest, ManySpecsReplay) {
     ubs_bind_map bind_map{at_child->ubs_state};
     for (uint32_t substitution_index = 0; substitution_index < substitution_count; ++substitution_index) {
         std::string label = "v" + std::to_string(substitution_index);
-        EXPECT_EQ(terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(0u, substitution_index)), 0}), functor(label.c_str(), {}));
+        EXPECT_EQ(normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(0u, substitution_index)), 0}), functor(label.c_str(), {}));
     }
 }
 
@@ -268,8 +277,8 @@ TEST_F(PudReplayerIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent
     ASSERT_TRUE(at_x.has_value());
     ubs_bind_map bind_map_bob{at_bob->ubs_state};
     ubs_bind_map bind_map_x{at_x->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map_bob).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("bob", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_x).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("x", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_bob).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("bob", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_x).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("x", {}));
 }
 
 TEST_F(PudReplayerIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor) {
@@ -295,7 +304,7 @@ TEST_F(PudReplayerIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor)
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map{at_child->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(0u, 2)), 0}), functor("bob", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(0u, 2)), 0}), functor("bob", {}));
 }
 
 TEST_F(PudReplayerIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
@@ -318,18 +327,18 @@ TEST_F(PudReplayerIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map{at_child->ubs_state};
     EXPECT_EQ(
-        terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}),
-        terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 0)), 0}));
+        normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}),
+        normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 0)), 0}));
     const uint32_t global_at_frame = globalize.globalize(frame_offset, 0);
-    const expr* resolved_global_at_frame = terms.make_normalizer(bind_map).normalize(framed_expr{var(global_at_frame), 0});
+    const expr* resolved_global_at_frame = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(global_at_frame), 0});
     const expr::var* rep_var_global_at_frame = std::get_if<expr::var>(&resolved_global_at_frame->content);
     ASSERT_NE(rep_var_global_at_frame, nullptr);
     EXPECT_EQ(rep_var_global_at_frame->index, global_at_frame);
-    const expr* resolved_zero = terms.make_normalizer(bind_map).normalize(framed_expr{var(0u), 0});
+    const expr* resolved_zero = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(0u), 0});
     const expr::var* rep_var_zero = std::get_if<expr::var>(&resolved_zero->content);
     ASSERT_NE(rep_var_zero, nullptr);
     EXPECT_EQ(rep_var_zero->index, 0u);
-    const expr* resolved_one = terms.make_normalizer(bind_map).normalize(framed_expr{var(1u), 0});
+    const expr* resolved_one = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(1u), 0});
     const expr::var* rep_var_one = std::get_if<expr::var>(&resolved_one->content);
     ASSERT_NE(rep_var_one, nullptr);
     EXPECT_EQ(rep_var_one->index, 1u);
@@ -361,15 +370,15 @@ TEST_F(PudReplayerIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) {
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map_child{at_child->ubs_state};
-    const expr* resolved_child_one = terms.make_normalizer(bind_map_child).normalize(framed_expr{var(1u), 0});
+    const expr* resolved_child_one = normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(1u), 0});
     const expr::var* rep_var_child_one = std::get_if<expr::var>(&resolved_child_one->content);
     ASSERT_NE(rep_var_child_one, nullptr);
     EXPECT_EQ(rep_var_child_one->index, 1u);
     std::optional<pud_replay> at_grandchild = replayer.descend(*at_child, grandchild);
     ASSERT_TRUE(at_grandchild.has_value());
     ubs_bind_map bind_map_grandchild{at_grandchild->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map_grandchild).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("b", {}));
-    const expr* resolved_grandchild_one = terms.make_normalizer(bind_map_grandchild).normalize(framed_expr{var(1u), 0});
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_grandchild).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0}), functor("b", {}));
+    const expr* resolved_grandchild_one = normalizers.make_normalizer(bind_map_grandchild).normalize(framed_expr{var(1u), 0});
     const expr::var* rep_var_grandchild_one = std::get_if<expr::var>(&resolved_grandchild_one->content);
     ASSERT_NE(rep_var_grandchild_one, nullptr);
     EXPECT_EQ(rep_var_grandchild_one->index, 1u);
@@ -401,7 +410,7 @@ TEST_F(PudReplayerIntegrationTest, SiblingStillDescendsAfterARefutedChild) {
     std::optional<pud_replay> at_good = replayer.descend(*opened, good_child);
     ASSERT_TRUE(at_good.has_value());
     ubs_bind_map bind_map{at_good->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(1, 0)), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(1, 0)), 0}), functor("a", {}));
 }
 
 TEST_F(PudReplayerIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
@@ -422,7 +431,7 @@ TEST_F(PudReplayerIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map{at_child->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(4, 0)), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(4, 0)), 0}), functor("a", {}));
 }
 
 TEST_F(PudReplayerIntegrationTest, ThreeLevelReplayAccumulates) {
@@ -460,8 +469,8 @@ TEST_F(PudReplayerIntegrationTest, ThreeLevelReplayAccumulates) {
     }
     ASSERT_TRUE(at.has_value());
     ubs_bind_map bind_map{at->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 2)), 0}), functor("c", {}));
-    const expr* resolved_one = terms.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0});
+    EXPECT_EQ(normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 2)), 0}), functor("c", {}));
+    const expr* resolved_one = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(globalize.globalize(frame_offset, 1)), 0});
     const expr::functor* g_functor = std::get_if<expr::functor>(&resolved_one->content);
     ASSERT_NE(g_functor, nullptr);
     EXPECT_EQ(g_functor->id, functors.id("g"));
@@ -549,8 +558,8 @@ TEST_F(PudReplayerIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) {
         ubs_bind_map bind_map{binding};
         ubs_bind_map replay_bind_map{replay->ubs_state};
         EXPECT_EQ(
-            terms.make_normalizer(replay_bind_map).normalize(framed_expr{var(index), 0}),
-            terms.make_normalizer(bind_map).normalize(framed_expr{var(index), 0}))
+            normalizers.make_normalizer(replay_bind_map).normalize(framed_expr{var(index), 0}),
+            normalizers.make_normalizer(bind_map).normalize(framed_expr{var(index), 0}))
             << "var " << index;
     }
 }
@@ -574,8 +583,8 @@ TEST_F(PudReplayerIntegrationTest, ParentUnchangedByChild) {
     ASSERT_TRUE(at_child.has_value());
     ubs_bind_map bind_map_child{at_child->ubs_state};
     ubs_bind_map bind_map_opened{opened->ubs_state};
-    EXPECT_EQ(terms.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(2u, 0)), 0}), functor("a", {}));
-    EXPECT_EQ(terms.make_normalizer(bind_map_opened).normalize(framed_expr{var(globalize.globalize(2u, 0)), 0}), var(0));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_child).normalize(framed_expr{var(globalize.globalize(2u, 0)), 0}), functor("a", {}));
+    EXPECT_EQ(normalizers.make_normalizer(bind_map_opened).normalize(framed_expr{var(globalize.globalize(2u, 0)), 0}), var(0));
 }
 
 TEST_F(PudReplayerIntegrationTest, OpenedReplayIsAtTheRoot) {

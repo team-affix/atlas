@@ -13,17 +13,24 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_modules.hpp"
 #include "infrastructure/pud_replayer.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_normalizer_factory.hpp"
+#include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 #include "value_objects/rule.hpp"
 
 // Replayer, witness searches, candidate searches and queries over the real modules. Each test builds
 // its modules' axioms up front, registers them, then stores the inferences below them.
 struct PudSearchStackIntegrationTest : public ::testing::Test {
-    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using bind_map_factory_t = pud_bind_map_factory;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_module>;
-    using replayer_t = pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
+    using replayer_t =
+        pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
     using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
     using mhcs_t =
         pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
@@ -35,11 +42,14 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    term_factory_t terms{globalize, exprs, exprs};
+    pud_bind_map_factory bind_maps;
+    cycle_detector_factory_t cycle_detectors{globalize, exprs};
+    unifier_factory_t unifiers{globalize, exprs};
+    normalizer_factory_t normalizers{globalize, exprs, exprs};
     std::deque<pud_module> module_data;
     modules_t modules;
     unit_queries_t unit_queries;
-    replayer_t replayer{modules, modules, exprs, terms, terms, terms};
+    replayer_t replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
     mhws_t mhws{replayer, modules, modules, modules};
     mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, modules, modules, modules};
     mhq_t mhq{replayer, modules, mhcs, mhcs, mhcs, mhcs, unit_queries};
@@ -183,13 +193,13 @@ TEST_F(PudSearchStackIntegrationTest, EachCandidatePathReplaysItsResolution) {
     for (size_t step = 1; step < paths.at(0).size(); ++step)
         replay0 = replayer.descend(replay0, paths.at(0).at(step)).value();
     ubs_bind_map bind_map0{replay0.ubs_state};
-    const expr* resolved0 = terms.make_normalizer(bind_map0).normalize(framed_expr{var(0), 0});
+    const expr* resolved0 = normalizers.make_normalizer(bind_map0).normalize(framed_expr{var(0), 0});
     EXPECT_EQ(resolved0, atom("red"));
     pud_replay replay1 = replayer.enter(empty_state, goal, 1, paths.at(1).front()).value();
     for (size_t step = 1; step < paths.at(1).size(); ++step)
         replay1 = replayer.descend(replay1, paths.at(1).at(step)).value();
     ubs_bind_map bind_map1{replay1.ubs_state};
-    const expr* resolved1 = terms.make_normalizer(bind_map1).normalize(framed_expr{var(0), 0});
+    const expr* resolved1 = normalizers.make_normalizer(bind_map1).normalize(framed_expr{var(0), 0});
     EXPECT_EQ(resolved1, atom("blue"));
 }
 
@@ -231,7 +241,7 @@ TEST_F(PudSearchStackIntegrationTest, RootHeadIsLiftedToTheFrameOffset) {
     for (size_t step = 1; step < paths.at(0).size(); ++step)
         replay = replayer.descend(replay, paths.at(0).at(step)).value();
     ubs_bind_map bind_map{replay.ubs_state};
-    const expr* resolved = terms.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
+    const expr* resolved = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
     EXPECT_EQ(resolved, functor("s", {var(3)}));
 }
 
@@ -253,7 +263,7 @@ TEST_F(PudSearchStackIntegrationTest, CallersStateIsLeftUntouched) {
     modules.register_module(module_data.back());
     mhq.try_open(k_module, empty_state, functor("color", {var(0)}), 1);
     ubs_bind_map bind_map{empty_state};
-    const expr* resolved = terms.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
+    const expr* resolved = normalizers.make_normalizer(bind_map).normalize(framed_expr{var(0), 0});
     EXPECT_EQ(resolved, var(0));
 }
 

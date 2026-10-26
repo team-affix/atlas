@@ -11,7 +11,7 @@
 #include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
 #include "value_objects/pud_goal_list.hpp"
 
 using ::testing::ElementsAre;
@@ -21,7 +21,7 @@ using ::testing::UnorderedElementsAre;
 // The structure watcher fed by the real binder: every node closes one goal, its call site, and each
 // node here carries a ground `go` goal as the call site its child closes.
 struct PudStructureWatcherIntegrationTest : public ::testing::Test {
-    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using bind_map_factory_t = pud_bind_map_factory;
     using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_module = 0;
@@ -29,11 +29,11 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    term_factory_t terms{globalize, exprs, exprs};
+    bind_map_factory_t bind_maps;
     pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     modules_t modules;
-    pud_binder<term_factory_t, modules_t> binder{terms, modules};
-    pud_structure_watcher<term_factory_t, modules_t, expr_pool> watcher{terms, modules, exprs};
+    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
+    pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool> watcher{bind_maps, modules, exprs};
     pud_goal_resolver goal_resolver;
     pud_initial_goal_opener initial_goal_opener;
 

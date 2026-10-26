@@ -8,7 +8,7 @@
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
 inline const expr* expr_from_framed_functor(expr_pool& pool, const framed_functor& ff) {
@@ -19,7 +19,7 @@ inline const expr* expr_from_framed_functor(expr_pool& pool, const framed_functo
 // The binder over the real modules and real bind maps. Every inference hangs under the one dummy
 // axiom of the test's module.
 struct PudBinderIntegrationTest : public ::testing::Test {
-    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using bind_map_factory_t = pud_bind_map_factory;
     using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_module = 0;
@@ -27,10 +27,10 @@ struct PudBinderIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    term_factory_t terms{globalize, exprs, exprs};
+    bind_map_factory_t bind_maps;
     pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     modules_t modules;
-    pud_binder<term_factory_t, modules_t> binder{terms, modules};
+    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 

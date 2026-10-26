@@ -25,7 +25,9 @@
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_term_factory.hpp"
+#include "infrastructure/pud_bind_map_factory.hpp"
+#include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_unifier_factory.hpp"
 #include "value_objects/rule.hpp"
 #include <immer/map.hpp>
 
@@ -36,16 +38,19 @@ using ::testing::UnorderedElementsAre;
 // Leaf activation over the real binder, watcher, search stack, and explicit query holders. The tree's
 // root and the facts its goals resolve against are the axioms of one module.
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
-    using term_factory_t = pud_term_factory<globalizer, expr_pool, expr_pool>;
+    using bind_map_factory_t = pud_bind_map_factory;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_module>;
-    using replayer_t = pud_replayer<modules_t, modules_t, expr_pool, term_factory_t, term_factory_t, term_factory_t>;
+    using replayer_t =
+        pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
     using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
     using mhcs_t =
         pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
     using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
-    using binder_t = pud_binder<term_factory_t, modules_t>;
-    using watcher_t = pud_structure_watcher<term_factory_t, modules_t, expr_pool>;
+    using binder_t = pud_binder<bind_map_factory_t, modules_t>;
+    using watcher_t = pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool>;
     using root_activator_t = pud_root_activator<
         modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, watcher_t, mhq_t,
         pud_query_holders>;
@@ -62,7 +67,9 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
-    term_factory_t terms{globalize, exprs, exprs};
+    pud_bind_map_factory bind_maps;
+    cycle_detector_factory_t cycle_detectors{globalize, exprs};
+    unifier_factory_t unifiers{globalize, exprs};
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_node_goals node_goals;
@@ -73,12 +80,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     unit_queries_t unit_queries;
     pud_active_states active_states;
     pud_query_holders query_holders;
-    replayer_t replayer{modules, modules, exprs, terms, terms, terms};
+    replayer_t replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
     mhws_t mhws{replayer, modules, modules, modules};
     mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, modules, modules, modules};
     mhq_t mhq{replayer, modules, mhcs, mhcs, mhcs, mhcs, unit_queries};
-    binder_t binder{terms, modules};
-    watcher_t structure_watcher{terms, modules, exprs};
+    binder_t binder{bind_maps, modules};
+    watcher_t structure_watcher{bind_maps, modules, exprs};
     root_activator_t root_activator{
         modules, initial_goal_opener, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{

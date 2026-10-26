@@ -11,7 +11,8 @@ struct PudExporterBindMapIntegrationTest : public ::testing::Test {
     test_functors functors;
     pud_term_stack stack;
     std::unordered_map<uint32_t, uint32_t> translations;
-    pud_term_stack::term_factory_t::exporter_t exporter{stack.terms.make_exporter(stack.bind_map, 10, translations)};
+    pud_term_stack::exporter_factory_t::exporter_t exporter{
+        stack.exporters.make_exporter(stack.bind_map, 10, translations)};
 
     const expr* var(uint32_t index) { return stack.pool.make_var(index); }
     const expr* functor(const char* name, std::vector<const expr*> args) {
