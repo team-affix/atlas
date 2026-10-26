@@ -204,7 +204,7 @@ TEST_F(PudSearchStackIntegrationTest, CallersBindingsAreRespected) {
     modules.register_module(module_data.back());
     const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_expr{atom("blue"), 0});
+    bind_map.instantiate(bind_map.find(0), framed_functor_from_framed_expr(framed_expr{atom("blue"), 0}));
     const pud_ubs_state caller = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, caller, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
@@ -449,7 +449,7 @@ TEST_F(PudSearchStackIntegrationTest, ForkKeepsOnlyCandidatesCompatibleWithTheNe
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 1);
     ASSERT_TRUE(query.has_value());
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_expr{atom("blue"), 0});
+    bind_map.instantiate(bind_map.find(0), framed_functor_from_framed_expr(framed_expr{atom("blue"), 0}));
     const pud_ubs_state narrowed = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> forked = mhq.try_fork(query.value(), narrowed, goal, 1);
     ASSERT_TRUE(forked.has_value());

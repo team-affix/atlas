@@ -138,7 +138,7 @@ TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
     const pud_global_node_id same = manifest.modules_.list_axioms(module).front();
     manifest.root_activator_.activate_root(same);
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_expr{atom("a"), 0});
+    bind_map.instantiate(bind_map.find(0), framed_functor_from_framed_expr(framed_expr{atom("a"), 0}));
     const pud_ubs_state caller_state = std::move(bind_map).persist();
     const pud_inference delta = acceptor.accept(
         caller, call_site, caller_state, 2, functor("eq", {var(0), var(1)}), {same});
@@ -238,7 +238,7 @@ TEST_F(PudAcceptorIntegrationTest, CallerVarsAreExportedWithoutBeingLookedUp) {
     const pud_global_node_id rule = manifest.modules_.list_axioms(module).front();
     manifest.root_activator_.activate_root(rule);
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_expr{functor("s", {var(1)}), 0});
+    bind_map.instantiate(bind_map.find(0), framed_functor_from_framed_expr(framed_expr{functor("s", {var(1)}), 0}));
     const pud_ubs_state caller_state = std::move(bind_map).persist();
     const pud_inference delta = acceptor.accept(
         caller, call_site, caller_state, 2, functor("q", {var(0)}), {rule});

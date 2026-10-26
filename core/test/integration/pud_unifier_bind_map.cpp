@@ -89,9 +89,9 @@ TEST_F(PudUnifierBindMapIntegrationTest, EqualBoundFunctorsUnifyDifferentOnesFai
     const expr* bound_a = merged.pool.make_functor(functors.id("a"), {});
     const expr* bound_b = merged.pool.make_functor(functors.id("b"), {});
     merged.bind_map.equate(merged.bind_map.find(0u), merged.bind_map.find(1u));
-    merged.bind_map.instantiate(merged.bind_map.find(0u), framed_expr{merged.pool.make_functor(functors.id("a"), {}), 0u});
+    merged.bind_map.instantiate(merged.bind_map.find(0u), framed_functor_from_framed_expr(framed_expr{merged.pool.make_functor(functors.id("a"), {}), 0u}));
     EXPECT_TRUE(merged.unifier.unify(framed_expr{merged.pool.make_var(0u), 0}, framed_expr{merged.pool.make_var(1u), 0}));
-    merged.bind_map.instantiate(merged.bind_map.find(2u), framed_expr{merged.pool.make_functor(functors.id("b"), {}), 0u});
+    merged.bind_map.instantiate(merged.bind_map.find(2u), framed_functor_from_framed_expr(framed_expr{merged.pool.make_functor(functors.id("b"), {}), 0u}));
     EXPECT_FALSE(merged.unifier.unify(framed_expr{merged.pool.make_var(0u), 0}, framed_expr{merged.pool.make_var(2u), 0}));
 }
 
@@ -99,7 +99,7 @@ TEST_F(PudUnifierBindMapIntegrationTest, StoredValueIsFullyNormalized) {
     pud_term_stack s;
     const expr* y = s.pool.make_var(1u);
     const expr* a_atom = s.pool.make_functor(functors.id("a"), {});
-    s.bind_map.instantiate(s.bind_map.find(1u), framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(1u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u}));
     const expr* fx = s.pool.make_functor(functors.id("wrap"), {y});
     EXPECT_TRUE(s.unifier.unify(framed_expr{s.pool.make_var(0u), 0}, framed_expr{fx, 0}));
     const expr* expected = s.normalizer.normalize(framed_expr{fx, 0});

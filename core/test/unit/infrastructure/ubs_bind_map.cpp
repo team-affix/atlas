@@ -22,7 +22,7 @@ struct UbsBindMapTest : public ::testing::Test {
     }
 
     void instantiate(uint32_t var, framed_expr value) {
-        bind_map.instantiate(bind_map.find(var), value);
+        bind_map.instantiate(bind_map.find(var), framed_functor_from_framed_expr(value));
     }
 };
 
@@ -140,7 +140,7 @@ TEST_F(UbsBindMapTest, EquivalentEditSequencesPersistEqualStates) {
     equate(1, 2);
     instantiate(1, framed_expr{&leaf, 0});
     other.equate(other.find(1), other.find(2));
-    other.instantiate(other.find(2), framed_expr{&leaf, 0});
+    other.instantiate(other.find(2), framed_functor_from_framed_expr(framed_expr{&leaf, 0}));
     EXPECT_EQ(std::move(bind_map).persist(), std::move(other).persist());
 }
 

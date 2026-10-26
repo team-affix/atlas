@@ -108,7 +108,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarStructurallyEqualDifferentFram
     pud_term_stack s;
     const expr* a0 = s.pool.make_functor(functors.id("a"), {});
     const expr* wrapped = s.pool.make_functor(functors.id("w"), {a0});
-    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("w"), {a0}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("w"), {a0}), 0u}));
     const expr* wrap_rhs = s.pool.make_functor(functors.id("w"), {s.pool.make_var(1u)});
     EXPECT_TRUE(s.unifier.unify(
         framed_expr{s.pool.make_var(0u), 0}, framed_expr{wrap_rhs, 0}));
@@ -117,8 +117,8 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarStructurallyEqualDifferentFram
 
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithDifferentBoundFunctorFails) {
     pud_term_stack s;
-    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u});
-    s.bind_map.instantiate(s.bind_map.find(1u), framed_expr{s.pool.make_functor(functors.id("b"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("a"), {}), 0u}));
+    s.bind_map.instantiate(s.bind_map.find(1u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("b"), {}), 0u}));
     EXPECT_FALSE(s.unifier.unify(
         framed_expr{s.pool.make_var(0u), 0},
         framed_expr{s.pool.make_var(1u), 0}));
@@ -127,7 +127,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithDifferentBoundFunctorFails
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarDiffersOnlyInNestedVarBindsNested) {
     pud_term_stack s;
     const expr* a_atom = s.pool.make_functor(functors.id("a"), {});
-    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("w"), {a_atom}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("w"), {a_atom}), 0u}));
     const expr* rhs = s.pool.make_functor(functors.id("w"), {s.pool.make_var(1u)});
     EXPECT_TRUE(s.unifier.unify(
         framed_expr{s.pool.make_var(0u), 0}, framed_expr{rhs, 0}));
@@ -137,7 +137,7 @@ TEST_F(PudUnifierExtendedIntegrationTest, BoundVarDiffersOnlyInNestedVarBindsNes
 TEST_F(PudUnifierExtendedIntegrationTest, BoundVarWithUnboundVarBindsUnboundClass) {
     pud_term_stack s;
     const expr* ground = s.pool.make_functor(functors.id("g"), {});
-    s.bind_map.instantiate(s.bind_map.find(0u), framed_expr{s.pool.make_functor(functors.id("g"), {}), 0u});
+    s.bind_map.instantiate(s.bind_map.find(0u), framed_functor_from_framed_expr(framed_expr{s.pool.make_functor(functors.id("g"), {}), 0u}));
     EXPECT_TRUE(s.unifier.unify(
         framed_expr{s.pool.make_var(0u), 0},
         framed_expr{s.pool.make_var(1u), 0}));

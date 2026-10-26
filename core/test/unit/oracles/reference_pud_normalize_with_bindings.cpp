@@ -29,13 +29,13 @@ TEST_F(ReferencePudNormalizeWithBindingsTest, UnboundVariableBecomesItsRepresent
 TEST_F(ReferencePudNormalizeWithBindingsTest, ChainedBindingFollowsToTheValue) {
     ubs_bind_map bind_map{pud_ubs_state{}};
     bind_map.equate(bind_map.find(0), bind_map.find(1));
-    bind_map.instantiate(bind_map.find(1), framed_expr{atom("a"), 0});
+    bind_map.instantiate(bind_map.find(1), framed_functor_from_framed_expr(framed_expr{atom("a"), 0}));
     EXPECT_EQ(reference_pud_normalize_with_bindings(bind_map, exprs, var(0)), atom("a"));
 }
 
 TEST_F(ReferencePudNormalizeWithBindingsTest, NestedFunctorNormalizesArguments) {
     ubs_bind_map bind_map{pud_ubs_state{}};
-    bind_map.instantiate(bind_map.find(0), framed_expr{atom("a"), 0});
+    bind_map.instantiate(bind_map.find(0), framed_functor_from_framed_expr(framed_expr{atom("a"), 0}));
     const expr* skeleton = functor("f", {var(0), atom("b")});
     EXPECT_EQ(reference_pud_normalize_with_bindings(bind_map, exprs, skeleton), functor("f", {atom("a"), atom("b")}));
 }

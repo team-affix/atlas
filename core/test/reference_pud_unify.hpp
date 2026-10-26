@@ -55,14 +55,14 @@ inline bool reference_pud_unify_terms(
         const expr* value = stack.normalizer.normalize(rhs);
         if (reference_pud_occurs(lhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(stack.bind_map.find(lhs_var->index), framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(lhs_var->index), framed_functor_from_framed_expr(framed_expr{value, 0u}));
         return true;
     }
     if (rhs_var) {
         const expr* value = stack.normalizer.normalize(lhs);
         if (reference_pud_occurs(rhs_var->index, value))
             return false;
-        stack.bind_map.instantiate(stack.bind_map.find(rhs_var->index), framed_expr{value, 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(rhs_var->index), framed_functor_from_framed_expr(framed_expr{value, 0u}));
         return true;
     }
 

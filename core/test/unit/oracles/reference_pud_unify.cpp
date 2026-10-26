@@ -36,7 +36,7 @@ TEST_F(ReferencePudUnifyTest, AnUnboundVariableDerefsToItsRepresentative) {
 }
 
 TEST_F(ReferencePudUnifyTest, ABoundVariableDerefsToItsValue) {
-    stack.bind_map.instantiate(stack.bind_map.find(4), framed_expr{atom("a"), 0});
+    stack.bind_map.instantiate(stack.bind_map.find(4), framed_functor_from_framed_expr(framed_expr{atom("a"), 0}));
     EXPECT_EQ(reference_pud_deref(stack, 4).skeleton, atom("a"));
 }
 

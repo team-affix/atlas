@@ -17,7 +17,7 @@ struct ubs_bind_map {
     // When both classes are bound, the merged class keeps one value and returns the other, which
     // the caller must unify with it.
     std::optional<framed_functor> equate(const ubs_class& class_a, const ubs_class& class_b);
-    void instantiate(const ubs_class& unbound, framed_expr value);
+    void instantiate(const ubs_class& unbound, framed_functor value);
     pud_ubs_state persist() &&;
 private:
     immer::map<uint32_t, uint32_t>::transient_type parents_;

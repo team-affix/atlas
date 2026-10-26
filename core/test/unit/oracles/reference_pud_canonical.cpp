@@ -59,7 +59,7 @@ TEST_F(ReferencePudCanonicalTest, MergingAVariableWithOneOutsideTheGoalKeepsTheF
 }
 
 TEST_F(ReferencePudCanonicalTest, ABoundVariableReadsAsItsValue) {
-    bind_map.instantiate(bind_map.find(1), framed_expr{functor("g", {var(4)}), 0});
+    bind_map.instantiate(bind_map.find(1), framed_functor_from_framed_expr(framed_expr{functor("g", {var(4)}), 0}));
     EXPECT_EQ(
         reference_pud_canonical(std::move(bind_map).persist(), functor("f", {var(1)})),
         reference_pud_canonical(pud_ubs_state{}, functor("f", {functor("g", {var(4)})})));
@@ -68,6 +68,6 @@ TEST_F(ReferencePudCanonicalTest, ABoundVariableReadsAsItsValue) {
 TEST_F(ReferencePudCanonicalTest, InstantiatingAVariableOfTheGoalChangesTheForm) {
     const expr* goal = functor("f", {var(1)});
     const std::vector<uint32_t> before = reference_pud_canonical(pud_ubs_state{}, goal);
-    bind_map.instantiate(bind_map.find(1), framed_expr{atom("a"), 0});
+    bind_map.instantiate(bind_map.find(1), framed_functor_from_framed_expr(framed_expr{atom("a"), 0}));
     EXPECT_NE(reference_pud_canonical(std::move(bind_map).persist(), goal), before);
 }

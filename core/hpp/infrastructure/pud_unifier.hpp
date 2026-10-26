@@ -105,7 +105,7 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(framed_expr lhs, framed
                 pending.emplace_back(framed_expr{reconstructed, var_class.value->frame_offset}, term);
                 continue;
             }
-            instantiate_.instantiate(var_class, term);
+            instantiate_.instantiate(var_class, framed_functor_from_framed_expr(term));
             edited.push_back(var_class);
             touched_class_roots.push_back(var_class.root);
             continue;
