@@ -27,7 +27,6 @@
 #include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_bt_fgt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
-#include "infrastructure/pud_solver_command_handler.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
 #include "infrastructure/hex_uint64.hpp"
@@ -94,38 +93,6 @@ int main(int argc, char** argv) {
         basic_command_handler h(basic_opts.file, basic_opts.goals_str,
                                 basic_opts.max_resolutions, basic_opts.seed,
                                 basic_opts.sim_progress_interval);
-        h();
-    });
-
-    struct {
-        std::string file;
-        std::string goals_str;
-        std::string head_str;
-        size_t max_unfolds  = 10000;
-        size_t max_answers  = 100;
-        uint32_t seed       = 0;
-    } pud_opts;
-
-    auto* pud_sub = app.add_subcommand(
-        "pud",
-        "Run the progressive unfolding database (unit propagation, witness search, random expansion)");
-    pud_sub->add_option("file", pud_opts.file, "CHC input file")->required();
-    pud_sub->add_option("-g,--goal", pud_opts.goals_str, "Query body, e.g. \"color(X)\"")->required();
-    pud_sub->add_option(
-        "--head",
-        pud_opts.head_str,
-        "Answer template (defaults to the first goal when omitted), e.g. \"c(X)\"");
-    pud_sub->add_option("--max-unfolds", pud_opts.max_unfolds, "Stop after this many unfolds");
-    pud_sub->add_option("--max-answers", pud_opts.max_answers, "Stop after this many printed answers");
-    pud_sub->add_option("--seed", pud_opts.seed, "RNG seed for expansion choices");
-    pud_sub->callback([&]() {
-        pud_solver_command_handler h(
-            pud_opts.file,
-            pud_opts.goals_str,
-            pud_opts.head_str,
-            pud_opts.max_unfolds,
-            pud_opts.max_answers,
-            pud_opts.seed);
         h();
     });
 
