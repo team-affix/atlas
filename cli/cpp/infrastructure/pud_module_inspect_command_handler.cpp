@@ -4,11 +4,17 @@
 #include "infrastructure/pud_module_deserializer_stack.hpp"
 #include "value_objects/pud_node_id.hpp"
 #include <fstream>
-#include <stdexcept>
 #include <iostream>
+#include <stdexcept>
+#include <vector>
 
-pud_module_inspect_command_handler::pud_module_inspect_command_handler(const std::string& input_path)
-    : input_path_(input_path) {}
+pud_module_inspect_command_handler::pud_module_inspect_command_handler(
+    const std::string& input_path,
+    bool id_only,
+    bool deps_only)
+    : input_path_(input_path)
+    , id_only_(id_only)
+    , deps_only_(deps_only) {}
 
 void pud_module_inspect_command_handler::operator()() {
     std::ifstream in(input_path_, std::ios::binary);
@@ -17,6 +23,20 @@ void pud_module_inspect_command_handler::operator()() {
     pud_module_deserializer_stack deserializer_stack;
     const pud_module module = deserializer_stack.deserialize_module(in);
     hex_uint64 hex_codec;
+    if (id_only_) {
+        std::cout << hex_codec.format_hex(module.get_module_id()) << '\n';
+        return;
+    }
+    if (deps_only_) {
+        const std::vector<pud_module_id>& dependencies = module.get_dependencies();
+        for (size_t index = 0; index < dependencies.size(); ++index) {
+            if (index > 0)
+                std::cout << ' ';
+            std::cout << hex_codec.format_hex(dependencies[index]);
+        }
+        std::cout << '\n';
+        return;
+    }
     std::cout << "module_id: " << hex_codec.format_hex(module.get_module_id()) << '\n';
     std::cout << "dependencies:";
     for (pud_module_id dependency : module.get_dependencies())

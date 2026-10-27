@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 #include <gtest/gtest.h>
+#include "infrastructure/hex_uint64.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
 
@@ -27,7 +28,7 @@ TEST(PudModuleInspectCommandHandlerTest, PrintsMetadataMatchingCreatedModule) {
     const std::string id_hex = create_out.str().substr(0, create_out.str().size() - 1);
     std::ostringstream inspect_out;
     old_out = std::cout.rdbuf(inspect_out.rdbuf());
-    pud_module_inspect_command_handler inspect_handler{output_path};
+    pud_module_inspect_command_handler inspect_handler{output_path, false, false};
     inspect_handler();
     std::cout.rdbuf(old_out);
     const std::string report = inspect_out.str();
@@ -35,5 +36,45 @@ TEST(PudModuleInspectCommandHandlerTest, PrintsMetadataMatchingCreatedModule) {
     EXPECT_NE(report.find("dependencies:\n"), std::string::npos);
     EXPECT_NE(report.find("axioms: "), std::string::npos);
     EXPECT_NE(report.find("inferences: 0\n"), std::string::npos);
+    std::remove(output_path.c_str());
+}
+
+TEST(PudModuleInspectCommandHandlerTest, IdOnlyPrintsSingleHexLine) {
+    const std::string output_path = temp_module_path();
+    std::ostringstream create_out;
+    std::streambuf* old_out = std::cout.rdbuf(create_out.rdbuf());
+    pud_module_create_command_handler create_handler{
+        "cli/examples/member/db.chc",
+        {},
+        output_path};
+    create_handler();
+    std::cout.rdbuf(old_out);
+    const std::string expected_id = create_out.str();
+    std::ostringstream inspect_out;
+    old_out = std::cout.rdbuf(inspect_out.rdbuf());
+    pud_module_inspect_command_handler inspect_handler{output_path, true, false};
+    inspect_handler();
+    std::cout.rdbuf(old_out);
+    EXPECT_EQ(inspect_out.str(), expected_id);
+    std::remove(output_path.c_str());
+}
+
+TEST(PudModuleInspectCommandHandlerTest, DepsOnlyPrintsSpaceSeparatedHexLine) {
+    hex_uint64 hex_codec;
+    const std::string output_path = temp_module_path();
+    std::ostringstream create_out;
+    std::streambuf* old_out = std::cout.rdbuf(create_out.rdbuf());
+    pud_module_create_command_handler create_handler{
+        "cli/examples/member/db.chc",
+        {hex_codec.parse_hex("a1"), hex_codec.parse_hex("b2")},
+        output_path};
+    create_handler();
+    std::cout.rdbuf(old_out);
+    std::ostringstream inspect_out;
+    old_out = std::cout.rdbuf(inspect_out.rdbuf());
+    pud_module_inspect_command_handler inspect_handler{output_path, false, true};
+    inspect_handler();
+    std::cout.rdbuf(old_out);
+    EXPECT_EQ(inspect_out.str(), "a1 b2\n");
     std::remove(output_path.c_str());
 }

@@ -162,14 +162,28 @@ int main(int argc, char** argv) {
 
     struct {
         std::string input_path;
+        bool id_only = false;
+        bool deps_only = false;
     } module_inspect_opts;
 
     auto* module_inspect_sub = module_app->add_subcommand(
         "inspect",
         "Print metadata from a binary PUD module file");
     module_inspect_sub->add_option("module", module_inspect_opts.input_path, "Binary PUD module file")->required();
+    auto* module_inspect_id_flag = module_inspect_sub->add_flag(
+        "--id",
+        module_inspect_opts.id_only,
+        "Print only the module id (hex, one line)");
+    auto* module_inspect_deps_flag = module_inspect_sub->add_flag(
+        "--deps",
+        module_inspect_opts.deps_only,
+        "Print only dependencies (hex, space-separated on one line)");
+    module_inspect_id_flag->excludes(module_inspect_deps_flag);
     module_inspect_sub->callback([&]() {
-        pud_module_inspect_command_handler handler{module_inspect_opts.input_path};
+        pud_module_inspect_command_handler handler{
+            module_inspect_opts.input_path,
+            module_inspect_opts.id_only,
+            module_inspect_opts.deps_only};
         handler();
     });
 
