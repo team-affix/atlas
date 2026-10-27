@@ -1,4 +1,6 @@
 #include <CLI/CLI.hpp>
+#include <vector>
+#include "value_objects/pud_module_id.hpp"
 #include "infrastructure/basic_command_handler.hpp"
 #include "infrastructure/dbuct_genius_command_handler.hpp"
 #include "infrastructure/dbuct_genius_fc_command_handler.hpp"
@@ -25,7 +27,10 @@
 #include "infrastructure/ridge_bt_command_handler.hpp"
 #include "infrastructure/ridge_bt_fgt_command_handler.hpp"
 #include "infrastructure/ridge_fc_command_handler.hpp"
-#include "infrastructure/pud_command_handler.hpp"
+#include "infrastructure/pud_solver_command_handler.hpp"
+#include "infrastructure/pud_module_create_command_handler.hpp"
+#include "infrastructure/pud_module_inspect_command_handler.hpp"
+#include "infrastructure/hex_uint64.hpp"
 #include "infrastructure/unfold_command_handler.hpp"
 
 #ifndef ATLAS_GIT_TAG
@@ -114,7 +119,7 @@ int main(int argc, char** argv) {
     pud_sub->add_option("--max-answers", pud_opts.max_answers, "Stop after this many printed answers");
     pud_sub->add_option("--seed", pud_opts.seed, "RNG seed for expansion choices");
     pud_sub->callback([&]() {
-        pud_command_handler h(
+        pud_solver_command_handler h(
             pud_opts.file,
             pud_opts.goals_str,
             pud_opts.head_str,
@@ -122,6 +127,50 @@ int main(int argc, char** argv) {
             pud_opts.max_answers,
             pud_opts.seed);
         h();
+    });
+
+    auto* module_app = app.add_subcommand("module", "PUD module files");
+    module_app->require_subcommand(1);
+
+    struct {
+        std::string database_path;
+        std::string output_path;
+        std::vector<std::string> dependency_hex;
+    } module_create_opts;
+
+    auto* module_create_sub = module_app->add_subcommand(
+        "create",
+        "Create a binary PUD module file from a CHC database");
+    module_create_sub->add_option("--db", module_create_opts.database_path, "CHC input file")->required();
+    module_create_sub->add_option("-o,--output", module_create_opts.output_path, "Output module file")->required();
+    module_create_sub->add_option(
+        "--deps",
+        module_create_opts.dependency_hex,
+        "Direct dependency module IDs (hex, repeatable)");
+    module_create_sub->callback([&]() {
+        hex_uint64 hex_codec;
+        std::vector<pud_module_id> dependencies;
+        dependencies.reserve(module_create_opts.dependency_hex.size());
+        for (const std::string& hex : module_create_opts.dependency_hex)
+            dependencies.push_back(hex_codec.parse_hex(hex));
+        pud_module_create_command_handler handler{
+            module_create_opts.database_path,
+            std::move(dependencies),
+            module_create_opts.output_path};
+        handler();
+    });
+
+    struct {
+        std::string input_path;
+    } module_inspect_opts;
+
+    auto* module_inspect_sub = module_app->add_subcommand(
+        "inspect",
+        "Print metadata from a binary PUD module file");
+    module_inspect_sub->add_option("-i,--input", module_inspect_opts.input_path, "Module file")->required();
+    module_inspect_sub->callback([&]() {
+        pud_module_inspect_command_handler handler{module_inspect_opts.input_path};
+        handler();
     });
 
     struct {

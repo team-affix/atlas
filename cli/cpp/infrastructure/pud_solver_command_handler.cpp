@@ -1,4 +1,4 @@
-#include "infrastructure/pud_command_handler.hpp"
+#include "infrastructure/pud_solver_command_handler.hpp"
 #include "infrastructure/coroutine.hpp"
 #include "parser/hpp/import_database_from_file.hpp"
 #include "parser/hpp/import_goals_from_string.hpp"
@@ -21,9 +21,9 @@ std::vector<rule> list_rules(db& database) {
     return rules;
 }
 
-} // namespace
+}
 
-pud_command_handler::pud_command_handler(
+pud_solver_command_handler::pud_solver_command_handler(
     const std::string& file,
     const std::string& goals_str,
     const std::string& head_str,
@@ -55,6 +55,6 @@ pud_command_handler::pud_command_handler(
     runtime_.register_module(database_module_.value());
 }
 
-void pud_command_handler::operator()() {
+void pud_solver_command_handler::operator()() {
     std::cerr << "PUD automatic solving is not available yet (axioms loaded).\n";
 }

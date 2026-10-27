@@ -1,5 +1,5 @@
-#ifndef PUD_COMMAND_HANDLER_HPP
-#define PUD_COMMAND_HANDLER_HPP
+#ifndef PUD_SOLVER_COMMAND_HANDLER_HPP
+#define PUD_SOLVER_COMMAND_HANDLER_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -18,10 +18,10 @@
 #include "infrastructure/var_names.hpp"
 
 // Loads a CHC database as one PUD module, queries it with goal strings, and prints answers.
-struct pud_command_handler {
+struct pud_solver_command_handler {
     using printer_t = expr_printer<id_var_printer, named_functor_printer<functor_names>>;
 
-    pud_command_handler(
+    pud_solver_command_handler(
         const std::string& file,
         const std::string& goals_str,
         const std::string& head_str,
