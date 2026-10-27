@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
     auto* module_inspect_sub = module_app->add_subcommand(
         "inspect",
         "Print metadata from a binary PUD module file");
-    module_inspect_sub->add_option("-i,--input", module_inspect_opts.input_path, "Module file")->required();
+    module_inspect_sub->add_option("module", module_inspect_opts.input_path, "Binary PUD module file")->required();
     module_inspect_sub->callback([&]() {
         pud_module_inspect_command_handler handler{module_inspect_opts.input_path};
         handler();
