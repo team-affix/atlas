@@ -2,7 +2,7 @@
 
 Progressive unfolding database (PUD): each registered **module** is an append-only resolution tree (axioms, then stored inferences). A **frontier** of **active leaves** sits on top: bindings, structure watches, and open **multi-headed queries** (MHQ). The caller expands by `unfold(leaf, body_goal)`; the runtime picks candidates, materializes child nodes, moves activity to children, and retires the parent.
 
-Deeper query semantics: [pud-query-model.txt](pud-query-model.txt). Design history: [pud-smell-resolution.md](pud-smell-resolution.md).
+Deeper query semantics: [pud-query-model.txt](pud-query-model.txt). Design history: [pud-smell-resolution.md](pud-smell-resolution.md). Solver and driver composition: [pud-solver-architecture.md](pud-solver-architecture.md).
 
 ---
 
