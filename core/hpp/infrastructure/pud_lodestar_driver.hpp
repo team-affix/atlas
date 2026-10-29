@@ -18,7 +18,6 @@ struct pud_lodestar_driver {
     pud_lodestar_driver(
         IManifest& manifest,
         pud_lodestar_frontier& frontier,
-        pud_global_node_id focus_axiom,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     bool refute_blocked();
     bool unfold_one();
@@ -47,7 +46,6 @@ private:
 
     IManifest& manifest_;
     pud_lodestar_frontier& frontier_;
-    pud_global_node_id focus_axiom_;
     size_t ratio_;
     size_t last_refuted_;
     bool last_unfold_on_focus_;
@@ -58,11 +56,9 @@ template<typename IManifest>
 pud_lodestar_driver<IManifest>::pud_lodestar_driver(
     IManifest& manifest,
     pud_lodestar_frontier& frontier,
-    pud_global_node_id focus_axiom,
     size_t non_conjecture_unfolds_per_conjecture_unfold)
     : manifest_(manifest)
     , frontier_(frontier)
-    , focus_axiom_(focus_axiom)
     , ratio_(non_conjecture_unfolds_per_conjecture_unfold)
     , last_refuted_(0)
     , last_unfold_on_focus_(false)
@@ -70,7 +66,7 @@ pud_lodestar_driver<IManifest>::pud_lodestar_driver(
 
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::on_focus(pud_global_node_id node) const {
-    return manifest_.node_axioms_.get(node) == focus_axiom_;
+    return manifest_.on_focus(node);
 }
 
 template<typename IManifest>
@@ -226,6 +222,7 @@ template<typename IManifest>
 void pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
     const pud_frontier_change change = manifest_.unfolder_.unfold(choice.leaf, choice.body_goal);
     frontier_.apply_unfold(choice.leaf, change);
+    manifest_.note_offspring(choice.leaf, change.offspring);
     last_refuted_ = change.refuted.size();
     last_unfold_on_focus_ = on_focus(choice.leaf);
     if (last_unfold_on_focus_)

@@ -4,6 +4,7 @@
 #include <deque>
 #include <optional>
 #include <set>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 #include "infrastructure/expr_pool.hpp"
@@ -41,6 +42,7 @@
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
+#include "value_objects/pud_global_node_id_hash.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 
 struct pud_lodestar_manifest {
@@ -147,6 +149,8 @@ struct pud_lodestar_manifest {
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     void register_module(pud_module& module);
+    bool on_focus(pud_global_node_id node) const;
+    void note_offspring(pud_global_node_id parent, const std::vector<pud_global_node_id>& offspring);
     bool next();
     const expr* solution() const;
     size_t solution_depth() const;
@@ -188,6 +192,7 @@ struct pud_lodestar_manifest {
 
     expr_pool& exprs_;
     pud_global_node_id focus_axiom_;
+    std::unordered_set<pud_global_node_id, pud_global_node_id_hash> focus_nodes_;
     size_t max_unfolds_;
     size_t unfolds_;
     size_t entry_unfolds_;
@@ -200,6 +205,7 @@ struct pud_lodestar_manifest {
     bool stopped_;
 private:
     std::optional<pud_global_node_id> unreported_answer() const;
+    void seed_focus_tree();
     const expr* normalized_head(pud_global_node_id leaf) const;
     size_t depth_of(pud_global_node_id leaf) const;
     const expr* normalize_with_bindings(const ubs_bind_map& bind_map, const expr* skeleton) const;

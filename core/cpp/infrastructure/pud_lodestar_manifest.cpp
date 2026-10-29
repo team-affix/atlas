@@ -47,12 +47,13 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_)
     , exprs_(expr_pool)
     , focus_axiom_(focus_axiom)
+    , focus_nodes_{focus_axiom}
     , max_unfolds_(max_unfolds)
     , unfolds_(0)
     , entry_unfolds_(0)
     , pending_conflicts_(0)
     , frontier_()
-    , driver_(*this, frontier_, focus_axiom, non_conjecture_unfolds_per_conjecture_unfold)
+    , driver_(*this, frontier_, non_conjecture_unfolds_per_conjecture_unfold)
     , reported_()
     , solution_(nullptr)
     , solution_depth_(0)
@@ -60,16 +61,43 @@ pud_lodestar_manifest::pud_lodestar_manifest(
 
 void pud_lodestar_manifest::register_module(pud_module& module) {
     modules_.register_module(module);
+    if (module.get_module_id() == focus_axiom_.module)
+        seed_focus_tree();
     const pud_frontier_change change = module_activator_.activate_module(module.get_module_id());
     frontier_.apply_register(change);
     if (!change.refuted.empty())
         pending_conflicts_ += change.refuted.size();
 }
 
+void pud_lodestar_manifest::seed_focus_tree() {
+    std::vector<pud_global_node_id> pending{focus_axiom_};
+    while (!pending.empty()) {
+        const pud_global_node_id node = pending.back();
+        pending.pop_back();
+        for (const pud_node_id child_id : modules_.get_children(node)) {
+            const pud_global_node_id child{.module = node.module, .node = child_id};
+            if (!focus_nodes_.insert(child).second)
+                continue;
+            pending.push_back(child);
+        }
+    }
+}
+
+bool pud_lodestar_manifest::on_focus(pud_global_node_id node) const {
+    return focus_nodes_.contains(node);
+}
+
+void pud_lodestar_manifest::note_offspring(
+    pud_global_node_id parent, const std::vector<pud_global_node_id>& offspring) {
+    if (!on_focus(parent))
+        return;
+    focus_nodes_.insert(offspring.begin(), offspring.end());
+}
+
 std::optional<pud_global_node_id> pud_lodestar_manifest::unreported_answer() const {
     std::optional<pud_global_node_id> smallest;
     for (const pud_global_node_id leaf : frontier_.live()) {
-        if (node_axioms_.get(leaf) != focus_axiom_)
+        if (!on_focus(leaf))
             continue;
         if (modules_.check_refuted(leaf))
             continue;
