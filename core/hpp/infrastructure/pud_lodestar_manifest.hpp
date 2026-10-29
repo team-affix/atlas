@@ -147,9 +147,12 @@ struct pud_lodestar_manifest {
         expr_pool& expr_pool,
         pud_global_node_id focus_axiom,
         size_t max_unfolds,
-        size_t non_conjecture_unfolds_per_conjecture_unfold);
+        size_t non_conjecture_unfolds_per_conjecture_unfold,
+        size_t max_node_depth);
     void register_module(pud_module& module);
     bool on_focus(pud_global_node_id node) const;
+    bool within_depth(pud_global_node_id node) const;
+    bool open_goals_within_bound(pud_global_node_id node) const;
     void note_offspring(pud_global_node_id parent, const std::vector<pud_global_node_id>& offspring);
     bool next();
     const expr* solution() const;
@@ -194,6 +197,7 @@ struct pud_lodestar_manifest {
     pud_global_node_id focus_axiom_;
     std::unordered_set<pud_global_node_id, pud_global_node_id_hash> focus_nodes_;
     size_t max_unfolds_;
+    size_t max_node_depth_;
     size_t unfolds_;
     size_t entry_unfolds_;
     size_t pending_conflicts_;

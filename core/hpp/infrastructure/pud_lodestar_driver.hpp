@@ -8,6 +8,7 @@
 #include <vector>
 #include "infrastructure/pud_lodestar_frontier.hpp"
 #include "infrastructure/pud_lodestar_schedule.hpp"
+#include "infrastructure/pud_query_holders.hpp"
 #include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_lodestar_choice.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
@@ -42,7 +43,8 @@ private:
         pud_global_node_id leaf) const;
     std::vector<pud_lodestar_choice> non_conjecture_ring() const;
     std::vector<pud_lodestar_choice> conjecture_ring() const;
-    void unfold(const pud_lodestar_choice& choice);
+    bool unfold(const pud_lodestar_choice& choice);
+    bool propagate_unit();
 
     IManifest& manifest_;
     pud_lodestar_frontier& frontier_;
@@ -138,7 +140,7 @@ void pud_lodestar_driver<IManifest>::push_witness_slot(
         .eligible = false,
     };
     const std::optional<pud_body_goal_id> ready = smallest_ready_goal(leaf);
-    if (ready.has_value()) {
+    if (ready.has_value() && manifest_.within_depth(leaf) && manifest_.open_goals_within_bound(leaf)) {
         choice.body_goal = ready.value();
         choice.eligible = true;
     }
@@ -209,7 +211,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             },
             .leaf = query.node,
             .body_goal = query.goal,
-            .eligible = true,
+            .eligible = manifest_.within_depth(query.node) && manifest_.open_goals_within_bound(query.node),
         });
     }
     std::sort(ring.begin(), ring.end(), [](const pud_lodestar_choice& left, const pud_lodestar_choice& right) {
@@ -219,7 +221,12 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
 }
 
 template<typename IManifest>
-void pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
+bool pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
+    if (!manifest_.within_depth(choice.leaf) || !manifest_.open_goals_within_bound(choice.leaf)) {
+        last_refuted_ = 0;
+        last_unfold_on_focus_ = false;
+        return false;
+    }
     const pud_frontier_change change = manifest_.unfolder_.unfold(choice.leaf, choice.body_goal);
     frontier_.apply_unfold(choice.leaf, change);
     manifest_.note_offspring(choice.leaf, change.offspring);
@@ -229,6 +236,51 @@ void pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
         schedule_.reset_ratio();
     else
         schedule_.count_non_conjecture();
+    return true;
+}
+
+template<typename IManifest>
+bool pud_lodestar_driver<IManifest>::propagate_unit() {
+    while (!manifest_.unit_queries_.empty()) {
+        const pud_mhq_head_id head = manifest_.unit_queries_.front();
+        manifest_.unit_queries_.pop_front();
+        const std::optional<pud_unfold> held = manifest_.query_holders_.find_holder(head);
+        if (!held.has_value())
+            continue;
+        if (manifest_.mhq_.candidates(head).size() != 1)
+            continue;
+        std::vector<pud_global_node_id> ready;
+        for (const pud_global_node_id leaf : manifest_.query_holders_.get_holders(head)) {
+            if (!frontier_.live().contains(leaf))
+                continue;
+            if (manifest_.modules_.check_refuted(leaf))
+                continue;
+            if (!manifest_.within_depth(leaf))
+                continue;
+            if (!manifest_.open_goals_within_bound(leaf))
+                continue;
+            ready.push_back(leaf);
+        }
+        if (ready.empty())
+            continue;
+        const pud_lodestar_choice choice{
+            .slot = pud_lodestar_slot_id{
+                .query_node = ready.front(),
+                .query_goal = held->goal,
+                .candidate = 0,
+                .side = k_lodestar_side_self,
+            },
+            .leaf = ready.front(),
+            .body_goal = held->goal,
+            .eligible = true,
+        };
+        if (!unfold(choice))
+            continue;
+        if (ready.size() > 1)
+            manifest_.unit_queries_.push_front(head);
+        return true;
+    }
+    return false;
 }
 
 template<typename IManifest>
@@ -250,24 +302,21 @@ bool pud_lodestar_driver<IManifest>::refute_blocked() {
 
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::unfold_one() {
+    if (propagate_unit())
+        return true;
     const bool below_ratio = schedule_.non_conjecture_since_caller() < ratio_;
     if (below_ratio) {
         const std::optional<pud_lodestar_choice> outside = schedule_.next_non_conjecture(non_conjecture_ring());
-        if (outside.has_value()) {
-            unfold(outside.value());
+        if (outside.has_value() && unfold(outside.value()))
             return true;
-        }
     }
     const std::optional<pud_lodestar_choice> inside = schedule_.next_conjecture(conjecture_ring());
-    if (inside.has_value()) {
-        unfold(inside.value());
+    if (inside.has_value() && unfold(inside.value()))
         return true;
-    }
     const std::optional<pud_lodestar_choice> more = schedule_.next_non_conjecture(non_conjecture_ring());
     if (!more.has_value())
         return false;
-    unfold(more.value());
-    return true;
+    return unfold(more.value());
 }
 
 template<typename IManifest>

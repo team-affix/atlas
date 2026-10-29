@@ -1,4 +1,5 @@
 #include "infrastructure/pud_lodestar_manifest.hpp"
+
 #include "value_objects/framed_functor.hpp"
 #include "value_objects/rule.hpp"
 #include "value_objects/ubs_class.hpp"
@@ -7,7 +8,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     expr_pool& expr_pool,
     pud_global_node_id focus_axiom,
     size_t max_unfolds,
-    size_t non_conjecture_unfolds_per_conjecture_unfold)
+    size_t non_conjecture_unfolds_per_conjecture_unfold,
+    size_t max_node_depth)
     : globalizer_()
     , cycle_detector_factory_(globalizer_, expr_pool)
     , unifier_factory_(globalizer_, expr_pool)
@@ -49,6 +51,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , focus_axiom_(focus_axiom)
     , focus_nodes_{focus_axiom}
     , max_unfolds_(max_unfolds)
+    , max_node_depth_(max_node_depth)
     , unfolds_(0)
     , entry_unfolds_(0)
     , pending_conflicts_(0)
@@ -85,6 +88,15 @@ void pud_lodestar_manifest::seed_focus_tree() {
 
 bool pud_lodestar_manifest::on_focus(pud_global_node_id node) const {
     return focus_nodes_.contains(node);
+}
+
+bool pud_lodestar_manifest::within_depth(pud_global_node_id node) const {
+    return depth_of(node) < max_node_depth_;
+}
+
+bool pud_lodestar_manifest::open_goals_within_bound(pud_global_node_id node) const {
+    constexpr size_t k_max_open_goals = 64;
+    return node_goals_.get(node).goals.size() <= k_max_open_goals;
 }
 
 void pud_lodestar_manifest::note_offspring(

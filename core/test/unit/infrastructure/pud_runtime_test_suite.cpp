@@ -30,6 +30,7 @@
 namespace pud_runtime_tests {
 
 inline constexpr size_t kMaxResolutions = 32;
+inline constexpr size_t kMaxNodeDepth = 64;
 inline constexpr uint32_t kSeed = 41;
 
 enum class runtime_kind { lodestar };
@@ -62,7 +63,8 @@ runtime_ref& make_runtime_session(
     initial_goal_exprs& initial_goals,
     expr_pool& exprs,
     uint32_t initial_frame_offset,
-    size_t max_resolutions) {
+    size_t max_resolutions,
+    size_t max_node_depth) {
     (void)kind;
     std::vector<rule_id> rule_ids;
     auto walk = database.lookup_all_rules().iterate();
@@ -89,7 +91,7 @@ runtime_ref& make_runtime_session(
     holder.modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(head, std::move(body), initial_frame_offset),
     });
-    holder.lodestar.emplace(exprs, pud_global_node_id{.module = 2, .node = 0}, max_resolutions, 10);
+    holder.lodestar.emplace(exprs, pud_global_node_id{.module = 2, .node = 0}, max_resolutions, 10, max_node_depth);
     for (pud_module& module : holder.modules)
         holder.lodestar->register_module(module);
     holder.ref.emplace(&*holder.lodestar);
@@ -185,9 +187,13 @@ struct RuntimeTestBase {
 
 struct PudRuntimeParamTest : RuntimeTestBase, ::testing::TestWithParam<runtime_kind> {
     runtime_session_holder holder_;
-    runtime_ref& make_session(uint32_t initial_frame_offset, size_t max_resolutions = kMaxResolutions) {
+    runtime_ref& make_session(
+        uint32_t initial_frame_offset,
+        size_t max_resolutions = kMaxResolutions,
+        size_t max_node_depth = kMaxNodeDepth) {
         return make_runtime_session(
-            holder_, GetParam(), database, initial_goals, saved_expr_pool_, initial_frame_offset, max_resolutions);
+            holder_, GetParam(), database, initial_goals, saved_expr_pool_, initial_frame_offset, max_resolutions,
+            max_node_depth);
     }
 };
 
@@ -2740,7 +2746,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
      * Intent: climb 10 stairs with steps 1 or 2 — Fibonacci F(11) = 89 ordered step lists.
      * steps(zero,nil). steps(S,cons(one,Rest)):-add(one,RestSum,S),steps(RestSum,Rest).
      * steps(S,cons(two,Rest)):-add(two,RestSum,S),steps(RestSum,Rest). Goal: steps(ten,P).
-     * Budget: 1024 (89 models, dual branching per level).
+     * Budget: 1024. Node depth 192: the all-ones climb is deeper than the shared cap of 64.
      */
     static constexpr size_t kTierIBudget = 1024;
     static constexpr int kStaircaseHeight = 10;
@@ -2810,7 +2816,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesStaircasePathsOneOrTwoSummingToTen) {
     build_paths(build_paths, kStaircaseHeight, nil);
     ASSERT_EQ(expected.size(), kExpectedPaths);
 
-    runtime_ref& session = make_session(kStaircaseInitialVarCount, kTierIBudget);
+    runtime_ref& session = make_session(kStaircaseInitialVarCount, kTierIBudget, 192);
     enumerate_all_solutions(
         session,
         saved_printer_,

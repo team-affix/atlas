@@ -4,8 +4,9 @@ pud_lodestar_runtime::pud_lodestar_runtime(
     expr_pool& exprs,
     pud_global_node_id focus_axiom,
     size_t max_unfolds,
-    size_t non_conjecture_unfolds_per_conjecture_unfold)
-    : manifest_(exprs, focus_axiom, max_unfolds, non_conjecture_unfolds_per_conjecture_unfold) {}
+    size_t non_conjecture_unfolds_per_conjecture_unfold,
+    size_t max_node_depth)
+    : manifest_(exprs, focus_axiom, max_unfolds, non_conjecture_unfolds_per_conjecture_unfold, max_node_depth) {}
 
 void pud_lodestar_runtime::register_module(pud_module& module) {
     manifest_.register_module(module);
