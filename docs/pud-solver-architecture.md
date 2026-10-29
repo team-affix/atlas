@@ -1,6 +1,16 @@
 # PUD solver architecture (decisions)
 
-**Status:** Design direction agreed 2026-10-27. Not fully implemented yet (naming and first solver manifests are follow-ups).
+**Status:** Lodestar is the first PUD solver runtime. Manual `pud_runtime` is unchanged.
+
+## Lodestar
+
+Lodestar is a PUD solver runtime. It exposes `next()`, `solution()`, and `solution_depth()`. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
+
+The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types. No existing `pud_*` type is edited.
+
+Unfolds of witnesses that conjecture queries rest on are dealt out by a round-robin over candidate slots. `non_conjecture_unfolds_per_conjecture_unfold` of those happen for each unfold inside the conjecture module. A new runtime starts that schedule from the first slot, including when the modules already contain inferences. The previous runtime's cursor is not restored.
+
+Correctness tests live in [`pud_runtime_test_suite.cpp`](../core/test/unit/infrastructure/pud_runtime_test_suite.cpp), a parameterized suite copied from the legacy runtime tests. The legacy suite is not edited.
 
 ## Context
 
@@ -77,7 +87,7 @@ Serde and CLI use **concrete `pud_module`**; the live engine uses the registry p
 ## Open follow-ups
 
 - Rename manual types (`pud_manual_runtime`, optional `pud_manual_manifest`) and update test includes.
-- First real solver manifest: session setup (which queries to open), frontier tracking, stats maps, stop condition; optional CLI runtime with `next()` mirroring `ridge_runtime`.
+- First real solver manifest: Lodestar (`pud_lodestar_manifest`, `pud_lodestar_runtime`).
 - Document operational "resume" as structural reload plus the same query-setup policy, not deserializing MHQ or solver state.
 
 ## References
