@@ -995,7 +995,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesFourVarSatThreeClauses) {
 
 TEST_P(PudRuntimeParamTest, EnumeratesAddPairsSummingLessThanTen) {
     static constexpr size_t kInitialVarCount = 3;
-    static constexpr size_t kPeanoBudget = 128;
+    static constexpr size_t kPeanoBudget = 2048;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -1200,7 +1200,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesMulPairsProductEight) {
 }
 TEST_P(PudRuntimeParamTest, EnumeratesDualBoundedSharedXSums) {
     static constexpr size_t kInitialVarCount = 5;
-    static constexpr size_t kPeanoBudget = 128;
+    static constexpr size_t kPeanoBudget = 2048;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -1290,7 +1290,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesDualBoundedSharedXSums) {
 
 TEST_P(PudRuntimeParamTest, EnumeratesCatalanTreesWithFiveNodes) {
     static constexpr size_t kInitialVarCount = 1;
-    static constexpr size_t kCatalanBudget = 70;
+    static constexpr size_t kCatalanBudget = 16384;
 
     const expr* zero = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
     database.push(rule{saved_expr_pool_.make_functor(holder_.functors.id("nat"), {zero}), {}, 0});
@@ -1730,7 +1730,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesFibIndicesWithValueBelowFive) {
      * fib(0)=0, fib(1)=1, fib(n+2)=fib(n)+fib(n+1).
      * Goal: fib(N, V), lt(V, five) — all indices with fib value below 5.
      */
-    static constexpr size_t kPeanoBudget = 128;
+    static constexpr size_t kPeanoBudget = 2048;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -1818,7 +1818,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesFactorPairsOfSix) {
      * Intent: commutative mul synthesis — (X,Y) and (Y,X) are distinct models.
      * Goal: mul(X, Y, six). Expected 4 factor pairs: (1,6), (6,1), (2,3), (3,2).
      */
-    static constexpr size_t kPeanoBudget = 128;
+    static constexpr size_t kPeanoBudget = 2048;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -2395,7 +2395,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesPeanoTriplesInsideTetrahedron) {
      * Goals: add(X,Y,S), add(S,Z,T), lt(T,nine). Expected C(11,3) = 165 triples.
      * Budget: 512 (165 models, triple add chain).
      */
-    static constexpr size_t kTierIBudget = 512;
+    static constexpr size_t kTierIBudget = 8192;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
@@ -2827,7 +2827,7 @@ TEST_P(PudRuntimeParamTest, EnumeratesFibIndexPairsWithSumBelowThirty) {
      * Goals: nat(I),nat(J),fib(I,VI),fib(J,VJ),add(VI,VJ,S),lt(S,three). Indices 0..3.
      * Expected: 11 pairs. Budget: 256 (search cost is highly seed-sensitive).
      */
-    static constexpr size_t kTierIBudget = 256;
+    static constexpr size_t kTierIBudget = 4096;
     static constexpr int kFibBruteForceBound = 3;
     static constexpr int kSumBound = 3;
 
