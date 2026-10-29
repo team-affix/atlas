@@ -143,7 +143,7 @@ struct pud_lodestar_manifest {
 
     pud_lodestar_manifest(
         expr_pool& expr_pool,
-        pud_module_id entry_module,
+        pud_global_node_id focus_axiom,
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     void register_module(pud_module& module);
@@ -187,7 +187,7 @@ struct pud_lodestar_manifest {
     module_activator_t         module_activator_;
 
     expr_pool& exprs_;
-    pud_module_id entry_module_;
+    pud_global_node_id focus_axiom_;
     size_t max_unfolds_;
     size_t unfolds_;
     size_t entry_unfolds_;

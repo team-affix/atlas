@@ -18,12 +18,12 @@ struct pud_lodestar_driver {
     pud_lodestar_driver(
         IManifest& manifest,
         pud_lodestar_frontier& frontier,
-        pud_module_id entry_module,
+        pud_global_node_id focus_axiom,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     bool refute_blocked();
     bool unfold_one();
     size_t last_refuted() const;
-    bool last_unfold_in_entry() const;
+    bool last_unfold_on_focus() const;
 private:
     struct query_ref {
         pud_global_node_id node;
@@ -32,6 +32,7 @@ private:
         bool has_candidates;
     };
 
+    bool on_focus(pud_global_node_id node) const;
     std::vector<query_ref> conjecture_queries() const;
     std::optional<pud_body_goal_id> smallest_ready_goal(pud_global_node_id leaf) const;
     void push_witness_slot(
@@ -46,10 +47,10 @@ private:
 
     IManifest& manifest_;
     pud_lodestar_frontier& frontier_;
-    pud_module_id entry_module_;
+    pud_global_node_id focus_axiom_;
     size_t ratio_;
     size_t last_refuted_;
-    bool last_unfold_in_entry_;
+    bool last_unfold_on_focus_;
     pud_lodestar_schedule schedule_;
 };
 
@@ -57,15 +58,20 @@ template<typename IManifest>
 pud_lodestar_driver<IManifest>::pud_lodestar_driver(
     IManifest& manifest,
     pud_lodestar_frontier& frontier,
-    pud_module_id entry_module,
+    pud_global_node_id focus_axiom,
     size_t non_conjecture_unfolds_per_conjecture_unfold)
     : manifest_(manifest)
     , frontier_(frontier)
-    , entry_module_(entry_module)
+    , focus_axiom_(focus_axiom)
     , ratio_(non_conjecture_unfolds_per_conjecture_unfold)
     , last_refuted_(0)
-    , last_unfold_in_entry_(false)
+    , last_unfold_on_focus_(false)
     , schedule_() {}
+
+template<typename IManifest>
+bool pud_lodestar_driver<IManifest>::on_focus(pud_global_node_id node) const {
+    return manifest_.node_axioms_.get(node) == focus_axiom_;
+}
 
 template<typename IManifest>
 std::vector<typename pud_lodestar_driver<IManifest>::query_ref>
@@ -73,7 +79,7 @@ pud_lodestar_driver<IManifest>::conjecture_queries() const {
     std::vector<pud_global_node_id> nodes(frontier_.live().begin(), frontier_.live().end());
     std::vector<query_ref> queries;
     for (const pud_global_node_id node : nodes) {
-        if (node.module != entry_module_)
+        if (!on_focus(node))
             continue;
         if (manifest_.modules_.check_refuted(node))
             continue;
@@ -154,7 +160,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::non_conjecture_
             if (watched == nullptr)
                 continue;
             if (watched->self_witness) {
-                if (watched->self_leaf.module == entry_module_)
+                if (on_focus(watched->self_leaf))
                     continue;
                 push_witness_slot(ring, query, candidate, k_lodestar_side_self, watched->self_leaf);
                 continue;
@@ -162,7 +168,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::non_conjecture_
             uint8_t side = k_lodestar_side_a;
             for (const pud_mhws_head_id witness : watched->witnesses) {
                 const std::optional<pud_global_node_id> leaf = manifest_.witness_log_.node_of(witness);
-                if (leaf.has_value() && leaf->module != entry_module_)
+                if (leaf.has_value() && !on_focus(leaf.value()))
                     push_witness_slot(ring, query, candidate, side, leaf.value());
                 side = k_lodestar_side_b;
             }
@@ -185,7 +191,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             if (watched == nullptr)
                 continue;
             if (watched->self_witness) {
-                if (watched->self_leaf.module != entry_module_)
+                if (!on_focus(watched->self_leaf))
                     continue;
                 push_witness_slot(ring, query, candidate, k_lodestar_side_self, watched->self_leaf);
                 continue;
@@ -193,7 +199,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             uint8_t side = k_lodestar_side_a;
             for (const pud_mhws_head_id witness : watched->witnesses) {
                 const std::optional<pud_global_node_id> leaf = manifest_.witness_log_.node_of(witness);
-                if (leaf.has_value() && leaf->module == entry_module_)
+                if (leaf.has_value() && on_focus(leaf.value()))
                     push_witness_slot(ring, query, candidate, side, leaf.value());
                 side = k_lodestar_side_b;
             }
@@ -221,8 +227,8 @@ void pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
     const pud_frontier_change change = manifest_.unfolder_.unfold(choice.leaf, choice.body_goal);
     frontier_.apply_unfold(choice.leaf, change);
     last_refuted_ = change.refuted.size();
-    last_unfold_in_entry_ = choice.leaf.module == entry_module_;
-    if (choice.leaf.module == entry_module_)
+    last_unfold_on_focus_ = on_focus(choice.leaf);
+    if (last_unfold_on_focus_)
         schedule_.reset_ratio();
     else
         schedule_.count_non_conjecture();
@@ -273,8 +279,8 @@ size_t pud_lodestar_driver<IManifest>::last_refuted() const {
 }
 
 template<typename IManifest>
-bool pud_lodestar_driver<IManifest>::last_unfold_in_entry() const {
-    return last_unfold_in_entry_;
+bool pud_lodestar_driver<IManifest>::last_unfold_on_focus() const {
+    return last_unfold_on_focus_;
 }
 
 #endif

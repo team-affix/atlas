@@ -7,12 +7,12 @@
 #include "infrastructure/pud_lodestar_manifest.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_module_id.hpp"
+#include "value_objects/pud_global_node_id.hpp"
 
 struct pud_lodestar_runtime {
     pud_lodestar_runtime(
         expr_pool& exprs,
-        pud_module_id entry_module,
+        pud_global_node_id focus_axiom,
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     void register_module(pud_module& module);

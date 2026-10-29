@@ -5,7 +5,7 @@
 
 pud_lodestar_manifest::pud_lodestar_manifest(
     expr_pool& expr_pool,
-    pud_module_id entry_module,
+    pud_global_node_id focus_axiom,
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold)
     : globalizer_()
@@ -46,13 +46,13 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , module_activator_(
           modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_)
     , exprs_(expr_pool)
-    , entry_module_(entry_module)
+    , focus_axiom_(focus_axiom)
     , max_unfolds_(max_unfolds)
     , unfolds_(0)
     , entry_unfolds_(0)
     , pending_conflicts_(0)
     , frontier_()
-    , driver_(*this, frontier_, entry_module, non_conjecture_unfolds_per_conjecture_unfold)
+    , driver_(*this, frontier_, focus_axiom, non_conjecture_unfolds_per_conjecture_unfold)
     , reported_()
     , solution_(nullptr)
     , solution_depth_(0)
@@ -69,7 +69,7 @@ void pud_lodestar_manifest::register_module(pud_module& module) {
 std::optional<pud_global_node_id> pud_lodestar_manifest::unreported_answer() const {
     std::optional<pud_global_node_id> smallest;
     for (const pud_global_node_id leaf : frontier_.live()) {
-        if (leaf.module != entry_module_)
+        if (node_axioms_.get(leaf) != focus_axiom_)
             continue;
         if (modules_.check_refuted(leaf))
             continue;
@@ -147,7 +147,7 @@ bool pud_lodestar_manifest::next() {
             return false;
         }
         ++unfolds_;
-        if (driver_.last_unfold_in_entry())
+        if (driver_.last_unfold_on_focus())
             ++entry_unfolds_;
     }
 }

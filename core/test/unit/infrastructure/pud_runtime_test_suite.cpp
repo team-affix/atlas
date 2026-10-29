@@ -89,7 +89,7 @@ runtime_ref& make_runtime_session(
     holder.modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(head, std::move(body), initial_frame_offset),
     });
-    holder.lodestar.emplace(exprs, 2, max_resolutions, 10);
+    holder.lodestar.emplace(exprs, pud_global_node_id{.module = 2, .node = 0}, max_resolutions, 10);
     for (pud_module& module : holder.modules)
         holder.lodestar->register_module(module);
     holder.ref.emplace(&*holder.lodestar);
