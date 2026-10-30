@@ -51,7 +51,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , module_activator_(
           modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_)
     , focus_set_()
-    , unfold_budget_store_(max_unfolds)
+    , unfold_budget_store_()
     , solution_store_()
     , pending_conflict_store_()
     , frontier_()
@@ -68,8 +68,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           frontier_)
     , search_stepper_(
           solution_store_, solution_store_, pending_conflict_store_, pending_conflict_store_, unfold_budget_store_,
-          unfold_budget_store_, unfold_budget_store_, unfold_budget_store_, unfold_budget_store_,
-          unfold_budget_store_, unfold_budget_store_, solution_taker_, driver_, driver_, driver_)
+          unfold_budget_store_, unfold_budget_store_, unfold_budget_store_, solution_taker_, driver_, driver_,
+          driver_, max_unfolds)
     , module_registrar_(
           functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
           pending_conflict_store_) {

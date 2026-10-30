@@ -10,9 +10,6 @@ template<
     typename ISetPendingConflicts,
     typename IGetStopped,
     typename ISetStopped,
-    typename IGetMaxUnfolds,
-    typename IGetUnfolds,
-    typename ISetUnfolds,
     typename IGetFocusUnfolds,
     typename ISetFocusUnfolds,
     typename ITakeSolution,
@@ -27,15 +24,13 @@ struct pud_lodestar_search_stepper {
         ISetPendingConflicts& set_pending_conflicts,
         IGetStopped& get_stopped,
         ISetStopped& set_stopped,
-        IGetMaxUnfolds& get_max_unfolds,
-        IGetUnfolds& get_unfolds,
-        ISetUnfolds& set_unfolds,
         IGetFocusUnfolds& get_focus_unfolds,
         ISetFocusUnfolds& set_focus_unfolds,
         ITakeSolution& take_solution,
         IRefuteBlocked& refute_blocked,
         IUnfoldOne& unfold_one,
-        ICheckLastUnfoldOnFocus& check_last_unfold_on_focus);
+        ICheckLastUnfoldOnFocus& check_last_unfold_on_focus,
+        size_t max_focus_unfolds);
     bool step();
 private:
     IClearSolution& clear_solution_;
@@ -44,28 +39,24 @@ private:
     ISetPendingConflicts& set_pending_conflicts_;
     IGetStopped& get_stopped_;
     ISetStopped& set_stopped_;
-    IGetMaxUnfolds& get_max_unfolds_;
-    IGetUnfolds& get_unfolds_;
-    ISetUnfolds& set_unfolds_;
     IGetFocusUnfolds& get_focus_unfolds_;
     ISetFocusUnfolds& set_focus_unfolds_;
     ITakeSolution& take_solution_;
     IRefuteBlocked& refute_blocked_;
     IUnfoldOne& unfold_one_;
     ICheckLastUnfoldOnFocus& check_last_unfold_on_focus_;
+    size_t max_focus_unfolds_;
 };
 
 #define PUD_LODESTAR_SEARCH_STEPPER_TEMPLATE                                                        \
     template<typename IClearSolution, typename ICountSolutions, typename IGetPendingConflicts,     \
              typename ISetPendingConflicts, typename IGetStopped, typename ISetStopped,             \
-             typename IGetMaxUnfolds, typename IGetUnfolds, typename ISetUnfolds,                  \
              typename IGetFocusUnfolds, typename ISetFocusUnfolds, typename ITakeSolution,          \
              typename IRefuteBlocked, typename IUnfoldOne, typename ICheckLastUnfoldOnFocus>
 #define PUD_LODESTAR_SEARCH_STEPPER                                                                 \
     pud_lodestar_search_stepper<IClearSolution, ICountSolutions, IGetPendingConflicts,            \
-        ISetPendingConflicts, IGetStopped, ISetStopped, IGetMaxUnfolds, IGetUnfolds, ISetUnfolds,  \
-        IGetFocusUnfolds, ISetFocusUnfolds, ITakeSolution, IRefuteBlocked, IUnfoldOne,             \
-        ICheckLastUnfoldOnFocus>
+        ISetPendingConflicts, IGetStopped, ISetStopped, IGetFocusUnfolds, ISetFocusUnfolds,        \
+        ITakeSolution, IRefuteBlocked, IUnfoldOne, ICheckLastUnfoldOnFocus>
 
 PUD_LODESTAR_SEARCH_STEPPER_TEMPLATE
 PUD_LODESTAR_SEARCH_STEPPER::pud_lodestar_search_stepper(
@@ -75,30 +66,26 @@ PUD_LODESTAR_SEARCH_STEPPER::pud_lodestar_search_stepper(
     ISetPendingConflicts& set_pending_conflicts,
     IGetStopped& get_stopped,
     ISetStopped& set_stopped,
-    IGetMaxUnfolds& get_max_unfolds,
-    IGetUnfolds& get_unfolds,
-    ISetUnfolds& set_unfolds,
     IGetFocusUnfolds& get_focus_unfolds,
     ISetFocusUnfolds& set_focus_unfolds,
     ITakeSolution& take_solution,
     IRefuteBlocked& refute_blocked,
     IUnfoldOne& unfold_one,
-    ICheckLastUnfoldOnFocus& check_last_unfold_on_focus)
+    ICheckLastUnfoldOnFocus& check_last_unfold_on_focus,
+    size_t max_focus_unfolds)
     : clear_solution_(clear_solution)
     , count_solutions_(count_solutions)
     , get_pending_conflicts_(get_pending_conflicts)
     , set_pending_conflicts_(set_pending_conflicts)
     , get_stopped_(get_stopped)
     , set_stopped_(set_stopped)
-    , get_max_unfolds_(get_max_unfolds)
-    , get_unfolds_(get_unfolds)
-    , set_unfolds_(set_unfolds)
     , get_focus_unfolds_(get_focus_unfolds)
     , set_focus_unfolds_(set_focus_unfolds)
     , take_solution_(take_solution)
     , refute_blocked_(refute_blocked)
     , unfold_one_(unfold_one)
-    , check_last_unfold_on_focus_(check_last_unfold_on_focus) {}
+    , check_last_unfold_on_focus_(check_last_unfold_on_focus)
+    , max_focus_unfolds_(max_focus_unfolds) {}
 
 PUD_LODESTAR_SEARCH_STEPPER_TEMPLATE
 bool PUD_LODESTAR_SEARCH_STEPPER::step() {
@@ -115,7 +102,7 @@ bool PUD_LODESTAR_SEARCH_STEPPER::step() {
             return true;
         if (refute_blocked_.refute_blocked())
             return true;
-        const bool budget_spent = get_focus_unfolds_.get_focus_unfolds() >= get_max_unfolds_.get_max_unfolds();
+        const bool budget_spent = get_focus_unfolds_.get_focus_unfolds() >= max_focus_unfolds_;
         if (budget_spent) {
             set_stopped_.set_stopped(true);
             return count_solutions_.solution_count() == 0;
@@ -124,7 +111,6 @@ bool PUD_LODESTAR_SEARCH_STEPPER::step() {
             set_stopped_.set_stopped(true);
             return false;
         }
-        set_unfolds_.set_unfolds(get_unfolds_.get_unfolds() + 1);
         if (!check_last_unfold_on_focus_.last_unfold_on_focus())
             continue;
         set_focus_unfolds_.set_focus_unfolds(get_focus_unfolds_.get_focus_unfolds() + 1);

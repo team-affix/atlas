@@ -202,11 +202,9 @@ struct pud_lodestar_manifest {
     struct search_stepper_t : pud_lodestar_search_stepper<
         pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
         pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
-        pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
         pud_lodestar_unfold_budget_store, solution_taker_t, driver_t, driver_t, driver_t> {
         using pud_lodestar_search_stepper<
             pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
-            pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
             pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
             pud_lodestar_unfold_budget_store, solution_taker_t, driver_t, driver_t,
             driver_t>::pud_lodestar_search_stepper;
