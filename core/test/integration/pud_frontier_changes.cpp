@@ -39,6 +39,7 @@ struct PudFrontierChangesIntegrationTest : public ::testing::Test {
 
 TEST_F(PudFrontierChangesIntegrationTest, AnEmptyModuleOpensNothing) {
     pud_module& mod = modules.emplace_back(1, std::vector<pud_module_id>{}, std::vector<rule>{});
+    install_shared_functor_names(mod, this->functors);
     EXPECT_EQ(runtime.register_module(mod), (pud_frontier_change{.offspring = {}, .refuted = {}}));
 }
 
@@ -56,6 +57,7 @@ TEST_F(PudFrontierChangesIntegrationTest, FactsReportAsOffspring) {
             rule(functor("color", {atom("blue")}), {}, 0),
             rule(functor("warm", {atom("red")}), {}, 0),
         });
+    install_shared_functor_names(mod, this->functors);
     const pud_frontier_change change = runtime.register_module(mod);
     EXPECT_THAT(change.offspring, ElementsAreArray(colors));
     EXPECT_THAT(change.refuted, IsEmpty());
@@ -77,6 +79,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ARuleOpensWithItsGoals) {
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     EXPECT_THAT(runtime.register_module(mod).offspring, UnorderedElementsAre(colors.at(0), colors.at(1), colors.at(2), rule_node));
 }
 
@@ -86,6 +89,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ARuleWithAnUnprovableGoalOpensRefuted)
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(atom("q"), {atom("missing")}, 0)});
+    install_shared_functor_names(mod, this->functors);
     const pud_frontier_change change = runtime.register_module(mod);
     EXPECT_THAT(change.offspring, IsEmpty());
     EXPECT_THAT(change.refuted, ElementsAre(rule_node));
@@ -103,6 +107,7 @@ TEST_F(PudFrontierChangesIntegrationTest, UnfoldingReportsTheChildrenButNeverThe
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)}), functor("color", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(rule_node, 0);
     std::vector<pud_global_node_id> children;
@@ -123,6 +128,7 @@ TEST_F(PudFrontierChangesIntegrationTest, UnfoldingTheLastGoalLeavesGoallessChil
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(rule_node, 0);
     std::vector<pud_global_node_id> children;
@@ -142,6 +148,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ChildrenAreStoredInTheUnfoldedLeafsMod
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     for (pud_global_node_id child : runtime.unfold(rule_node, 0).offspring)
         EXPECT_EQ(child.module, rule_node.module);
@@ -158,6 +165,7 @@ TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefute
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(rule_node, 0);
     std::vector<pud_global_node_id> children;
@@ -184,6 +192,7 @@ TEST_F(PudFrontierChangesIntegrationTest, SiblingsRefutedOnArrivalThatShareAnExh
             rule(functor("s", {atom("c")}), {}, 0),
             rule(atom("p"), {atom("p"), functor("q", {atom("d")})}, 0),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(rule_node, 1);
     std::vector<pud_global_node_id> children;
@@ -206,6 +215,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ARefutationIsReportedInEveryTreeItReac
             rule(functor("mid", {var(0)}), {functor("base", {var(0)}), functor("check", {var(0)})}, 1),
             rule(atom("top"), {functor("mid", {atom("c")})}, 0),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
@@ -225,6 +235,7 @@ TEST_F(PudFrontierChangesIntegrationTest, AnAxiomWhoseOnlyCandidateIsRefutedDuri
             rule(functor("q", {var(0)}), {functor("color", {var(0)}), atom("never")}, 1),
             rule(atom("never"), {atom("never_holds")}, 0),
         });
+    install_shared_functor_names(mod, this->functors);
     const pud_frontier_change registered = runtime.register_module(mod);
     EXPECT_THAT(registered.refuted, Contains(rule_node));
     EXPECT_TRUE(mod.check_refuted(rule_node.node));

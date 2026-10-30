@@ -252,8 +252,8 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
     pud_functor_linker<pud_symbol_table, pud_link_table> linker{symbols, links};
     struct linked_demoduler {
         struct demoduler_t;
-        struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool> {
-            using pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool>::pud_functor_demoduler;
+        struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool> {
+            using pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool>::pud_functor_demoduler;
         };
         struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
             using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
@@ -261,7 +261,7 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
         functor_demoduler_t functor_demoduler;
         demoduler_t demoduler;
         linked_demoduler(pud_link_table& links, expr_pool& exprs)
-            : functor_demoduler(demoduler, links, links, exprs)
+            : functor_demoduler(demoduler, links, exprs)
             , demoduler(functor_demoduler, exprs) {}
     };
     linked_demoduler linked{links, exprs};

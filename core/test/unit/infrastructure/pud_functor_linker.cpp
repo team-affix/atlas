@@ -28,22 +28,20 @@ struct PudFunctorLinkerTest : public ::testing::Test {
 
 }
 
-TEST_F(PudFunctorLinkerTest, AFunctorWithNoNameIsLinkedToItself) {
+TEST_F(PudFunctorLinkerTest, AnEmptyNameVectorInsertsNoLinks) {
     pud_module module{3, {}, {rule(&head, {}, 0)}};
     EXPECT_CALL(intern, intern_functor_name).Times(0);
-    EXPECT_CALL(insert, insert_link(3u, 0u, 0u));
+    EXPECT_CALL(insert, insert_link).Times(0);
     linker.link(module);
 }
 
-TEST_F(PudFunctorLinkerTest, AnIdPastTheNameVectorIsLinkedToItselfOnce) {
+TEST_F(PudFunctorLinkerTest, AnIdPastTheNameVectorIsNotLinked) {
     expr inner{expr::functor{9, {}}};
     expr outer{expr::functor{5, {&inner}}};
     pud_module module{3, {}, {rule(&outer, {&outer}, 0)}};
     module.append_functor_name("[]");
     EXPECT_CALL(intern, intern_functor_name("[]")).WillOnce(Return(0u));
     EXPECT_CALL(insert, insert_link(3u, 0u, 0u));
-    EXPECT_CALL(insert, insert_link(3u, 5u, 5u));
-    EXPECT_CALL(insert, insert_link(3u, 9u, 9u));
     linker.link(module);
 }
 

@@ -92,8 +92,10 @@ runtime_ref& make_runtime_session(
         rule(head, std::move(body), initial_frame_offset),
     });
     holder.lodestar.emplace(exprs, pud_global_node_id{.module = 2, .node = 0}, max_resolutions, 10, max_node_depth);
-    for (pud_module& module : holder.modules)
+    for (pud_module& module : holder.modules) {
+        install_shared_functor_names(module, holder.functors);
         holder.lodestar->register_module(module);
+    }
     holder.ref.emplace(&*holder.lodestar);
     return holder.ref.value();
 }

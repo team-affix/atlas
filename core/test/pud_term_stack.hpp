@@ -26,9 +26,9 @@ struct pud_term_stack {
     using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
     using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, copy_demoduler_t>;
     using exporter_factory_t = pud_exporter_factory<
-        globalizer, expr_pool, expr_pool, pud_identity_global_functor_ids, pud_identity_global_functor_ids,
+        globalizer, expr_pool, expr_pool, pud_identity_global_functor_ids, pud_identity_local_functor_ids,
         pud_identity_local_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids,
-        pud_identity_local_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids>;
+        pud_identity_local_functor_ids>;
 
     expr_pool pool;
     globalizer globalize;
@@ -41,8 +41,8 @@ struct pud_term_stack {
     unifier_factory_t unifiers{globalize, pool, demoduler};
     normalizer_factory_t normalizers{globalize, pool, pool, copy_demoduler};
     exporter_factory_t exporters{
-        globalize, pool, pool, global_functor_ids, global_functor_ids, local_functor_ids, local_functor_ids,
-        local_functor_ids, local_functor_ids, local_functor_ids, local_functor_ids};
+        globalize, pool, pool, global_functor_ids, local_functor_ids, local_functor_ids, local_functor_ids,
+        local_functor_ids, local_functor_ids};
     ubs_bind_map bind_map{pud_ubs_state{}};
     cycle_detector_factory_t::cycle_detector_t cycle_detector{cycle_detectors.make_cycle_detector(bind_map)};
     unifier_factory_t::unifier_t unifier{unifiers.make_unifier(bind_map, cycle_detector)};

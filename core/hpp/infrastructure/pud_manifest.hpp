@@ -43,8 +43,8 @@ struct pud_manifest {
     using bind_map_factory_t = pud_bind_map_factory;
     using modules_t = pud_modules<IModule>;
     struct demoduler_t;
-    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, IExprPool> {
-        using pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, IExprPool>::pud_functor_demoduler;
+    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, IExprPool> {
+        using pud_functor_demoduler<demoduler_t, pud_link_table, IExprPool>::pud_functor_demoduler;
     };
     struct demoduler_t : pud_demoduler<functor_demoduler_t, IExprPool> {
         using pud_demoduler<functor_demoduler_t, IExprPool>::pud_demoduler;
@@ -53,8 +53,8 @@ struct pud_manifest {
     using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
     using unifier_factory_t = pud_unifier_factory<globalizer, IExprPool, demoduler_t, functor_demoduler_t>;
     using exporter_factory_t = pud_exporter_factory<
-        globalizer, IExprPool, IExprPool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
-        pud_symbol_table, pud_symbol_table, modules_t, pud_link_table>;
+        globalizer, IExprPool, IExprPool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table,
+        modules_t, pud_link_table>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
     using refutation_propagator_t = pud_refutation_propagator<modules_t, pud_node_live_child_counts, modules_t>;
@@ -133,7 +133,7 @@ template<typename IModule, typename IExprPool>
 pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     : symbol_table_()
     , link_table_()
-    , functor_demoduler_(demoduler_, link_table_, link_table_, expr_pool)
+    , functor_demoduler_(demoduler_, link_table_, expr_pool)
     , demoduler_(functor_demoduler_, expr_pool)
     , functor_linker_(symbol_table_, link_table_)
     , globalizer_()
@@ -142,8 +142,8 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , bind_map_factory_()
     , modules_()
     , exporter_factory_(
-          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, link_table_, symbol_table_,
-          symbol_table_, modules_, link_table_)
+          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, symbol_table_, modules_,
+          link_table_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()

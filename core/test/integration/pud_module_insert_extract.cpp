@@ -278,7 +278,9 @@ TEST_F(PudModuleInsertExtractIntegrationTest, RoundTrippedModuleRegistersSameFro
     pud_module loaded = round_trip(original);
     pud_runtime<pud_module, expr_pool> original_runtime{encode_pool};
     pud_runtime<pud_module, expr_pool> loaded_runtime{decode_pool};
+    install_shared_functor_names(original, this->functors);
     const pud_frontier_change original_change = original_runtime.register_module(original);
+    install_shared_functor_names(loaded, this->functors);
     const pud_frontier_change loaded_change = loaded_runtime.register_module(loaded);
     EXPECT_EQ(original_change.offspring, loaded_change.offspring);
     EXPECT_EQ(original_change.refuted, loaded_change.refuted);
@@ -301,7 +303,9 @@ TEST_F(PudModuleInsertExtractIntegrationTest, RoundTrippedModuleAllowsSameUnfold
     pud_module loaded = round_trip(original);
     pud_runtime<pud_module, expr_pool> original_runtime{encode_pool};
     pud_runtime<pud_module, expr_pool> loaded_runtime{decode_pool};
+    install_shared_functor_names(original, this->functors);
     original_runtime.register_module(original);
+    install_shared_functor_names(loaded, this->functors);
     loaded_runtime.register_module(loaded);
     const pud_global_node_id step{.module = 1, .node = 1};
     const pud_frontier_change original_unfold = original_runtime.unfold(step, 0);

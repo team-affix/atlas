@@ -39,12 +39,14 @@ TEST_F(PudModuleVisibilityIntegrationTest, ADependentModulesGoalsResolveAgainstT
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
     pud_module& dependent = modules.emplace_back(
         2,
         std::vector<pud_module_id>{base_fact.module},
         std::vector<rule>{rule(functor("q", {var(0)}), {functor("p", {var(0)})}, 1)});
+    install_shared_functor_names(dependent, this->functors);
     EXPECT_THAT(runtime.register_module(dependent).offspring, ElementsAre(query));
     const pud_frontier_change change = runtime.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
@@ -64,11 +66,13 @@ TEST_F(PudModuleVisibilityIntegrationTest, AModuleWithoutTheDependencyCannotReso
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     pud_module& isolated = modules.emplace_back(
         2,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("q", {var(0)}), {functor("p", {var(0)})}, 1)});
+    install_shared_functor_names(isolated, this->functors);
     const pud_frontier_change change = runtime.register_module(isolated);
     EXPECT_THAT(change.refuted, ElementsAre(query));
     EXPECT_TRUE(isolated.check_refuted(query.node));
@@ -80,11 +84,13 @@ TEST_F(PudModuleVisibilityIntegrationTest, ADependencyNeverSeesItsDependentsAxio
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(atom("q"), {functor("l", {atom("a")})}, 0)});
+    install_shared_functor_names(first, this->functors);
     EXPECT_THAT(runtime.register_module(first).refuted, ElementsAre(query));
     pud_module& second = modules.emplace_back(
         2,
         std::vector<pud_module_id>{query.module},
         std::vector<rule>{rule(functor("l", {atom("a")}), {}, 0)});
+    install_shared_functor_names(second, this->functors);
     runtime.register_module(second);
     EXPECT_TRUE(first.check_refuted(query.node));
 }
@@ -96,16 +102,19 @@ TEST_F(PudModuleVisibilityIntegrationTest, SiblingModulesDoNotSeeEachOthersAxiom
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     pud_module& sibling = modules.emplace_back(
         2,
         std::vector<pud_module_id>{base_fact.module},
         std::vector<rule>{rule(functor("l", {atom("x")}), {}, 0)});
+    install_shared_functor_names(sibling, this->functors);
     runtime.register_module(sibling);
     pud_module& dependent = modules.emplace_back(
         3,
         std::vector<pud_module_id>{base_fact.module},
         std::vector<rule>{rule(functor("q", {var(0)}), {functor("l", {var(0)})}, 1)});
+    install_shared_functor_names(dependent, this->functors);
     EXPECT_THAT(runtime.register_module(dependent).refuted, ElementsAre(query));
 }
 
@@ -117,17 +126,20 @@ TEST_F(PudModuleVisibilityIntegrationTest, IndirectDependenciesAreVisible) {
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     pud_module& middle = modules.emplace_back(
         2,
         std::vector<pud_module_id>{base_fact.module},
         std::vector<rule>{rule(functor("r", {atom("a")}), {}, 0)});
+    install_shared_functor_names(middle, this->functors);
     runtime.register_module(middle);
     pud_module& top = modules.emplace_back(
         3,
         std::vector<pud_module_id>{middle_fact.module},
         std::vector<rule>{
             rule(functor("q", {var(0)}), {functor("p", {var(0)}), functor("r", {var(0)})}, 1)});
+    install_shared_functor_names(top, this->functors);
     EXPECT_THAT(runtime.register_module(top).offspring, ElementsAre(query));
     const pud_frontier_change change = runtime.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
@@ -143,6 +155,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, AxiomsOfTheSameModuleAreCandidatesFor
             rule(functor("p", {atom("a")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("p", {var(0)})}, 1),
         });
+    install_shared_functor_names(mod, this->functors);
     runtime.register_module(mod);
     EXPECT_EQ(runtime.unfold(query, 0).offspring.size(), 1u);
 }
@@ -157,6 +170,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, CandidatesComeFromDependenciesFirstTh
             rule(functor("color", {atom("red")}), {}, 0),
             rule(functor("color", {atom("blue")}), {}, 0),
         });
+    install_shared_functor_names(colors, this->functors);
     runtime.register_module(colors);
     pud_module& extended = modules.emplace_back(
         2,
@@ -165,6 +179,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, CandidatesComeFromDependenciesFirstTh
             rule(functor("color", {atom("green")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)})}, 1),
         });
+    install_shared_functor_names(extended, this->functors);
     runtime.register_module(extended);
     const std::vector<pud_global_node_id> children = runtime.unfold(query, 0).offspring;
     ASSERT_EQ(children.size(), 3u);
@@ -198,6 +213,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, AnUnfoldedChildKeepsItsModulesVisibil
             rule(functor("color", {atom("red")}), {}, 0),
             rule(functor("color", {atom("blue")}), {}, 0),
         });
+    install_shared_functor_names(colors, this->functors);
     runtime.register_module(colors);
     pud_module& extended = modules.emplace_back(
         2,
@@ -206,6 +222,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, AnUnfoldedChildKeepsItsModulesVisibil
             rule(functor("warm", {atom("red")}), {}, 0),
             rule(functor("q", {var(0)}), {functor("color", {var(0)}), functor("warm", {var(0)})}, 1),
         });
+    install_shared_functor_names(extended, this->functors);
     runtime.register_module(extended);
     const pud_frontier_change change = runtime.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
@@ -227,6 +244,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, TwoModulesOnOneDependencyStayIsolated
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     pud_module& first = modules.emplace_back(
         2,
@@ -235,11 +253,13 @@ TEST_F(PudModuleVisibilityIntegrationTest, TwoModulesOnOneDependencyStayIsolated
             rule(functor("f", {atom("a")}), {}, 0),
             rule(functor("q1", {var(0)}), {functor("p", {var(0)}), functor("f", {var(0)})}, 1),
         });
+    install_shared_functor_names(first, this->functors);
     runtime.register_module(first);
     pud_module& second = modules.emplace_back(
         3,
         std::vector<pud_module_id>{base_fact.module},
         std::vector<rule>{rule(functor("q2", {var(0)}), {functor("p", {var(0)}), functor("f", {var(0)})}, 1)});
+    install_shared_functor_names(second, this->functors);
     const pud_frontier_change second_change = runtime.register_module(second);
     EXPECT_FALSE(first.check_refuted(first_query.node));
     EXPECT_THAT(second_change.refuted, Contains(second_query));

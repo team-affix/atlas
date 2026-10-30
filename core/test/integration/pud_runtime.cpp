@@ -40,6 +40,7 @@ TEST_F(PudRuntimeIntegrationTest, RegisteringAModuleBeforeItsDependencyFails) {
         1,
         std::vector<pud_module_id>{99},
         std::vector<rule>{rule(atom("q"), {}, 0)});
+    install_shared_functor_names(mod, this->functors);
     EXPECT_THROW(runtime.register_module(mod), std::logic_error);
 }
 
@@ -49,12 +50,14 @@ TEST_F(PudRuntimeIntegrationTest, NodesWithTheSameLocalIdInTwoModulesStayApart) 
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {atom("a")}), {}, 0)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
     pud_module& dependent = modules.emplace_back(
         2,
         std::vector<pud_module_id>{fact.module},
         std::vector<rule>{rule(functor("q", {var(0)}), {functor("p", {var(0)})}, 1)});
+    install_shared_functor_names(dependent, this->functors);
     runtime.register_module(dependent);
     ASSERT_EQ(fact.node, query.node);
     const pud_frontier_change change = runtime.unfold(query, 0);
@@ -76,6 +79,7 @@ TEST_F(PudRuntimeIntegrationTest, UnfoldingADependencysLeafKeepsADependentsQuery
             rule(functor("nat", {atom("z")}), {}, 0),
             rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
         });
+    install_shared_functor_names(nat, this->functors);
     runtime.register_module(nat);
     const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
     pud_module& dependent = modules.emplace_back(
@@ -83,6 +87,7 @@ TEST_F(PudRuntimeIntegrationTest, UnfoldingADependencysLeafKeepsADependentsQuery
         std::vector<pud_module_id>{step.module},
         std::vector<rule>{
             rule(atom("q"), {functor("nat", {functor("s", {functor("s", {atom("z")})})})}, 0)});
+    install_shared_functor_names(dependent, this->functors);
     runtime.register_module(dependent);
     runtime.unfold(step, 0);
     EXPECT_FALSE(dependent.check_refuted(query.node));
@@ -102,6 +107,7 @@ TEST_F(PudRuntimeIntegrationTest, ARefutationInADependencyRefutesTheDependentsLe
             rule(functor("check", {atom("a")}), {}, 0),
             rule(functor("mid", {var(0)}), {functor("base", {var(0)}), functor("check", {var(0)})}, 1),
         });
+    install_shared_functor_names(base_mod, this->functors);
     runtime.register_module(base_mod);
     const pud_global_node_id top = pud_global_node_id{.module = 2, .node = 0};
     const pud_global_node_id other = pud_global_node_id{.module = 2, .node = 1};
@@ -112,6 +118,7 @@ TEST_F(PudRuntimeIntegrationTest, ARefutationInADependencyRefutesTheDependentsLe
             rule(atom("top"), {functor("mid", {atom("c")})}, 0),
             rule(atom("other"), {functor("check", {atom("a")})}, 0),
         });
+    install_shared_functor_names(dependent, this->functors);
     runtime.register_module(dependent);
     const pud_frontier_change change = runtime.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
@@ -133,6 +140,7 @@ TEST_F(PudRuntimeIntegrationTest, ReloadedModulesPutBackTheSameFrontierWithoutRe
             rule(functor("warm", {atom("red")}), {}, 0),
         });
     std::set<pud_global_node_id> live;
+    install_shared_functor_names(nat_colors, this->functors);
     pud_frontier_change first_register = runtime.register_module(nat_colors);
     live.insert(first_register.offspring.begin(), first_register.offspring.end());
     for (pud_global_node_id refuted : first_register.refuted)
@@ -149,6 +157,7 @@ TEST_F(PudRuntimeIntegrationTest, ReloadedModulesPutBackTheSameFrontierWithoutRe
             rule(atom("g"), {functor("color", {atom("green")})}, 0),
             rule(functor("n", {var(0)}), {functor("nat", {var(0)})}, 1),
         });
+    install_shared_functor_names(mixed, this->functors);
     pud_frontier_change second_register = runtime.register_module(mixed);
     live.insert(second_register.offspring.begin(), second_register.offspring.end());
     for (pud_global_node_id refuted : second_register.refuted)
@@ -206,6 +215,7 @@ TEST_F(PudRuntimeIntegrationTest, AReloadedTreeKeepsUnfoldingTheWayTheOriginalDo
             rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
         });
     std::set<pud_global_node_id> live;
+    install_shared_functor_names(nat, this->functors);
     pud_frontier_change first_register = runtime.register_module(nat);
     live.insert(first_register.offspring.begin(), first_register.offspring.end());
     for (pud_global_node_id refuted : first_register.refuted)
@@ -216,6 +226,7 @@ TEST_F(PudRuntimeIntegrationTest, AReloadedTreeKeepsUnfoldingTheWayTheOriginalDo
         2,
         std::vector<pud_module_id>{step.module},
         std::vector<rule>{rule(functor("n", {var(0)}), {functor("nat", {var(0)})}, 1)});
+    install_shared_functor_names(dependent, this->functors);
     pud_frontier_change second_register = runtime.register_module(dependent);
     live.insert(second_register.offspring.begin(), second_register.offspring.end());
     for (pud_global_node_id refuted : second_register.refuted)
@@ -258,6 +269,7 @@ TEST_F(PudRuntimeIntegrationTest, AReloadedRefutedNodeIsNeverActivatedAgain) {
             rule(atom("d"), {functor("color", {atom("green")})}, 0),
             rule(atom("f"), {functor("color", {atom("red")})}, 0),
         });
+    install_shared_functor_names(colors, this->functors);
     const pud_frontier_change registered = runtime.register_module(colors);
     EXPECT_THAT(registered.refuted, ElementsAre(doomed));
 

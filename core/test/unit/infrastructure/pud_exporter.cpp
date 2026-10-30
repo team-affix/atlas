@@ -47,9 +47,8 @@ ubs_class singleton(uint32_t var) {
 
 using test_exporter_t = pud_exporter<
     NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>,
-    pud_identity_global_functor_ids, pud_identity_global_functor_ids, pud_identity_local_functor_ids,
-    pud_identity_local_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids,
-    pud_identity_local_functor_ids, pud_identity_local_functor_ids>;
+    pud_identity_global_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids,
+    pud_identity_local_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids>;
 
 struct PudExporterTest : public ::testing::Test {
     std::deque<expr> owned;
@@ -61,9 +60,8 @@ struct PudExporterTest : public ::testing::Test {
     pud_identity_local_functor_ids local_functor_ids;
     std::unordered_map<uint32_t, uint32_t> translations;
     test_exporter_t exporter{
-        globalize, make_functor, make_var, find, global_functor_ids, global_functor_ids, local_functor_ids,
-        local_functor_ids, local_functor_ids, local_functor_ids, local_functor_ids, local_functor_ids, 10,
-        translations};
+        globalize, make_functor, make_var, find, global_functor_ids, local_functor_ids, local_functor_ids,
+        local_functor_ids, local_functor_ids, local_functor_ids, 10, translations};
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
@@ -147,14 +145,8 @@ TEST_F(PudExporterTest, ASharedSubtermIsRebuiltOnceAcrossExports) {
 struct MockGetGlobalFunctorId {
     MOCK_METHOD(uint32_t, get_global_functor_id_from_local_functor_id, (pud_module_id, uint32_t));
 };
-struct MockContainsModule {
-    MOCK_METHOD(bool, contains_module, (pud_module_id));
-};
 struct MockContainsGlobalFunctorId {
     MOCK_METHOD(bool, contains_global_functor_id, (pud_module_id, uint32_t));
-};
-struct MockContainsNamedFunctorId {
-    MOCK_METHOD(bool, contains_named_functor_id, (uint32_t));
 };
 struct MockGetLocalFunctorId {
     MOCK_METHOD(uint32_t, get_local_functor_id_from_global_functor_id, (pud_module_id, uint32_t));
@@ -171,9 +163,8 @@ struct MockInsertLink {
 
 using translating_exporter_t = pud_exporter<
     NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>,
-    MockGetGlobalFunctorId, NiceMock<MockContainsModule>, NiceMock<MockContainsGlobalFunctorId>,
-    MockGetLocalFunctorId, NiceMock<MockContainsNamedFunctorId>, NiceMock<MockGetNameByGlobalFunctorId>,
-    NiceMock<MockGetModule>, NiceMock<MockInsertLink>>;
+    MockGetGlobalFunctorId, NiceMock<MockContainsGlobalFunctorId>, MockGetLocalFunctorId,
+    NiceMock<MockGetNameByGlobalFunctorId>, NiceMock<MockGetModule>, NiceMock<MockInsertLink>>;
 
 struct PudExporterTranslationTest : public ::testing::Test {
     std::deque<expr> owned;
@@ -182,17 +173,15 @@ struct PudExporterTranslationTest : public ::testing::Test {
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockFind> find;
     MockGetGlobalFunctorId get_global;
-    NiceMock<MockContainsModule> contains_module;
     NiceMock<MockContainsGlobalFunctorId> contains_global;
     MockGetLocalFunctorId get_local;
-    NiceMock<MockContainsNamedFunctorId> contains_named;
     NiceMock<MockGetNameByGlobalFunctorId> get_name;
     NiceMock<MockGetModule> get_module;
     NiceMock<MockInsertLink> insert_link;
     std::unordered_map<uint32_t, uint32_t> translations;
     translating_exporter_t exporter{
-        globalize, make_functor, make_var, find, get_global, contains_module, contains_global, get_local,
-        contains_named, get_name, get_module, insert_link, 10, translations};
+        globalize, make_functor, make_var, find, get_global, contains_global, get_local, get_name, get_module,
+        insert_link, 10, translations};
 
     const expr* var(uint32_t index) {
         owned.push_back(expr{expr::var{index}});
@@ -208,7 +197,6 @@ struct PudExporterTranslationTest : public ::testing::Test {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudExporterTranslationTest::var));
-        ON_CALL(contains_module, contains_module(_)).WillByDefault(Return(true));
         ON_CALL(contains_global, contains_global_functor_id(_, _)).WillByDefault(Return(true));
     }
 };

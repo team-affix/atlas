@@ -20,10 +20,8 @@ template<
     typename IMakeVar,
     typename IFind,
     typename IGetGlobalFunctorIdFromLocalFunctorId,
-    typename IContainsModule,
     typename IContainsGlobalFunctorId,
     typename IGetLocalFunctorIdFromGlobalFunctorId,
-    typename IContainsNamedFunctorId,
     typename IGetNameByGlobalFunctorId,
     typename IGetModule,
     typename IInsertLink>
@@ -34,10 +32,8 @@ struct pud_exporter {
         IMakeVar& make_var,
         IFind& find,
         IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-        IContainsModule& contains_module,
         IContainsGlobalFunctorId& contains_global_functor_id,
         IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-        IContainsNamedFunctorId& contains_named_functor_id,
         IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
         IGetModule& get_module,
         IInsertLink& insert_link,
@@ -60,10 +56,8 @@ private:
     IMakeVar& make_var_;
     IFind& find_;
     IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
-    IContainsModule& contains_module_;
     IContainsGlobalFunctorId& contains_global_functor_id_;
     IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id_;
-    IContainsNamedFunctorId& contains_named_functor_id_;
     IGetNameByGlobalFunctorId& get_name_by_global_functor_id_;
     IGetModule& get_module_;
     IInsertLink& insert_link_;
@@ -74,14 +68,13 @@ private:
 
 #define PUD_EXPORTER_TEMPLATE \
     template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, \
-             typename IGetGlobalFunctorIdFromLocalFunctorId, typename IContainsModule, \
-             typename IContainsGlobalFunctorId, typename IGetLocalFunctorIdFromGlobalFunctorId, \
-             typename IContainsNamedFunctorId, typename IGetNameByGlobalFunctorId, \
+             typename IGetGlobalFunctorIdFromLocalFunctorId, typename IContainsGlobalFunctorId, \
+             typename IGetLocalFunctorIdFromGlobalFunctorId, typename IGetNameByGlobalFunctorId, \
              typename IGetModule, typename IInsertLink>
 #define PUD_EXPORTER \
     pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, IFind, IGetGlobalFunctorIdFromLocalFunctorId, \
-        IContainsModule, IContainsGlobalFunctorId, IGetLocalFunctorIdFromGlobalFunctorId, \
-        IContainsNamedFunctorId, IGetNameByGlobalFunctorId, IGetModule, IInsertLink>
+        IContainsGlobalFunctorId, IGetLocalFunctorIdFromGlobalFunctorId, IGetNameByGlobalFunctorId, \
+        IGetModule, IInsertLink>
 
 PUD_EXPORTER_TEMPLATE
 PUD_EXPORTER::pud_exporter(
@@ -90,10 +83,8 @@ PUD_EXPORTER::pud_exporter(
     IMakeVar& make_var,
     IFind& find,
     IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-    IContainsModule& contains_module,
     IContainsGlobalFunctorId& contains_global_functor_id,
     IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-    IContainsNamedFunctorId& contains_named_functor_id,
     IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
     IGetModule& get_module,
     IInsertLink& insert_link,
@@ -104,10 +95,8 @@ PUD_EXPORTER::pud_exporter(
     , make_var_(make_var)
     , find_(find)
     , get_global_functor_id_(get_global_functor_id)
-    , contains_module_(contains_module)
     , contains_global_functor_id_(contains_global_functor_id)
     , get_local_functor_id_(get_local_functor_id)
-    , contains_named_functor_id_(contains_named_functor_id)
     , get_name_by_global_functor_id_(get_name_by_global_functor_id)
     , get_module_(get_module)
     , insert_link_(insert_link)
@@ -127,21 +116,14 @@ const expr* PUD_EXPORTER::export_expr(moduled_expr source, pud_module_id accepti
         }
         const expr::functor& functor = std::get<expr::functor>(top.functor.skeleton->content);
         if (top.args.size() == functor.args.size()) {
-            const bool source_module_is_linked = contains_module_.contains_module(top.functor.module);
-            const uint32_t global_functor_id = source_module_is_linked
-                ? get_global_functor_id_.get_global_functor_id_from_local_functor_id(top.functor.module, functor.id)
-                : functor.id;
+            const uint32_t global_functor_id = get_global_functor_id_.get_global_functor_id_from_local_functor_id(
+                top.functor.module, functor.id);
             const bool accepting_module_has_functor = contains_global_functor_id_.contains_global_functor_id(
                 accepting_module, global_functor_id);
-            uint32_t local_functor_id = global_functor_id;
+            uint32_t local_functor_id = 0;
             if (accepting_module_has_functor) {
                 local_functor_id = get_local_functor_id_.get_local_functor_id_from_global_functor_id(
                     accepting_module, global_functor_id);
-            } else if (!source_module_is_linked) {
-                local_functor_id = global_functor_id;
-            } else if (get_module_.get_module(accepting_module).functor_names().empty()
-                || !contains_named_functor_id_.contains_named_functor_id(global_functor_id)) {
-                insert_link_.insert_link(accepting_module, global_functor_id, global_functor_id);
             } else {
                 const std::string& name = get_name_by_global_functor_id_.get_name_by_global_functor_id(global_functor_id);
                 local_functor_id = get_module_.get_module(accepting_module).append_functor_name(name);

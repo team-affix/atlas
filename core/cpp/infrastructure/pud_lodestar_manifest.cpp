@@ -12,7 +12,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     size_t max_node_depth)
     : symbol_table_()
     , link_table_()
-    , functor_demoduler_(demoduler_, link_table_, link_table_, expr_pool)
+    , functor_demoduler_(demoduler_, link_table_, expr_pool)
     , demoduler_(functor_demoduler_, expr_pool)
     , functor_linker_(symbol_table_, link_table_)
     , globalizer_()
@@ -21,8 +21,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , bind_map_factory_()
     , modules_()
     , exporter_factory_(
-          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, link_table_, symbol_table_,
-          symbol_table_, modules_, link_table_)
+          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, symbol_table_, modules_,
+          link_table_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()

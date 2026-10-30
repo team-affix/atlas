@@ -45,6 +45,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsSingleUnitSolution) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -122,6 +123,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsSingleUnitSolutionInEv
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -192,6 +194,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesWhenNoCandidates) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -267,6 +270,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesWhenNoCandidatesInEv
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -340,6 +344,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsClauseDerivedUnitSolut
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -418,6 +423,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsClauseDerivedUnitSolut
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -490,6 +496,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsSolutionWithCorrectBin
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -567,6 +574,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsSolutionWithCorrectBin
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -641,6 +649,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsClauseBodyBindingSolut
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -720,6 +729,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsClauseBodyBindingSolut
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -794,6 +804,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterCdclOnUnsatClau
     std::set<pud_global_node_id> live;
     size_t refuted_total = 0;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -876,6 +887,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterCdclOnUnsatClau
         std::set<pud_global_node_id> live;
             size_t refuted_total = 0;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -952,6 +964,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoGroundChoiceSo
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1039,6 +1052,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoGroundChoiceSo
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1123,6 +1137,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterEnumeratingAllG
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1210,6 +1225,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterEnumeratingAllG
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1294,6 +1310,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoVarChoiceSolut
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1372,6 +1389,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoVarChoiceSolut
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1445,6 +1463,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterEnumeratingAllV
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1523,6 +1542,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, RefutesAfterEnumeratingAllV
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1598,6 +1618,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoGoalSharedVarS
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1678,6 +1699,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoGoalSharedVarS
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1753,6 +1775,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourVarBindingSol
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1833,6 +1856,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourVarBindingSol
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -1909,6 +1933,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourClauseBodyFac
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -1999,6 +2024,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourClauseBodyFac
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2085,6 +2111,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsUniqueSharedVarConjunc
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2165,6 +2192,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsUniqueSharedVarConjunc
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2235,6 +2263,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, ConflictedTickNotSolved) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2310,6 +2339,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, ConflictedTickNotSolvedInEv
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2384,6 +2414,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoParentBindings
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2463,6 +2494,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoParentBindings
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2540,6 +2572,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesPeanoLessThanSeve
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2639,6 +2672,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesPeanoLessThanSeve
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2719,6 +2753,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesSatPAndQOrR) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2808,6 +2843,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesSatPAndQOrRInEver
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -2891,6 +2927,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoSatAssignments
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -2979,6 +3016,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoSatAssignments
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
             for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -3064,6 +3102,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoPathTwoColorin
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -3157,6 +3196,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoPathTwoColorin
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -3245,6 +3285,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesK3ThreeColorings)
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -3352,6 +3393,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesK3ThreeColoringsI
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -3442,6 +3484,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesK3TailFourNodeCol
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -3563,6 +3606,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesK3TailFourNodeCol
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -3659,6 +3703,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourVarSatThreeCl
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -3772,6 +3817,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourVarSatThreeCl
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -3872,6 +3918,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesAddPairsSummingLe
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -3976,6 +4023,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesAddPairsSummingLe
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -4069,6 +4117,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesAddPairsSummingEx
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -4166,6 +4215,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesAddPairsSummingEx
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -4264,6 +4314,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesMulPairsProductEi
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -4370,6 +4421,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesMulPairsProductEi
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -4487,6 +4539,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDualBoundedShared
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -4604,6 +4657,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDualBoundedShared
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -4702,6 +4756,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, CatalanMinimalCaseOneNode) 
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -4864,6 +4919,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesCatalanTreesWithF
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5073,6 +5129,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesCatalanTreesWithF
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -5189,6 +5246,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourTwoGoalGround
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5276,6 +5334,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFourTwoGoalGround
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -5360,6 +5419,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesEightThreeGoalGro
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5449,6 +5509,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesEightThreeGoalGro
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -5537,6 +5598,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesManySharedVarGrou
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5633,6 +5695,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesManySharedVarGrou
         std::set<pud_global_node_id> live;
         std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -5705,6 +5768,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesThreeGroundBranch
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5783,6 +5847,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesThreeGroundBranch
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -5855,6 +5920,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, SolvesRecursiveClauseTreeWi
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -5932,6 +5998,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, SolvesRecursiveClauseTreeWi
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6003,6 +6070,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTransitiveReachFr
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6085,6 +6153,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTransitiveReachFr
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6160,6 +6229,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesEvenPeanoLessThan
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6253,6 +6323,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesEvenPeanoLessThan
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6329,6 +6400,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesListSplitsForThre
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6410,6 +6482,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesListSplitsForThre
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6480,6 +6553,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoChoiceClauseSo
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6558,6 +6632,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoChoiceClauseSo
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6651,6 +6726,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesCollatzOneStepPre
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6758,6 +6834,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesCollatzOneStepPre
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -6842,6 +6919,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFibIndicesWithVal
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -6950,6 +7028,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFibIndicesWithVal
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7033,6 +7112,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFactorPairsOfSix)
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -7134,6 +7214,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFactorPairsOfSixI
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7224,6 +7305,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDistinctTwoPartPa
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -7314,6 +7396,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDistinctTwoPartPa
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7397,6 +7480,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesArithmeticProgres
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -7484,6 +7568,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesArithmeticProgres
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7579,6 +7664,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsGcdOfSixAndFourViaSubt
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -7677,6 +7763,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsGcdOfSixAndFourViaSubt
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7768,6 +7855,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoSubsetsOfFourE
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -7867,6 +7955,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesTwoSubsetsOfFourE
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -7951,6 +8040,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesBalancedGrammarSt
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -8040,6 +8130,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesBalancedGrammarSt
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -8122,6 +8213,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDepthTwoTermsOver
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -8217,6 +8309,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesDepthTwoTermsOver
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -8303,6 +8396,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsEvenParityListOfLength
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -8394,6 +8488,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, FindsEvenParityListOfLength
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -8481,6 +8576,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesPeanoTriplesInsid
     std::set<pud_global_node_id> live;
     std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id leaf : change.offspring) {
             live.insert(leaf);
@@ -8599,6 +8695,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesPeanoTriplesInsid
         std::set<pud_global_node_id> live;
         std::map<pud_global_node_id, pud_unnormalized_rule_information> leaf_rule_info;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -8684,6 +8781,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesLatticePathsFourB
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -8771,6 +8869,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesLatticePathsFourB
         std::set<pud_global_node_id> live;
             std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id offspring : change.offspring) {
                 live.insert(offspring);
@@ -8869,6 +8968,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, CompositionsMinimalCaseOrde
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -9032,6 +9132,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesOrderedCompositio
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -9219,6 +9320,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesOrderedCompositio
         std::set<pud_global_node_id> live;
             std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id offspring : change.offspring) {
                 live.insert(offspring);
@@ -9362,6 +9464,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesBinaryStringsNoCo
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -9480,6 +9583,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesBinaryStringsNoCo
         std::set<pud_global_node_id> live;
             std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id offspring : change.offspring) {
                 live.insert(offspring);
@@ -9603,6 +9707,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesStaircasePathsOne
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -9725,6 +9830,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesStaircasePathsOne
         std::set<pud_global_node_id> live;
             std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id offspring : change.offspring) {
                 live.insert(offspring);
@@ -9878,6 +9984,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFibIndexPairsWith
     std::set<pud_global_node_id> live;
     std::set<pud_global_node_id> unfoldable;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         for (pud_global_node_id offspring : change.offspring) {
             live.insert(offspring);
@@ -10033,6 +10140,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFibIndexPairsWith
         std::set<pud_global_node_id> live;
             std::set<pud_global_node_id> unfoldable;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id offspring : change.offspring) {
                 live.insert(offspring);

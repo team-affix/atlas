@@ -26,8 +26,10 @@ TEST_F(PudLodestarManifestTest, EmptyConjectureFactIsDepthZero) {
         rule(atom("lodestar_query"), {}, 0),
     });
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
-    for (pud_module& module : modules)
+    for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
+    }
     ASSERT_TRUE(runtime.next());
     ASSERT_NE(runtime.solution(), nullptr);
     EXPECT_EQ(runtime.solution_depth(), 0u);
@@ -45,8 +47,10 @@ TEST_F(PudLodestarManifestTest, FactInDependencyNormalizesTheConjectureHead) {
         rule(functor("lodestar_query", {exprs.make_var(0)}), {functor("f", {exprs.make_var(0)})}, 1),
     });
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
-    for (pud_module& module : modules)
+    for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
+    }
     ASSERT_TRUE(runtime.next());
     ASSERT_NE(runtime.solution(), nullptr);
     EXPECT_GE(runtime.solution_depth(), 1u);
@@ -63,8 +67,10 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
         rule(atom("lodestar_query"), {atom("missing")}, 0),
     });
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
-    for (pud_module& module : modules)
+    for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
+    }
     ASSERT_TRUE(runtime.next());
     EXPECT_EQ(runtime.solution(), nullptr);
     EXPECT_FALSE(runtime.next());

@@ -48,6 +48,7 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, ColorsInferencesStayValidUnder
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -108,6 +109,7 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, PeanoAdditionInferencesStayVal
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -167,6 +169,7 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, AppendSplitInferencesStayValid
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);
@@ -233,6 +236,7 @@ TYPED_TEST(PudInferenceInvariantsIntegrationTest, GraphReachabilityInferencesSta
         TypeParam runtime(this->exprs);
         std::set<pud_global_node_id> live;
         for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
             const pud_frontier_change change = runtime.register_module(module);
             for (pud_global_node_id leaf : change.offspring) {
                 live.insert(leaf);

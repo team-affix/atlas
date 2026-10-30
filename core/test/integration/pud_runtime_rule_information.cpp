@@ -38,12 +38,14 @@ struct PudRuntimeRuleInformationIntegrationTest : public ::testing::Test {
                 rule(functor("nat", {atom("z")}), {}, 0),
                 rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
             });
+        install_shared_functor_names(nat, this->functors);
         runtime.register_module(nat);
         nat_step_axiom = pud_global_node_id{.module = 1, .node = 1};
         pud_module& query_mod = modules.emplace_back(
             2,
             std::vector<pud_module_id>{nat_step_axiom.module},
             std::vector<rule>{rule(functor("q", {var(0)}), {functor("nat", {var(0)})}, 1)});
+        install_shared_functor_names(query_mod, this->functors);
         runtime.register_module(query_mod);
         query_axiom = pud_global_node_id{.module = 2, .node = 0};
     }
@@ -143,6 +145,7 @@ TEST_F(PudRuntimeRuleInformationIntegrationTest, TwoOpenBodyGoalsAppearInBodyMap
             rule(functor("nat", {functor("s", {var(0)})}), {functor("nat", {var(0)})}, 1),
             rule(functor("color", {atom("red")}), {}, 0),
         });
+    install_shared_functor_names(nat, this->functors);
     runtime.register_module(nat);
     nat_step = pud_global_node_id{.module = 1, .node = 1};
     pud_module& query_mod = modules.emplace_back(
@@ -150,6 +153,7 @@ TEST_F(PudRuntimeRuleInformationIntegrationTest, TwoOpenBodyGoalsAppearInBodyMap
         std::vector<pud_module_id>{nat_step.module},
         std::vector<rule>{
             rule(functor("q", {var(0)}), {functor("nat", {var(0)}), functor("color", {var(0)})}, 1)});
+    install_shared_functor_names(query_mod, this->functors);
     runtime.register_module(query_mod);
     query = pud_global_node_id{.module = 2, .node = 0};
 
@@ -163,12 +167,14 @@ TEST_F(PudRuntimeRuleInformationIntegrationTest, RepeatedVariablesEquateInBindin
         1,
         std::vector<pud_module_id>{},
         std::vector<rule>{rule(functor("p", {var(0), var(0)}), {}, 1)});
+    install_shared_functor_names(base, this->functors);
     runtime.register_module(base);
     const pud_global_node_id query = pud_global_node_id{.module = 2, .node = 0};
     pud_module& query_mod = modules.emplace_back(
         2,
         std::vector<pud_module_id>{base.get_module_id()},
         std::vector<rule>{rule(functor("q", {var(0), var(1)}), {functor("p", {var(0), var(1)})}, 2)});
+    install_shared_functor_names(query_mod, this->functors);
     runtime.register_module(query_mod);
 
     const pud_global_node_id child = runtime.unfold(query, 0).offspring.front();

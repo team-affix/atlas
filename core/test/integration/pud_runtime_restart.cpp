@@ -65,12 +65,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingBeforeAnyUnfoldPutsBackTh
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -82,6 +84,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingBeforeAnyUnfoldPutsBackTh
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -120,12 +123,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingAProgramThatRefutedOnRegi
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_registration.insert(refuted_on_registration.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -139,6 +144,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingAProgramThatRefutedOnRegi
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -182,12 +188,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedArithmeticContinuesLikeIts
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -237,6 +245,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedArithmeticContinuesLikeIts
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -322,12 +331,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListsContinueLikeTheirTwin
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -377,6 +388,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListsContinueLikeTheirTwin
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -456,12 +468,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedGraphQueriesRunOutOfUnfold
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -511,6 +525,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedGraphQueriesRunOutOfUnfold
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -600,12 +615,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTiersRunOutOfUnfoldsLikeTh
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -654,6 +671,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTiersRunOutOfUnfoldsLikeTh
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -734,12 +752,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSiblingModulesContinueLike
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -789,6 +809,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSiblingModulesContinueLike
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -864,12 +885,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedRefutationsCascadeLikeThei
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -918,6 +941,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedRefutationsCascadeLikeThei
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -990,12 +1014,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, AfterARestartAnUnfoldInADependencyR
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1008,6 +1034,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, AfterARestartAnUnfoldInADependencyR
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1074,12 +1101,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartedRuntimeStoresNewInference
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1129,6 +1158,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartedRuntimeStoresNewInference
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1212,12 +1242,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingNeverStoresAnInferenceOrM
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1270,6 +1302,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingNeverStoresAnInferenceOrM
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1319,12 +1352,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingTwiceWithoutUnfoldingChan
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1374,6 +1409,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingTwiceWithoutUnfoldingChan
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1393,6 +1429,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingTwiceWithoutUnfoldingChan
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1476,12 +1513,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingAfterEveryUnfoldMatchesTh
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1525,6 +1564,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingAfterEveryUnfoldMatchesTh
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1571,12 +1611,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingEveryFewUnfoldsMatchesThe
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1628,6 +1670,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartingEveryFewUnfoldsMatchesThe
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1674,12 +1717,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1728,6 +1773,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
     std::set<pud_global_node_id> copy_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : copy_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = copy_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         copy_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1745,6 +1791,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ARestartAndACopyReloadAgreeAndConti
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1839,12 +1886,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedPeanoMulMatchesTwinUnderHe
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1894,6 +1943,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedPeanoMulMatchesTwinUnderHe
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1978,12 +2028,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListMembersMatchTwinToExha
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2032,6 +2084,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedListMembersMatchTwinToExha
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2114,12 +2167,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedMirrorTreesMatchTwin) {
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2169,6 +2224,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedMirrorTreesMatchTwin) {
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2271,12 +2327,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedNestedUnaryChainMatchesTwi
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2326,6 +2384,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedNestedUnaryChainMatchesTwi
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2414,12 +2473,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnd
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2469,6 +2530,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnd
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2525,6 +2587,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedTripleAppendMatchesTwinUnd
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2573,12 +2636,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSharedBinaryMatchesTwin) {
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2628,6 +2693,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RestartedSharedBinaryMatchesTwin) {
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2709,12 +2775,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ColorsRestartsAndContinuesLikeItsTw
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2765,6 +2833,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ColorsRestartsAndContinuesLikeItsTw
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2853,12 +2922,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ArithmeticRestartsAndContinuesLikeI
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2909,6 +2980,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ArithmeticRestartsAndContinuesLikeI
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2997,12 +3069,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListsRestartsAndContinuesLikeItsTwi
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3053,6 +3127,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListsRestartsAndContinuesLikeItsTwi
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3139,12 +3214,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, GraphRestartsAndContinuesLikeItsTwi
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3195,6 +3272,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, GraphRestartsAndContinuesLikeItsTwi
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3278,12 +3356,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TiersRestartsAndContinuesLikeItsTwi
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3334,6 +3414,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TiersRestartsAndContinuesLikeItsTwi
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3421,12 +3502,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SiblingsRestartsAndContinuesLikeIts
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3477,6 +3560,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SiblingsRestartsAndContinuesLikeIts
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3559,12 +3643,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RefutationsRestartsAndContinuesLike
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3615,6 +3701,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, RefutationsRestartsAndContinuesLike
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3695,12 +3782,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, CascadeRestartsAndContinuesLikeItsT
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3751,6 +3840,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, CascadeRestartsAndContinuesLikeItsT
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3850,12 +3940,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulRestartsAndContinuesLikeIts
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3906,6 +3998,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulRestartsAndContinuesLikeIts
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3997,12 +4090,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersRestartsAndContinuesLike
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4053,6 +4148,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersRestartsAndContinuesLike
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4140,12 +4236,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesRestartsAndContinuesLike
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4196,6 +4294,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesRestartsAndContinuesLike
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4303,12 +4402,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainRestartsAndContinue
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4359,6 +4460,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainRestartsAndContinue
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4454,12 +4556,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendRestartsAndContinuesLik
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4510,6 +4614,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendRestartsAndContinuesLik
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4601,12 +4706,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryRestartsAndContinuesLik
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4657,6 +4764,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryRestartsAndContinuesLik
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4756,12 +4864,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulUnderStressRestartsAndConti
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4812,6 +4922,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, PeanoMulUnderStressRestartsAndConti
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4903,12 +5014,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersUnderStressRestartsAndCo
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4959,6 +5072,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, ListMembersUnderStressRestartsAndCo
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5046,12 +5160,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesUnderStressRestartsAndCo
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5102,6 +5218,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, MirrorTreesUnderStressRestartsAndCo
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5209,12 +5326,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainUnderStressRestarts
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5265,6 +5384,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, NestedUnaryChainUnderStressRestarts
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5360,12 +5480,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendUnderStressRestartsAndC
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5416,6 +5538,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, TripleAppendUnderStressRestartsAndC
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5507,12 +5630,14 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryUnderStressRestartsAndC
     std::set<pud_global_node_id> twin_live;
     std::set<pud_global_node_id> restarted_live;
     for (pud_module& module : twin_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = twin_runtime.register_module(module);
         twin_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
             twin_live.erase(refuted);
     }
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         restarted_live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5563,6 +5688,7 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, SharedBinaryUnderStressRestartsAndC
     restarted_live.clear();
     std::vector<pud_global_node_id> refuted_on_restart;
     for (pud_module& module : restarted_modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = restarted_runtime->register_module(module);
         refuted_on_restart.insert(refuted_on_restart.end(), change.refuted.begin(), change.refuted.end());
         restarted_live.insert(change.offspring.begin(), change.offspring.end());

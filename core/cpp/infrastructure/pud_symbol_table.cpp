@@ -21,10 +21,6 @@ uint32_t pud_symbol_table::get_global_functor_id_by_name(const std::string& name
     return global_by_name_.at(name);
 }
 
-bool pud_symbol_table::contains_named_functor_id(uint32_t global_functor_id) const {
-    return name_by_global_.contains(global_functor_id);
-}
-
 const std::string& pud_symbol_table::get_name_by_global_functor_id(uint32_t global_functor_id) const {
     return name_by_global_.at(global_functor_id);
 }

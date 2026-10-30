@@ -15,9 +15,6 @@ using ::testing::Return;
 
 namespace {
 
-struct MockContainsModule {
-    MOCK_METHOD(bool, contains_module, (pud_module_id));
-};
 struct MockGetGlobalFunctorId {
     MOCK_METHOD(uint32_t, get_global_functor_id_from_local_functor_id, (pud_module_id, uint32_t));
 };
@@ -31,25 +28,20 @@ struct MockMakeVar {
 };
 
 struct demoduler_t;
-struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, MockContainsModule, MockGetGlobalFunctorId, MockMakeFunctor> {
-    using pud_functor_demoduler<demoduler_t, MockContainsModule, MockGetGlobalFunctorId, MockMakeFunctor>::pud_functor_demoduler;
+struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, MockGetGlobalFunctorId, MockMakeFunctor> {
+    using pud_functor_demoduler<demoduler_t, MockGetGlobalFunctorId, MockMakeFunctor>::pud_functor_demoduler;
 };
 struct demoduler_t : pud_demoduler<functor_demoduler_t, MockMakeVar> {
     using pud_demoduler<functor_demoduler_t, MockMakeVar>::pud_demoduler;
 };
 
 struct PudDemodulerTest : public ::testing::Test {
-    MockContainsModule contains_module;
     MockGetGlobalFunctorId global_ids;
     MockMakeFunctor make_functor;
     MockMakeVar make_var;
-    functor_demoduler_t functor_demoduler{demoduler, contains_module, global_ids, make_functor};
+    functor_demoduler_t functor_demoduler{demoduler, global_ids, make_functor};
     demoduler_t demoduler{functor_demoduler, make_var};
     std::deque<expr> owned;
-
-    void SetUp() override {
-        EXPECT_CALL(contains_module, contains_module(_)).WillRepeatedly(Return(true));
-    }
 
     const expr* var(uint32_t index) {
         owned.push_back(expr{expr::var{index}});

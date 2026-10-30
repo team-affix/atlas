@@ -46,6 +46,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AModuleWithoutAxiomsReloadsToAnEmpty
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -56,6 +57,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AModuleWithoutAxiomsReloadsToAnEmpty
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -81,6 +83,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, FactsAloneReloadAsTheirOwnFrontier) 
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -91,6 +94,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, FactsAloneReloadAsTheirOwnFrontier) 
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -127,6 +131,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AxiomsWithNothingDerivedReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -139,6 +144,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AxiomsWithNothingDerivedReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -170,6 +176,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationFoundOnRegistrationIsNotF
     std::set<pud_global_node_id> live;
     std::vector<pud_global_node_id> refuted_on_registration;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         refuted_on_registration.insert(refuted_on_registration.end(), change.refuted.begin(), change.refuted.end());
         live.insert(change.offspring.begin(), change.offspring.end());
@@ -183,6 +190,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationFoundOnRegistrationIsNotF
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -219,6 +227,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFewUnfoldsReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -256,6 +265,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFewUnfoldsReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : copies) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -291,6 +301,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AProgramUnfoldedToExhaustionReloads)
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -331,6 +342,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AProgramUnfoldedToExhaustionReloads)
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -367,6 +379,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFrontierOfOnlySolvedLeavesReloads) 
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -411,6 +424,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AFrontierOfOnlySolvedLeavesReloads) 
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -447,6 +461,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ADeeplyUnfoldedDatabaseReloads) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -477,6 +492,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ADeeplyUnfoldedDatabaseReloads) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -514,6 +530,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ManyRandomUnfoldsOfArithmeticReload)
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -558,6 +575,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ManyRandomUnfoldsOfArithmeticReload)
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -595,6 +613,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, UnfoldingOnlyTheQueriesOfArithmeticR
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -632,6 +651,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, UnfoldingOnlyTheQueriesOfArithmeticR
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -675,6 +695,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RandomUnfoldsOfListsReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -719,6 +740,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RandomUnfoldsOfListsReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -762,6 +784,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListQueriesUnfoldedToExhaustionReloa
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -802,6 +825,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListQueriesUnfoldedToExhaustionReloa
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -837,6 +861,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphQueriesUnfoldedToExhaustionRelo
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -877,6 +902,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphQueriesUnfoldedToExhaustionRelo
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -912,6 +938,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -956,6 +983,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -988,6 +1016,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheBottomModuleRe
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1025,6 +1054,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheBottomModuleRe
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1057,6 +1087,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheTopModuleReloa
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1095,6 +1126,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedOnlyInTheTopModuleReloa
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1127,6 +1159,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedEverywhereReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1167,6 +1200,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersUnfoldedEverywhereReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1204,6 +1238,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingModulesOverOneBaseReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1248,6 +1283,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingModulesOverOneBaseReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1279,6 +1315,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadingRefutationsReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1319,6 +1356,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadingRefutationsReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1347,6 +1385,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NothingBelowARefutedInteriorNodeCome
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1370,6 +1409,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NothingBelowARefutedInteriorNodeCome
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1401,6 +1441,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationThatCrossedModulesStaysOn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1423,6 +1464,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationThatCrossedModulesStaysOn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1469,6 +1511,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AReloadOfAReloadIsFaithfulToo) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1504,6 +1547,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AReloadOfAReloadIsFaithfulToo) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1521,6 +1565,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AReloadOfAReloadIsFaithfulToo) {
     std::set<pud_global_node_id> second_live;
     std::vector<pud_global_node_id> refuted_on_second_reload;
     for (pud_module& copy : second_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = second_runtime.register_module(copy);
         refuted_on_second_reload.insert(refuted_on_second_reload.end(), change.refuted.begin(), change.refuted.end());
         second_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1558,6 +1603,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingTheSameModulesManyTimesNeve
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1595,6 +1641,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingTheSameModulesManyTimesNeve
         std::set<pud_global_node_id> reloaded_live;
         std::vector<pud_global_node_id> refuted_on_reload;
         for (pud_module& copy : reloaded_modules) {
+                install_shared_functor_names(copy, this->functors);
                 const pud_frontier_change change = reloaded_runtime.register_module(copy);
                 refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
                 reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1625,6 +1672,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ModuleIdsAreOnlyNames) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1660,6 +1708,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ModuleIdsAreOnlyNames) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1710,6 +1759,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulWithManyRandomUnfoldsReloads
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1754,6 +1804,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulWithManyRandomUnfoldsReloads
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1804,6 +1855,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersUnfoldedToExhaustionReloa
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1844,6 +1896,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersUnfoldedToExhaustionReloa
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1876,6 +1929,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesWithDeepStructureReload) 
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -1916,6 +1970,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesWithDeepStructureReload) 
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -1969,6 +2024,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainUnfoldsDeeplyThenRel
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2018,6 +2074,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainUnfoldsDeeplyThenRel
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2070,6 +2127,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendStressReloads) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2114,6 +2172,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendStressReloads) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2152,6 +2211,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryNestedTermsReload) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2191,6 +2251,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryNestedTermsReload) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2242,6 +2303,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsAfterHeavyRandomUnfol
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2281,6 +2343,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsAfterHeavyRandomUnfol
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2338,6 +2401,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsAfterHeavyRandomUn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2377,6 +2441,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsAfterHeavyRandomUn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2416,6 +2481,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsAfterHeavyRandomUn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2455,6 +2521,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsAfterHeavyRandomUn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2516,6 +2583,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsAfterHeavyRan
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2555,6 +2623,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsAfterHeavyRan
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2614,6 +2683,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsAfterHeavyRandomU
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2653,6 +2723,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsAfterHeavyRandomU
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2698,6 +2769,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsAfterHeavyRandomU
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2737,6 +2809,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsAfterHeavyRandomU
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2780,6 +2853,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsReloadsFaithfullyAfterAnyNumbe
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2817,6 +2891,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsReloadsFaithfullyAfterAnyNumbe
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2861,6 +2936,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticReloadsFaithfullyAfterAnyN
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2898,6 +2974,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticReloadsFaithfullyAfterAnyN
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -2948,6 +3025,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsReloadsFaithfullyAfterAnyNumber
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -2985,6 +3063,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsReloadsFaithfullyAfterAnyNumber
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3027,6 +3106,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphReloadsFaithfullyAfterAnyNumber
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3064,6 +3144,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphReloadsFaithfullyAfterAnyNumber
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3103,6 +3184,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersReloadsFaithfullyAfterAnyNumber
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3140,6 +3222,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersReloadsFaithfullyAfterAnyNumber
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3184,6 +3267,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsReloadsFaithfullyAfterAnyNum
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3221,6 +3305,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsReloadsFaithfullyAfterAnyNum
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3259,6 +3344,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsReloadsFaithfullyAfterAny
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3296,6 +3382,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsReloadsFaithfullyAfterAny
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3332,6 +3419,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeReloadsFaithfullyAfterAnyNumb
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3369,6 +3457,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeReloadsFaithfullyAfterAnyNumb
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3426,6 +3515,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsFaithfullyAfterAnyNum
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3463,6 +3553,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsFaithfullyAfterAnyNum
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3520,6 +3611,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsFaithfullyAfterAny
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3557,6 +3649,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsFaithfullyAfterAny
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3596,6 +3689,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsFaithfullyAfterAny
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3633,6 +3727,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsFaithfullyAfterAny
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3694,6 +3789,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsFaithfullyAft
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3731,6 +3827,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsFaithfullyAft
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3790,6 +3887,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsFaithfullyAfterAn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3827,6 +3925,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsFaithfullyAfterAn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3872,6 +3971,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsFaithfullyAfterAn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3909,6 +4009,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsFaithfullyAfterAn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -3954,6 +4055,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumingFromAxiomsAloneIsLikeNeverHa
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -3964,6 +4066,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumingFromAxiomsAloneIsLikeNeverHa
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4045,6 +4148,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4080,6 +4184,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedProgramUnfoldsToExhaustionLi
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4182,6 +4287,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedArithmeticUnfoldsLikeTheOrigi
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4217,6 +4323,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedArithmeticUnfoldsLikeTheOrigi
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4305,6 +4412,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedListsUnfoldLikeTheOriginal) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4340,6 +4448,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedListsUnfoldLikeTheOriginal) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4420,6 +4529,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4455,6 +4565,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedGraphQueriesUnfoldToExhaustio
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4552,6 +4663,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTiersUnfoldLikeTheOriginal) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4587,6 +4699,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTiersUnfoldLikeTheOriginal) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4669,6 +4782,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedSiblingModulesUnfoldLikeTheOr
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4704,6 +4818,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedSiblingModulesUnfoldLikeTheOr
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4780,6 +4895,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedRefutationsCascadeLikeTheOrig
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4815,6 +4931,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedRefutationsCascadeLikeTheOrig
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4888,6 +5005,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyRefutesTh
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4898,6 +5016,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyRefutesTh
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -4951,6 +5070,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyKeepsADep
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -4961,6 +5081,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyKeepsADep
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5028,6 +5149,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5038,6 +5160,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5052,8 +5175,10 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
     std::deque<pud_module> resumed_modules(reloaded_modules.begin(), reloaded_modules.end());
     auto resumed_runtime = std::make_unique<TypeParam>(this->exprs);
     std::set<pud_global_node_id> resumed_live = reloaded_live;
-    for (pud_module& copy : resumed_modules)
+    for (pud_module& copy : resumed_modules) {
+        install_shared_functor_names(copy, this->functors);
         resumed_runtime->register_module(copy);
+    }
 
     for (int unfold_index = 0; unfold_index < 20 && !this->HasFailure(); ++unfold_index) {
         EXPECT_EQ(resumed_live, live);
@@ -5095,6 +5220,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
         std::set<pud_global_node_id> next_live;
         std::vector<pud_global_node_id> refuted_on_next;
         for (pud_module& copy : next_modules) {
+            install_shared_functor_names(copy, this->functors);
             const pud_frontier_change change = next_runtime.register_module(copy);
             refuted_on_next.insert(refuted_on_next.end(), change.refuted.begin(), change.refuted.end());
             next_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5109,8 +5235,10 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingAfterEveryUnfoldKeepsUnfold
         resumed_modules = std::move(next_modules);
         resumed_live = std::move(next_live);
         resumed_runtime = std::make_unique<TypeParam>(this->exprs);
-        for (pud_module& copy : resumed_modules)
+        for (pud_module& copy : resumed_modules) {
+            install_shared_functor_names(copy, this->functors);
             resumed_runtime->register_module(copy);
+        }
     }
     EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
 
@@ -5145,6 +5273,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5155,6 +5284,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5169,8 +5299,10 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
     std::deque<pud_module> resumed_modules(reloaded_modules.begin(), reloaded_modules.end());
     auto resumed_runtime = std::make_unique<TypeParam>(this->exprs);
     std::set<pud_global_node_id> resumed_live = reloaded_live;
-    for (pud_module& copy : resumed_modules)
+    for (pud_module& copy : resumed_modules) {
+        install_shared_functor_names(copy, this->functors);
         resumed_runtime->register_module(copy);
+    }
 
     for (int generation = 0; generation < 6 && !this->HasFailure(); ++generation) {
         size_t lockstep_taken = 0;
@@ -5219,6 +5351,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
         std::set<pud_global_node_id> next_live;
         std::vector<pud_global_node_id> refuted_on_next;
         for (pud_module& copy : next_modules) {
+            install_shared_functor_names(copy, this->functors);
             const pud_frontier_change change = next_runtime.register_module(copy);
             refuted_on_next.insert(refuted_on_next.end(), change.refuted.begin(), change.refuted.end());
             next_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5233,8 +5366,10 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ReloadingEveryFewUnfoldsKeepsUnfoldi
         resumed_modules = std::move(next_modules);
         resumed_live = std::move(next_live);
         resumed_runtime = std::make_unique<TypeParam>(this->exprs);
-        for (pud_module& copy : resumed_modules)
+        for (pud_module& copy : resumed_modules) {
+            install_shared_functor_names(copy, this->functors);
             resumed_runtime->register_module(copy);
+        }
     }
     EXPECT_EQ(resumed_live, live);
 
@@ -5261,6 +5396,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5296,6 +5432,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5356,6 +5493,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedRuntimeCanItselfBeReloadedAn
     std::set<pud_global_node_id> second_live;
     std::vector<pud_global_node_id> refuted_on_second;
     for (pud_module& copy : second_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = second_runtime.register_module(copy);
         refuted_on_second.insert(refuted_on_second.end(), change.refuted.begin(), change.refuted.end());
         second_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5446,6 +5584,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOrigi
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5481,6 +5620,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedPeanoMulContinuesLikeTheOrigi
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5578,6 +5718,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheO
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5613,6 +5754,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedTripleAppendContinuesLikeTheO
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5690,6 +5832,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustion
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5725,6 +5868,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ResumedMirrorTreesUnfoldToExhaustion
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5821,6 +5965,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesAfterHeavyUnfolds) {
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5856,6 +6001,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesAfterHeavyUnfolds) {
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -5956,6 +6102,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesAfterHeavyUnfolds)
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -5991,6 +6138,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesAfterHeavyUnfolds)
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6073,6 +6221,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesAfterHeavyUnfolds)
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6108,6 +6257,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesAfterHeavyUnfolds)
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6212,6 +6362,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesAfterHeavyUnf
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6247,6 +6398,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesAfterHeavyUnf
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6349,6 +6501,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesAfterHeavyUnfolds
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6384,6 +6537,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesAfterHeavyUnfolds
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6472,6 +6626,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesAfterHeavyUnfolds
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6507,6 +6662,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesAfterHeavyUnfolds
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6593,6 +6749,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyP
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6628,6 +6785,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyP
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6715,6 +6873,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFrom
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6750,6 +6909,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFrom
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6843,6 +7003,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPo
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6878,6 +7039,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPo
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -6963,6 +7125,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPo
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -6998,6 +7161,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPo
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7080,6 +7244,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPo
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7115,6 +7280,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPo
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7202,6 +7368,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7237,6 +7404,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7318,6 +7486,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFro
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7353,6 +7522,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFro
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7432,6 +7602,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAny
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7467,6 +7638,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAny
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7567,6 +7739,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAn
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7602,6 +7775,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAn
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7702,6 +7876,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFro
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7737,6 +7912,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFro
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7819,6 +7995,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFro
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7854,6 +8031,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFro
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -7958,6 +8136,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOrigin
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -7993,6 +8172,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOrigin
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -8095,6 +8275,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFr
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -8130,6 +8311,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFr
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());
@@ -8218,6 +8400,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFr
     TypeParam runtime(this->exprs);
     std::set<pud_global_node_id> live;
     for (pud_module& module : modules) {
+        install_shared_functor_names(module, this->functors);
         const pud_frontier_change change = runtime.register_module(module);
         live.insert(change.offspring.begin(), change.offspring.end());
         for (pud_global_node_id refuted : change.refuted)
@@ -8253,6 +8436,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFr
     std::set<pud_global_node_id> reloaded_live;
     std::vector<pud_global_node_id> refuted_on_reload;
     for (pud_module& copy : reloaded_modules) {
+        install_shared_functor_names(copy, this->functors);
         const pud_frontier_change change = reloaded_runtime.register_module(copy);
         refuted_on_reload.insert(refuted_on_reload.end(), change.refuted.begin(), change.refuted.end());
         reloaded_live.insert(change.offspring.begin(), change.offspring.end());

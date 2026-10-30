@@ -58,8 +58,8 @@ struct pud_lodestar_manifest {
         using pud_modules<pud_module>::pud_modules;
     };
     struct demoduler_t;
-    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool> {
-        using pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool>::pud_functor_demoduler;
+    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool> {
+        using pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool>::pud_functor_demoduler;
     };
     struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
         using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
@@ -72,11 +72,11 @@ struct pud_lodestar_manifest {
         using pud_unifier_factory<globalizer, expr_pool, demoduler_t, functor_demoduler_t>::pud_unifier_factory;
     };
     struct exporter_factory_t : pud_exporter_factory<
-        globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
-        pud_symbol_table, pud_symbol_table, modules_t, pud_link_table> {
+        globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table, modules_t,
+        pud_link_table> {
         using pud_exporter_factory<
-            globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
-            pud_symbol_table, pud_symbol_table, modules_t, pud_link_table>::pud_exporter_factory;
+            globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table,
+            modules_t, pud_link_table>::pud_exporter_factory;
     };
     struct unit_queries_t : std::deque<pud_mhq_head_id> {
         using std::deque<pud_mhq_head_id>::deque;
