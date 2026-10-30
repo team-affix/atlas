@@ -16,3 +16,7 @@ pud_module_deserializer_stack::pud_module_deserializer_stack()
 pud_module pud_module_deserializer_stack::deserialize_module(std::istream& in) const {
     return extract_module_.extract_module(in);
 }
+
+expr_pool& pud_module_deserializer_stack::exprs() {
+    return expr_pool_;
+}

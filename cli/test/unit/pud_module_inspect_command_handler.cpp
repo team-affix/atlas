@@ -28,7 +28,7 @@ TEST(PudModuleInspectCommandHandlerTest, PrintsMetadataMatchingCreatedModule) {
     const std::string id_hex = create_out.str().substr(0, create_out.str().size() - 1);
     std::ostringstream inspect_out;
     old_out = std::cout.rdbuf(inspect_out.rdbuf());
-    pud_module_inspect_command_handler inspect_handler{output_path, false, false};
+    pud_module_inspect_command_handler inspect_handler{output_path, false, false, false};
     inspect_handler();
     std::cout.rdbuf(old_out);
     const std::string report = inspect_out.str();
@@ -52,7 +52,7 @@ TEST(PudModuleInspectCommandHandlerTest, IdOnlyPrintsSingleHexLine) {
     const std::string expected_id = create_out.str();
     std::ostringstream inspect_out;
     old_out = std::cout.rdbuf(inspect_out.rdbuf());
-    pud_module_inspect_command_handler inspect_handler{output_path, true, false};
+    pud_module_inspect_command_handler inspect_handler{output_path, true, false, false};
     inspect_handler();
     std::cout.rdbuf(old_out);
     EXPECT_EQ(inspect_out.str(), expected_id);
@@ -72,9 +72,38 @@ TEST(PudModuleInspectCommandHandlerTest, DepsOnlyPrintsSpaceSeparatedHexLine) {
     std::cout.rdbuf(old_out);
     std::ostringstream inspect_out;
     old_out = std::cout.rdbuf(inspect_out.rdbuf());
-    pud_module_inspect_command_handler inspect_handler{output_path, false, true};
+    pud_module_inspect_command_handler inspect_handler{output_path, false, true, false};
     inspect_handler();
     std::cout.rdbuf(old_out);
     EXPECT_EQ(inspect_out.str(), "a1 b2\n");
+    std::remove(output_path.c_str());
+}
+
+TEST(PudModuleInspectCommandHandlerTest, DetailedPrintsEachAxiomClause) {
+    const std::string output_path = temp_module_path();
+    std::ostringstream create_out;
+    std::streambuf* old_out = std::cout.rdbuf(create_out.rdbuf());
+    pud_module_create_command_handler create_handler{
+        "cli/examples/member/db.chc",
+        {},
+        output_path};
+    create_handler();
+    std::cout.rdbuf(old_out);
+    std::ostringstream inspect_out;
+    old_out = std::cout.rdbuf(inspect_out.rdbuf());
+    pud_module_inspect_command_handler inspect_handler{output_path, false, false, true};
+    inspect_handler();
+    std::cout.rdbuf(old_out);
+    const std::string report = inspect_out.str();
+    const std::string axioms_label = "axioms: ";
+    const size_t axioms_at = report.find(axioms_label);
+    ASSERT_NE(axioms_at, std::string::npos);
+    const size_t axiom_count = static_cast<size_t>(std::stoul(report.substr(axioms_at + axioms_label.size())));
+    EXPECT_GT(axiom_count, 0u);
+    for (size_t node = 0; node < axiom_count; ++node) {
+        const std::string line = "node " + std::to_string(node) + " axiom ";
+        EXPECT_NE(report.find(line), std::string::npos) << line;
+    }
+    EXPECT_EQ(report.find("inference parent="), std::string::npos);
     std::remove(output_path.c_str());
 }

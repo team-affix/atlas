@@ -17,6 +17,7 @@
 struct pud_module_deserializer_stack {
     pud_module_deserializer_stack();
     pud_module deserialize_module(std::istream& in) const;
+    expr_pool& exprs();
 private:
     using expr_extractor_t =
         expr_istream_extractor<expr_pool, expr_pool, istream_uint8_extractor, istream_uint32_extractor>;

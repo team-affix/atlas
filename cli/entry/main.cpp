@@ -29,6 +29,7 @@
 #include "infrastructure/ridge_fc_command_handler.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
+#include "infrastructure/lodestar_command_handler.hpp"
 #include "infrastructure/hex_uint64.hpp"
 
 #ifndef ATLAS_GIT_TAG
@@ -98,6 +99,7 @@ int main(int argc, char** argv) {
         std::string input_path;
         bool id_only = false;
         bool deps_only = false;
+        bool detailed = false;
     } module_inspect_opts;
 
     auto* module_inspect_sub = module_app->add_subcommand(
@@ -113,11 +115,46 @@ int main(int argc, char** argv) {
         module_inspect_opts.deps_only,
         "Print only dependencies (hex, space-separated on one line)");
     module_inspect_id_flag->excludes(module_inspect_deps_flag);
+    auto* module_inspect_detailed_flag = module_inspect_sub->add_flag(
+        "--detailed",
+        module_inspect_opts.detailed,
+        "After the summary, print each node id and its stored clause or inference");
+    module_inspect_detailed_flag->excludes(module_inspect_id_flag);
+    module_inspect_detailed_flag->excludes(module_inspect_deps_flag);
     module_inspect_sub->callback([&]() {
         pud_module_inspect_command_handler handler{
             module_inspect_opts.input_path,
             module_inspect_opts.id_only,
-            module_inspect_opts.deps_only};
+            module_inspect_opts.deps_only,
+            module_inspect_opts.detailed};
+        handler();
+    });
+
+    struct {
+        std::vector<std::string> modules;
+        std::string focus;
+        size_t max_unfolds = 1000;
+        size_t ratio = 10;
+        size_t max_node_depth = 64;
+        size_t sim_progress_interval = 1000;
+    } lodestar_opts;
+
+    auto* lodestar_sub = app.add_subcommand("lodestar", "Run the Lodestar PUD solver");
+    lodestar_sub->add_option("modules", lodestar_opts.modules, "PUD module files")->required()->expected(1, -1);
+    lodestar_sub->add_option("--focus", lodestar_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
+    lodestar_sub->add_option("--max-unfolds", lodestar_opts.max_unfolds, "Max focus unfolds");
+    lodestar_sub->add_option("--ratio", lodestar_opts.ratio, "Non-conjecture unfolds per conjecture unfold");
+    lodestar_sub->add_option("--max-node-depth", lodestar_opts.max_node_depth, "Max inference depth of a node");
+    lodestar_sub->add_option("--sim-progress-interval", lodestar_opts.sim_progress_interval,
+                             "Print progress every N ticks (0 disables)");
+    lodestar_sub->callback([&]() {
+        lodestar_command_handler handler{
+            lodestar_opts.modules,
+            lodestar_opts.focus,
+            lodestar_opts.max_unfolds,
+            lodestar_opts.ratio,
+            lodestar_opts.max_node_depth,
+            lodestar_opts.sim_progress_interval};
         handler();
     });
 
