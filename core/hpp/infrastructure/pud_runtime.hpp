@@ -24,6 +24,7 @@ pud_runtime<IModule, IExprPool>::pud_runtime(IExprPool& expr_pool)
 
 template<typename IModule, typename IExprPool>
 pud_frontier_change pud_runtime<IModule, IExprPool>::register_module(IModule& module) {
+    manifest_.functor_linker_.link(module);
     manifest_.modules_.register_module(module);
     return manifest_.module_activator_.activate_module(module.get_module_id());
 }

@@ -455,5 +455,5 @@ TEST_F(PudModuleOstreamLayoutIntegrationTest, SerializeAppendsToNonEmptyStream) 
 
 TEST_F(PudModuleOstreamLayoutIntegrationTest, SerializeOnEmptyModuleProducesOnlyHeaderSections) {
     const std::string blob = insert_module_blob(wiring, make_empty_pud_module(1));
-    EXPECT_EQ(blob.size(), 4u + 8u + 8u + 8u + 8u + 8u);
+    EXPECT_EQ(blob.size(), 4u + 8u + 8u + 8u + 8u + 8u + 8u);
 }

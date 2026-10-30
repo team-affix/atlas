@@ -15,7 +15,7 @@ ubs_class ubs_bind_map::find(uint32_t var) const {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-std::optional<framed_functor> ubs_bind_map::equate(const ubs_class& class_a, const ubs_class& class_b) {
+std::optional<moduled_functor> ubs_bind_map::equate(const ubs_class& class_a, const ubs_class& class_b) {
     DEBUG_ASSERT(class_a.root != class_b.root);
     const bool a_survives = class_a.size >= class_b.size;
     const ubs_class& survivor = a_survives ? class_a : class_b;
@@ -36,7 +36,7 @@ std::optional<framed_functor> ubs_bind_map::equate(const ubs_class& class_a, con
     return absorbed.value;
 }
 
-void ubs_bind_map::instantiate(const ubs_class& unbound, framed_functor value) {
+void ubs_bind_map::instantiate(const ubs_class& unbound, moduled_functor value) {
     DEBUG_ASSERT(!unbound.value.has_value());
     classes_.set(unbound.root, ubs_class{
         .root = unbound.root,

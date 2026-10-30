@@ -16,13 +16,14 @@
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
-#include "value_objects/framed_functor.hpp"
+#include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
 template<typename IMakeBindMap, typename IGetInference, typename IMakeFunctor>
 struct pud_structure_watcher {
     pud_structure_watcher(IMakeBindMap& make_bind_map, IGetInference& get_inference, IMakeFunctor& make_functor);
-    pud_structure_watch watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const;
+    pud_structure_watch watch_root(
+        const pud_ubs_state& root_bindings, const pud_goal_list& goals, pud_module_id module) const;
     pud_structure_watch_change descend(
         const pud_structure_watch& parent_watch,
         const pud_ubs_state& child_bindings,
@@ -31,15 +32,15 @@ struct pud_structure_watcher {
         const pud_goal_list& child_goals) const;
 private:
     template<typename IFind>
-    void watch(pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, IFind& bind_map) const;
+    void watch(pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, pud_module_id module, IFind& bind_map) const;
     void unwatch(pud_structure_watch& watched, pud_body_goal_id goal) const;
     std::vector<pud_body_goal_id> propagate_rep_updated(
         pud_structure_watch& watched, uint32_t demoted_rep, uint32_t surviving_rep) const;
     template<typename IFind>
     std::vector<pud_body_goal_id> propagate_rep_instantiated(
-        pud_structure_watch& watched, uint32_t rep, const expr* value, IFind& bind_map) const;
+        pud_structure_watch& watched, uint32_t rep, const expr* value, pud_module_id module, IFind& bind_map) const;
     template<typename IFind>
-    immer::set<uint32_t> visit_reps(const expr* visited, IFind& bind_map) const;
+    immer::set<uint32_t> visit_reps(const expr* visited, pud_module_id module, IFind& bind_map) const;
 
     IMakeBindMap& make_bind_map_;
     IGetInference& get_inference_;
@@ -57,11 +58,12 @@ PUD_STRUCTURE_WATCHER::pud_structure_watcher(
     , make_functor_(make_functor) {}
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
-pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(const pud_ubs_state& root_bindings, const pud_goal_list& goals) const {
+pud_structure_watch PUD_STRUCTURE_WATCHER::watch_root(
+    const pud_ubs_state& root_bindings, const pud_goal_list& goals, pud_module_id module) const {
     auto&& bind_map = make_bind_map_.make_bind_map(root_bindings);
     pud_structure_watch watched{.rep_to_goals = {}, .goal_to_reps = {}};
     for (const auto& [id, goal] : goals.goals)
-        watch(watched, id, goal, bind_map);
+        watch(watched, id, goal, module, bind_map);
     return watched;
 }
 
@@ -78,19 +80,21 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
     std::unordered_set<pud_body_goal_id> changed_once;
     for (const pud_substitution& substitution : get_inference_.get_inference(child).substitutions) {
         const expr* value = substitution.value;
+        pud_module_id value_module = child.module;
         std::optional<uint32_t> surviving_rep;
         if (const expr::var* surviving = std::get_if<expr::var>(&value->content)) {
             const ubs_class surviving_class = bind_map.find(surviving->index);
             if (surviving_class.value.has_value()) {
-                const expr::functor& f = *surviving_class.value->functor;
-                value = make_functor_.make_functor(f.id, f.args);
+                const expr::functor& functor = *surviving_class.value->functor;
+                value = make_functor_.make_functor(functor.id, functor.args);
+                value_module = surviving_class.value->module;
             }
             else
                 surviving_rep = surviving->index;
         }
         const std::vector<pud_body_goal_id> changed = surviving_rep.has_value()
             ? propagate_rep_updated(change.watch, substitution.var_idx, surviving_rep.value())
-            : propagate_rep_instantiated(change.watch, substitution.var_idx, value, bind_map);
+            : propagate_rep_instantiated(change.watch, substitution.var_idx, value, value_module, bind_map);
         for (pud_body_goal_id goal : changed) {
             const bool first_change = changed_once.insert(goal).second;
             if (!first_change)
@@ -102,7 +106,7 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
         const bool added = change.watch.goal_to_reps.find(id) == nullptr;
         if (!added)
             continue;
-        watch(change.watch, id, goal, bind_map);
+        watch(change.watch, id, goal, child.module, bind_map);
     }
     return change;
 }
@@ -110,8 +114,8 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
 PUD_STRUCTURE_WATCHER_TEMPLATE
 template<typename IFind>
 void PUD_STRUCTURE_WATCHER::watch(
-    pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, IFind& bind_map) const {
-    const immer::set<uint32_t> reps = visit_reps(goal, bind_map);
+    pud_structure_watch& watched, pud_body_goal_id id, const expr* goal, pud_module_id module, IFind& bind_map) const {
+    const immer::set<uint32_t> reps = visit_reps(goal, module, bind_map);
     watched.goal_to_reps = watched.goal_to_reps.set(id, reps);
     for (uint32_t rep : reps)
         watched.rep_to_goals = watched.rep_to_goals.set(rep, watched.rep_to_goals[rep].insert(id));
@@ -148,8 +152,8 @@ std::vector<pud_body_goal_id> PUD_STRUCTURE_WATCHER::propagate_rep_updated(
 PUD_STRUCTURE_WATCHER_TEMPLATE
 template<typename IFind>
 std::vector<pud_body_goal_id> PUD_STRUCTURE_WATCHER::propagate_rep_instantiated(
-    pud_structure_watch& watched, uint32_t rep, const expr* value, IFind& bind_map) const {
-    const immer::set<uint32_t> introduced_reps = visit_reps(value, bind_map);
+    pud_structure_watch& watched, uint32_t rep, const expr* value, pud_module_id module, IFind& bind_map) const {
+    const immer::set<uint32_t> introduced_reps = visit_reps(value, module, bind_map);
     std::vector<pud_body_goal_id> changed;
     const immer::set<pud_body_goal_id> instantiated_goals = watched.rep_to_goals[rep];
     for (pud_body_goal_id goal : instantiated_goals) {
@@ -167,30 +171,35 @@ std::vector<pud_body_goal_id> PUD_STRUCTURE_WATCHER::propagate_rep_instantiated(
 
 PUD_STRUCTURE_WATCHER_TEMPLATE
 template<typename IFind>
-immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, IFind& bind_map) const {
+immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, pud_module_id module, IFind& bind_map) const {
     immer::set<uint32_t> reps;
-    std::vector<const expr*> pending{visited};
+    struct walked {
+        const expr* skeleton;
+        pud_module_id module;
+    };
+    std::vector<walked> pending{{visited, module}};
     std::unordered_set<const expr*> visited_functors;
     std::unordered_set<uint32_t> expanded_roots;
     while (!pending.empty()) {
-        const expr* next = pending.back();
+        const walked next = pending.back();
         pending.pop_back();
-        if (const expr::var* var = std::get_if<expr::var>(&next->content)) {
+        if (const expr::var* var = std::get_if<expr::var>(&next.skeleton->content)) {
             const ubs_class var_class = bind_map.find(var->index);
             if (!var_class.value.has_value()) {
                 reps = reps.insert(var_class.rep);
                 continue;
             }
             if (expanded_roots.insert(var_class.root).second) {
-                const expr::functor& f = *var_class.value->functor;
-                pending.push_back(make_functor_.make_functor(f.id, f.args));
+                const expr::functor& functor = *var_class.value->functor;
+                const expr* reconstructed = make_functor_.make_functor(functor.id, functor.args);
+                pending.push_back(walked{reconstructed, var_class.value->module});
             }
             continue;
         }
-        if (!visited_functors.insert(next).second)
+        if (!visited_functors.insert(next.skeleton).second)
             continue;
-        for (const expr* arg : std::get<expr::functor>(next->content).args)
-            pending.push_back(arg);
+        for (const expr* arg : std::get<expr::functor>(next.skeleton->content).args)
+            pending.push_back(walked{arg, next.module});
     }
     return reps;
 }

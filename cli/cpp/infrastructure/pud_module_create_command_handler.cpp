@@ -35,7 +35,14 @@ void pud_module_create_command_handler::operator()() {
     coroutine<rule_id, void> listed = database_.lookup_all_rules().iterate();
     while (auto rule_id = listed.next())
         axioms.push_back(*database_.get_rule(*rule_id));
-    const pud_module module{module_id, dependencies_, std::move(axioms)};
+    pud_module module{module_id, dependencies_, std::move(axioms)};
+    std::vector<std::string> names(next_functor_id_);
+    names[k_nil_functor_id] = "[]";
+    names[k_cons_functor_id] = "cons";
+    for (const auto& [name, functor_id] : functor_map_)
+        names.at(functor_id) = name;
+    for (const std::string& name : names)
+        module.append_functor_name(name);
     std::ofstream out(output_path_, std::ios::binary);
     if (!out)
         throw std::runtime_error("cannot open output file: " + output_path_);

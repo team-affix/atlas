@@ -1,5 +1,7 @@
 #include "infrastructure/pud_module.hpp"
+
 #include <utility>
+
 #include "debug_assert.hpp"
 
 pud_module::pud_module(pud_module_id module_id, std::vector<pud_module_id> dependencies, std::vector<rule> axioms)
@@ -8,7 +10,8 @@ pud_module::pud_module(pud_module_id module_id, std::vector<pud_module_id> depen
     , axioms_(std::move(axioms))
     , inferences_()
     , children_(axioms_.size())
-    , refuted_(axioms_.size(), false) {}
+    , refuted_(axioms_.size(), false)
+    , functor_names_() {}
 
 pud_module_id pud_module::get_module_id() const {
     return module_id_;
@@ -67,4 +70,13 @@ bool pud_module::check_leaf(pud_node_id node) const {
 
 bool pud_module::check_refuted(pud_node_id node) const {
     return refuted_.at(node);
+}
+
+const std::vector<std::string>& pud_module::functor_names() const {
+    return functor_names_;
+}
+
+uint32_t pud_module::append_functor_name(const std::string& name) {
+    functor_names_.push_back(name);
+    return static_cast<uint32_t>(functor_names_.size() - 1);
 }

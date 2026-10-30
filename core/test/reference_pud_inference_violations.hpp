@@ -46,7 +46,7 @@ inline ubs_bind_map reference_pud_inference_violations_bindings(const pud_module
                 bind_map.equate(target, bind_map.find(value_var->index));
                 continue;
             }
-            bind_map.instantiate(target, framed_functor{std::get_if<expr::functor>(&(substitution.value)->content), 0});
+            bind_map.instantiate(target, moduled_functor{std::get_if<expr::functor>(&(substitution.value)->content), 0, 0});
         }
     }
     return bind_map;

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <deque>
 #include <optional>
+#include <string>
 #include <vector>
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_module_id.hpp"
@@ -24,6 +25,8 @@ struct pud_module {
     const std::vector<pud_node_id>& get_children(pud_node_id node) const;
     bool check_leaf(pud_node_id node) const;
     bool check_refuted(pud_node_id node) const;
+    const std::vector<std::string>& functor_names() const;
+    uint32_t append_functor_name(const std::string& name);
 private:
     pud_module_id module_id_;
     std::vector<pud_module_id> dependencies_;
@@ -31,6 +34,7 @@ private:
     std::deque<pud_inference> inferences_;
     std::deque<std::vector<pud_node_id>> children_;
     std::vector<bool> refuted_;
+    std::vector<std::string> functor_names_;
 };
 
 #endif

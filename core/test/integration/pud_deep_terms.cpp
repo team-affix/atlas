@@ -43,8 +43,8 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepTerm) {
     const expr* deep_bound = var(1);
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_bound = functor("s", {deep_bound});
-    stack.bind_map.instantiate(stack.bind_map.find(0u), framed_functor{std::get_if<expr::functor>(&(deep_bound)->content), 0u});
-    stack.bind_map.instantiate(stack.bind_map.find(1u), framed_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u});
+    stack.bind_map.instantiate(stack.bind_map.find(0u), moduled_functor{std::get_if<expr::functor>(&(deep_bound)->content), 0u, 0});
+    stack.bind_map.instantiate(stack.bind_map.find(1u), moduled_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u, 0});
     const expr* deep_expected = atom("z");
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_expected = functor("s", {deep_expected});
@@ -54,7 +54,7 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepTerm) {
 TEST_F(PudDeepTermsIntegrationTest, NormalizerHandlesAVeryDeepChainOfBindings) {
     const uint32_t chain = 50000;
     for (uint32_t index = 0; index < chain; ++index)
-        stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(index + 1)}))->content), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(index), moduled_functor{std::get_if<expr::functor>(&(functor("s", {var(index + 1)}))->content), 0u, 0});
     const expr* deep_chain = var(chain);
     for (uint32_t level = 0; level < chain; ++level)
         deep_chain = functor("s", {deep_chain});
@@ -70,20 +70,20 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterHandlesAVeryDeepTerm) {
         deep_exported = functor("s", {deep_exported});
     std::unordered_map<uint32_t, uint32_t> translations;
     auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
-    EXPECT_EQ(exporter.export_expr(framed_expr{deep_term, 10u}), deep_exported);
+    EXPECT_EQ(exporter.export_expr(moduled_expr{deep_term, 10u, 0}, 0), deep_exported);
     EXPECT_EQ(translations.size(), 1u);
 }
 
 TEST_F(PudDeepTermsIntegrationTest, ExporterFollowsAVeryDeepChainOfCalleeBindings) {
     const uint32_t chain = 50000;
     for (uint32_t index = 0; index < chain; ++index)
-        stack.bind_map.instantiate(stack.bind_map.find(10 + index), framed_functor{std::get_if<expr::functor>(&(functor("s", {var(11 + index)}))->content), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(10 + index), moduled_functor{std::get_if<expr::functor>(&(functor("s", {var(11 + index)}))->content), 0u, 0});
     const expr* deep_chain = var(10);
     for (uint32_t level = 0; level < chain; ++level)
         deep_chain = functor("s", {deep_chain});
     std::unordered_map<uint32_t, uint32_t> translations;
     auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
-    EXPECT_EQ(exporter.export_expr(framed_expr{var(0), 10u}), deep_chain);
+    EXPECT_EQ(exporter.export_expr(moduled_expr{var(0), 10u, 0}, 0), deep_chain);
 }
 
 TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesTwoVeryDeepTerms) {
@@ -93,7 +93,7 @@ TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesTwoVeryDeepTerms) {
     const expr* deep_rhs = atom("z");
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_rhs = functor("s", {deep_rhs});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{deep_lhs, 0u}, framed_expr{deep_rhs, 0u}).has_value());
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{deep_lhs, 0u, 0}, moduled_expr{deep_rhs, 0u, 0}).has_value());
     EXPECT_EQ(stack.normalizer.normalize(framed_expr{var(0), 0u}), atom("z"));
 }
 
@@ -104,21 +104,21 @@ TEST_F(PudDeepTermsIntegrationTest, UnifierFailsAtTheBottomOfTwoVeryDeepTerms) {
     const expr* deep_b = atom("b");
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_b = functor("s", {deep_b});
-    EXPECT_FALSE(stack.unifier.unify(framed_expr{deep_a, 0u}, framed_expr{deep_b, 0u}).has_value());
+    EXPECT_FALSE(stack.unifier.unify(moduled_expr{deep_a, 0u, 0}, moduled_expr{deep_b, 0u, 0}).has_value());
 }
 
 TEST_F(PudDeepTermsIntegrationTest, OccursCheckFindsAVariableAtTheBottomOfAVeryDeepTerm) {
     const expr* deep_var = var(0);
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_var = functor("s", {deep_var});
-    EXPECT_FALSE(stack.unifier.unify(framed_expr{var(0), 0u}, framed_expr{deep_var, 0u}).has_value());
+    EXPECT_FALSE(stack.unifier.unify(moduled_expr{var(0), 0u, 0}, moduled_expr{deep_var, 0u, 0}).has_value());
 }
 
 TEST_F(PudDeepTermsIntegrationTest, OccursCheckPassesAVeryDeepAcyclicTerm) {
     const expr* deep_var = var(1);
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_var = functor("s", {deep_var});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{var(0), 0u}, framed_expr{deep_var, 0u}).has_value());
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{var(0), 0u, 0}, moduled_expr{deep_var, 0u, 0}).has_value());
     const expr* deep_expected = var(1);
     for (uint32_t level = 0; level < k_deep; ++level)
         deep_expected = functor("s", {deep_expected});
@@ -133,15 +133,15 @@ TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesAVeryWideTerm) {
         fills.push_back(atom(index % 2 == 0 ? "a" : "b"));
     }
     EXPECT_TRUE(stack.unifier.unify(
-        framed_expr{functor("w", holes), 0u},
-        framed_expr{functor("w", fills), 0u}).has_value());
+        moduled_expr{functor("w", holes), 0u, 0},
+        moduled_expr{functor("w", fills), 0u, 0}).has_value());
     EXPECT_EQ(stack.normalizer.normalize(framed_expr{var(19999), 0u}), atom("b"));
 }
 
 TEST_F(PudDeepTermsIntegrationTest, UnifierBindsArgumentsLeftToRight) {
     EXPECT_FALSE(stack.unifier.unify(
-        framed_expr{functor("p", {var(0), var(0)}), 0u},
-        framed_expr{functor("p", {atom("a"), atom("b")}), 0u}).has_value());
+        moduled_expr{functor("p", {var(0), var(0)}), 0u, 0},
+        moduled_expr{functor("p", {atom("a"), atom("b")}), 0u, 0}).has_value());
     EXPECT_EQ(stack.normalizer.normalize(framed_expr{var(0), 0u}), atom("a"));
 }
 
@@ -149,14 +149,14 @@ TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesASharedGroundTermWithItselfInL
     const expr* term = atom("z");
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         term = functor("f", {term, term});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{term, 0u}, framed_expr{term, 0u}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{term, 0u, 0}, moduled_expr{term, 0u, 0}));
 }
 
 TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesASharedGroundTermAcrossFramesInLinearTime) {
     const expr* term = atom("z");
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         term = functor("f", {term, term});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{term, 0u}, framed_expr{term, 7u}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{term, 0u, 0}, moduled_expr{term, 7u, 0}));
 }
 
 TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesTwoDistinctSharedTermsInLinearTime) {
@@ -167,7 +167,7 @@ TEST_F(PudDeepTermsIntegrationTest, UnifierUnifiesTwoDistinctSharedTermsInLinear
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         shared_rhs = functor("f", {shared_rhs, shared_rhs});
     EXPECT_TRUE(stack.unifier.unify(
-        framed_expr{shared_lhs, 0u}, framed_expr{shared_rhs, 0u}).has_value());
+        moduled_expr{shared_lhs, 0u, 0}, moduled_expr{shared_rhs, 0u, 0}).has_value());
     EXPECT_EQ(stack.normalizer.normalize(framed_expr{var(0), 0u}), atom("z"));
 }
 
@@ -175,16 +175,16 @@ TEST_F(PudDeepTermsIntegrationTest, OccursCheckSearchesASharedValueInLinearTime)
     const expr* shared_var = var(1);
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         shared_var = functor("f", {shared_var, shared_var});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{var(0), 0u}, framed_expr{shared_var, 0u}).has_value());
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{var(0), 0u, 0}, moduled_expr{shared_var, 0u, 0}).has_value());
     EXPECT_FALSE(stack.unifier.unify(
-        framed_expr{var(1), 0u},
-        framed_expr{functor("g", {var(0)}), 0u}).has_value());
+        moduled_expr{var(1), 0u, 0},
+        moduled_expr{functor("g", {var(0)}), 0u, 0}).has_value());
 }
 
 TEST_F(PudDeepTermsIntegrationTest, NormalizerResolvesSharedBindingsInLinearTime) {
     for (uint32_t index = 0; index < k_shared_depth; ++index)
-        stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(functor("f", {var(index + 1), var(index + 1)}))->content), 0u});
-    stack.bind_map.instantiate(stack.bind_map.find(k_shared_depth), framed_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u});
+        stack.bind_map.instantiate(stack.bind_map.find(index), moduled_functor{std::get_if<expr::functor>(&(functor("f", {var(index + 1), var(index + 1)}))->content), 0u, 0});
+    stack.bind_map.instantiate(stack.bind_map.find(k_shared_depth), moduled_functor{std::get_if<expr::functor>(&(atom("z"))->content), 0u, 0});
     const expr* shared_expected = atom("z");
     for (uint32_t level = 0; level < k_shared_depth; ++level)
         shared_expected = functor("f", {shared_expected, shared_expected});
@@ -200,7 +200,7 @@ TEST_F(PudDeepTermsIntegrationTest, ExporterRebuildsASharedTermInLinearTime) {
         shared_exported = functor("f", {shared_exported, shared_exported});
     std::unordered_map<uint32_t, uint32_t> translations;
     auto exporter = stack.exporters.make_exporter(stack.bind_map, 10, translations);
-    EXPECT_EQ(exporter.export_expr(framed_expr{shared_term, 10u}), shared_exported);
+    EXPECT_EQ(exporter.export_expr(moduled_expr{shared_term, 10u, 0}, 0), shared_exported);
 }
 
 TEST_F(PudDeepTermsIntegrationTest, NormalizerMatchesARecursiveReferenceOnRandomTerms) {
@@ -214,7 +214,7 @@ TEST_F(PudDeepTermsIntegrationTest, NormalizerMatchesARecursiveReferenceOnRandom
             const expr* value = random_term(rng, 3, index + 1, 8);
             if (std::holds_alternative<expr::var>(value->content))
                 continue;
-            stack.bind_map.instantiate(stack.bind_map.find(index), framed_functor{std::get_if<expr::functor>(&(value)->content), 0u});
+            stack.bind_map.instantiate(stack.bind_map.find(index), moduled_functor{std::get_if<expr::functor>(&(value)->content), 0u, 0});
         }
         const expr* term = random_term(rng, 6, 0, 9);
         EXPECT_EQ(

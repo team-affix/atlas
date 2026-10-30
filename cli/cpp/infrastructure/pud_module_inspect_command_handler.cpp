@@ -6,9 +6,10 @@
 #include <vector>
 
 #include "infrastructure/expr_printer.hpp"
+#include "infrastructure/functor_names.hpp"
 #include "infrastructure/hex_uint64.hpp"
-#include "infrastructure/id_functor_printer.hpp"
 #include "infrastructure/id_var_printer.hpp"
+#include "infrastructure/named_functor_printer.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_deserializer_stack.hpp"
 #include "infrastructure/rule_printer.hpp"
@@ -68,10 +69,14 @@ void pud_module_inspect_command_handler::operator()() {
 }
 
 void pud_module_inspect_command_handler::print_nodes(const pud_module& module) const {
+    functor_names names;
+    const std::vector<std::string>& stored_names = module.functor_names();
+    for (uint32_t functor_id = 0; functor_id < stored_names.size(); ++functor_id)
+        names.set_name(functor_id, stored_names[functor_id]);
     id_var_printer print_var;
-    id_functor_printer print_functor;
-    expr_printer<id_var_printer, id_functor_printer> print_expr{std::cout, print_var, print_functor};
-    rule_printer<expr_printer<id_var_printer, id_functor_printer>> print_rule{std::cout, print_expr};
+    named_functor_printer<functor_names> print_functor{names};
+    expr_printer<id_var_printer, named_functor_printer<functor_names>> print_expr{std::cout, print_var, print_functor};
+    rule_printer<expr_printer<id_var_printer, named_functor_printer<functor_names>>> print_rule{std::cout, print_expr};
     const size_t axiom_count = module.count_axioms();
     const size_t node_count = module.count_nodes();
     for (pud_node_id node = 0; node < node_count; ++node) {

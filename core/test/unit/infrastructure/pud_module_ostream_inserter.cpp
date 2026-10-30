@@ -72,6 +72,7 @@ TEST_F(PudModuleOstreamInserterTest, EmptyModuleInsertsMagicAndSectionCounts) {
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     sut.insert_module(out, module);
 }
 
@@ -91,6 +92,7 @@ TEST_F(PudModuleOstreamInserterTest, EachAxiomIsInsertedInOrder) {
     EXPECT_CALL(insert_uint64, insert_uint64(_, 2u));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 0));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 0));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     sut.insert_module(out, module);
 }
 
@@ -110,5 +112,6 @@ TEST_F(PudModuleOstreamInserterTest, RefutedFlagsFollowNodeOrder) {
     EXPECT_CALL(insert_uint64, insert_uint64(_, 2u));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 0));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 1));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     sut.insert_module(out, module);
 }

@@ -27,6 +27,8 @@
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_demoduler.hpp"
+#include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "value_objects/rule.hpp"
 #include <immer/map.hpp>
@@ -39,8 +41,10 @@ using ::testing::UnorderedElementsAre;
 // root and the facts its goals resolve against are the axioms of one module.
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
+    using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
+    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_module>;
     using replayer_t =
@@ -67,9 +71,11 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
+    copy_demoduler_t copy_demoduler{exprs};
+    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
-    cycle_detector_factory_t cycle_detectors{globalize, exprs};
-    unifier_factory_t unifiers{globalize, exprs};
+    cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
+    unifier_factory_t unifiers{globalize, exprs, demoduler};
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_node_goals node_goals;

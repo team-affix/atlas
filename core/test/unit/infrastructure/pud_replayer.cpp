@@ -6,6 +6,7 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/rule.hpp"
+#include "value_objects/moduled_expr.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -35,7 +36,7 @@ const edited_t k_not_unified{std::nullopt};
 
 struct MockCycleDetector {};
 struct MockUnifier {
-    MOCK_METHOD(edited_t, unify, (framed_expr, framed_expr));
+    MOCK_METHOD(edited_t, unify, (moduled_expr, moduled_expr));
 };
 struct MockMakeBindMap {
     MOCK_METHOD(MockBindMap&, make_bind_map, (const pud_ubs_state&));
@@ -97,23 +98,23 @@ struct PudReplayerTest : public ::testing::Test {
 
 TEST_F(PudReplayerTest, EnteringAnAxiomUnifiesTheGoalWithTheHeadFramedAtTheOffset) {
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
-    EXPECT_CALL(unifier, unify((framed_expr{&goal, 0}), (framed_expr{&head, 7}))).WillOnce(Return(k_unified));
+    EXPECT_CALL(unifier, unify((moduled_expr{&goal, 0, 0}), (moduled_expr{&head, 7, k_test_module}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
-        replayer.enter(caller_state, &goal, 7, pud_test_node(8)),
+        replayer.enter(caller_state, &goal, 7, pud_test_node(8), 0),
         (pud_replay{.node = pud_test_node(8), .frame_offset = 7, .ubs_state = persisted_state}));
 }
 
 TEST_F(PudReplayerTest, EnteringFailsWhenTheHeadDoesNotUnify) {
     ON_CALL(unifier, unify(_, _)).WillByDefault(Return(k_not_unified));
-    EXPECT_FALSE(replayer.enter(caller_state, &goal, 7, pud_test_node(8)).has_value());
+    EXPECT_FALSE(replayer.enter(caller_state, &goal, 7, pud_test_node(8), 0).has_value());
 }
 
 TEST_F(PudReplayerTest, DescendingReplaysEverySubstitutionAtTheFrameOffsetInOrder) {
     const pud_replay parent{.node = pud_test_node(8), .frame_offset = 7, .ubs_state = caller_state};
     InSequence in_order;
     EXPECT_CALL(make_bind_map, make_bind_map(caller_state));
-    EXPECT_CALL(unifier, unify((framed_expr{&var_three, 7}), (framed_expr{&value, 7}))).WillOnce(Return(k_unified));
-    EXPECT_CALL(unifier, unify((framed_expr{&var_four, 7}), (framed_expr{&other_value, 7}))).WillOnce(Return(k_unified));
+    EXPECT_CALL(unifier, unify((moduled_expr{&var_three, 7, k_test_module}), (moduled_expr{&value, 7, k_test_module}))).WillOnce(Return(k_unified));
+    EXPECT_CALL(unifier, unify((moduled_expr{&var_four, 7, k_test_module}), (moduled_expr{&other_value, 7, k_test_module}))).WillOnce(Return(k_unified));
     EXPECT_EQ(
         replayer.descend(parent, pud_test_node(9)),
         (pud_replay{.node = pud_test_node(9), .frame_offset = 7, .ubs_state = persisted_state}));

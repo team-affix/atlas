@@ -15,7 +15,9 @@
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
+#include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 #include "value_objects/rule.hpp"
@@ -24,9 +26,11 @@
 // its modules' axioms up front, registers them, then stores the inferences below them.
 struct PudSearchStackIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool>;
+    using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
+    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, copy_demoduler_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_module>;
     using replayer_t =
@@ -42,10 +46,12 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
+    copy_demoduler_t copy_demoduler{exprs};
+    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
-    cycle_detector_factory_t cycle_detectors{globalize, exprs};
-    unifier_factory_t unifiers{globalize, exprs};
-    normalizer_factory_t normalizers{globalize, exprs, exprs};
+    cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
+    unifier_factory_t unifiers{globalize, exprs, demoduler};
+    normalizer_factory_t normalizers{globalize, exprs, exprs, copy_demoduler};
     std::deque<pud_module> module_data;
     modules_t modules;
     unit_queries_t unit_queries;
@@ -189,13 +195,13 @@ TEST_F(PudSearchStackIntegrationTest, EachCandidatePathReplaysItsResolution) {
     for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
         paths.push_back(mhcs.path(candidate));
     ASSERT_EQ(paths.size(), 2u);
-    pud_replay replay0 = replayer.enter(empty_state, goal, 1, paths.at(0).front()).value();
+    pud_replay replay0 = replayer.enter(empty_state, goal, 1, paths.at(0).front(), 0).value();
     for (size_t step = 1; step < paths.at(0).size(); ++step)
         replay0 = replayer.descend(replay0, paths.at(0).at(step)).value();
     ubs_bind_map bind_map0{replay0.ubs_state};
     const expr* resolved0 = normalizers.make_normalizer(bind_map0).normalize(framed_expr{var(0), 0});
     EXPECT_EQ(resolved0, atom("red"));
-    pud_replay replay1 = replayer.enter(empty_state, goal, 1, paths.at(1).front()).value();
+    pud_replay replay1 = replayer.enter(empty_state, goal, 1, paths.at(1).front(), 0).value();
     for (size_t step = 1; step < paths.at(1).size(); ++step)
         replay1 = replayer.descend(replay1, paths.at(1).at(step)).value();
     ubs_bind_map bind_map1{replay1.ubs_state};
@@ -214,7 +220,7 @@ TEST_F(PudSearchStackIntegrationTest, CallersBindingsAreRespected) {
     modules.register_module(module_data.back());
     const pud_global_node_id blue = pud_global_node_id{.module = k_module, .node = 1};
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_functor{std::get_if<expr::functor>(&(atom("blue"))->content), 0});
+    bind_map.instantiate(bind_map.find(0), moduled_functor{std::get_if<expr::functor>(&(atom("blue"))->content), 0, 0});
     const pud_ubs_state caller = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, caller, functor("color", {var(0)}), 1);
     ASSERT_TRUE(query.has_value());
@@ -237,7 +243,7 @@ TEST_F(PudSearchStackIntegrationTest, RootHeadIsLiftedToTheFrameOffset) {
     for (pud_mhcs_head_id candidate : mhq.candidates(query.value()))
         paths.push_back(mhcs.path(candidate));
     ASSERT_EQ(paths.size(), 1u);
-    pud_replay replay = replayer.enter(empty_state, goal, 3, paths.at(0).front()).value();
+    pud_replay replay = replayer.enter(empty_state, goal, 3, paths.at(0).front(), 0).value();
     for (size_t step = 1; step < paths.at(0).size(); ++step)
         replay = replayer.descend(replay, paths.at(0).at(step)).value();
     ubs_bind_map bind_map{replay.ubs_state};
@@ -459,7 +465,7 @@ TEST_F(PudSearchStackIntegrationTest, ForkKeepsOnlyCandidatesCompatibleWithTheNe
     const std::optional<pud_mhq_head_id> query = mhq.try_open(k_module, empty_state, goal, 1);
     ASSERT_TRUE(query.has_value());
     ubs_bind_map bind_map{empty_state};
-    bind_map.instantiate(bind_map.find(0), framed_functor{std::get_if<expr::functor>(&(atom("blue"))->content), 0});
+    bind_map.instantiate(bind_map.find(0), moduled_functor{std::get_if<expr::functor>(&(atom("blue"))->content), 0, 0});
     const pud_ubs_state narrowed = std::move(bind_map).persist();
     const std::optional<pud_mhq_head_id> forked = mhq.try_fork(query.value(), narrowed, goal, 1);
     ASSERT_TRUE(forked.has_value());

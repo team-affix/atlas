@@ -357,8 +357,9 @@ TEST_F(PudModuleIstreamHandlingIntegrationTest, RefutedSectionTooShortThrows) {
     EXPECT_THROW(wiring.extract_module_.extract_module(in), std::runtime_error);
 }
 
-TEST_F(PudModuleIstreamHandlingIntegrationTest, ExtraBytesAfterRefutedSectionAreIgnored) {
+TEST_F(PudModuleIstreamHandlingIntegrationTest, ExtraBytesAfterNameSectionAreIgnored) {
     std::string blob = empty_module_blob(1);
+    pud_module_serde_bytes::append_u64(blob, 0);
     blob.push_back('x');
     blob.push_back('y');
     const pud_module module = deserialize_pool(blob, pool);
@@ -396,7 +397,7 @@ TEST_F(PudModuleIstreamHandlingIntegrationTest, CorruptedByteInRefutedSectionThr
     std::ostringstream out;
     encode_wiring.insert_module_.insert_module(out, original);
     std::string blob = out.str();
-    blob.back() = 2;
+    blob[blob.size() - 9] = 2;
     std::istringstream in(blob);
     pool_decode_wiring_t decode_wiring{pool, pool};
     EXPECT_THROW(decode_wiring.extract_module_.extract_module(in), std::runtime_error);

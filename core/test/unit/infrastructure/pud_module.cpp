@@ -193,3 +193,18 @@ TEST_F(PudModuleTest, StoredNodesStayInPlaceWhileLaterNodesAreStored) {
     EXPECT_EQ(&stored_inference, &data.get_inference(child));
     EXPECT_EQ(&children, &data.get_children(0));
 }
+
+TEST_F(PudModuleTest, ANewModuleStartsWithNoFunctorNames) {
+    EXPECT_TRUE(data.functor_names().empty());
+}
+
+TEST_F(PudModuleTest, AppendingAFunctorNameReturnsTheNextDenseIndex) {
+    EXPECT_EQ(data.append_functor_name("nat"), 0u);
+    EXPECT_EQ(data.append_functor_name("add"), 1u);
+    EXPECT_THAT(data.functor_names(), ElementsAre("nat", "add"));
+}
+
+TEST_F(PudModuleTest, ReadingAMissingFunctorNameThrows) {
+    data.append_functor_name("nat");
+    EXPECT_THROW((void)data.functor_names().at(1), std::out_of_range);
+}

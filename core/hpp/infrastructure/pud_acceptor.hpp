@@ -7,13 +7,14 @@
 #include <unordered_map>
 #include <vector>
 #include "value_objects/expr.hpp"
-#include "value_objects/framed_expr.hpp"
+#include "value_objects/moduled_expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/rule.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_substitution.hpp"
 #include "value_objects/pud_ubs_state.hpp"
-#include "value_objects/framed_functor.hpp"
+#include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 #include "debug_assert.hpp"
 
@@ -103,12 +104,18 @@ pud_inference PUD_ACCEPTOR::accept(
     auto&& cycle_detector = make_cycle_detector_.make_cycle_detector(accepted);
     auto&& unifier = make_unifier_.make_unifier(accepted, cycle_detector);
     std::set<uint32_t> touched_caller_reps;
-    const framed_expr axiom_head{get_axiom_.get_axiom(candidate_path.front()).head, acceptor_lvc};
-    note_caller_classes(unifier.unify(framed_expr{call_site_goal, 0}, axiom_head), acceptor_lvc, touched_caller_reps);
+    const rule& axiom = get_axiom_.get_axiom(candidate_path.front());
+    note_caller_classes(
+        unifier.unify(
+            moduled_expr{call_site_goal, 0, acceptor.module},
+            moduled_expr{axiom.head, acceptor_lvc, candidate_path.front().module}),
+        acceptor_lvc,
+        touched_caller_reps);
     for (size_t path_index = 1; path_index < candidate_path.size(); ++path_index) {
-        for (const pud_substitution& substitution : get_inference_.get_inference(candidate_path.at(path_index)).substitutions) {
-            const framed_expr replaced{make_var_.make_var(substitution.var_idx), acceptor_lvc};
-            const framed_expr value{substitution.value, acceptor_lvc};
+        const pud_global_node_id path_node = candidate_path.at(path_index);
+        for (const pud_substitution& substitution : get_inference_.get_inference(path_node).substitutions) {
+            const moduled_expr replaced{make_var_.make_var(substitution.var_idx), acceptor_lvc, path_node.module};
+            const moduled_expr value{substitution.value, acceptor_lvc, path_node.module};
             note_caller_classes(unifier.unify(replaced, value), acceptor_lvc, touched_caller_reps);
         }
     }
@@ -126,14 +133,18 @@ pud_inference PUD_ACCEPTOR::accept(
             .var_idx = caller_rep,
             .value = accepted_class.rep != caller_rep
                 ? make_var_.make_var(accepted_class.rep)
-                : exporter.export_expr(framed_expr{
-                      make_functor_.make_functor(
-                          accepted_class.value->functor->id, accepted_class.value->functor->args),
-                      accepted_class.value->frame_offset}),
+                : exporter.export_expr(
+                      moduled_expr{
+                          make_functor_.make_functor(
+                              accepted_class.value->functor->id, accepted_class.value->functor->args),
+                          accepted_class.value->frame_offset,
+                          accepted_class.value->module},
+                      acceptor.module),
         });
     }
     for (const auto& [id, callee_goal] : get_node_goals_.get(candidate_path.back()).goals)
-        inference.body_goals.push_back(exporter.export_expr(framed_expr{callee_goal, acceptor_lvc}));
+        inference.body_goals.push_back(exporter.export_expr(
+            moduled_expr{callee_goal, acceptor_lvc, candidate_path.back().module}, acceptor.module));
     inference.var_count = static_cast<uint32_t>(translations.size());
     return inference;
 }

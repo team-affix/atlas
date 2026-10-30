@@ -4,6 +4,7 @@
 #include <cstring>
 #include <istream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_ostream_inserter.hpp"
@@ -97,6 +98,16 @@ pud_module PUD_MODULE_ISTREAM_EXTRACTOR::extract_module(std::istream& in) const 
             throw std::runtime_error("invalid pud refuted flag");
         if (flag == 1)
             module.mark_refuted(static_cast<pud_node_id>(node));
+    }
+    if (!in || in.peek() == std::char_traits<char>::eof())
+        return module;
+    const uint64_t name_count = extract_uint64_.extract_uint64(in);
+    for (uint64_t index = 0; index < name_count; ++index) {
+        const uint64_t length = extract_uint64_.extract_uint64(in);
+        std::string name(length, '\0');
+        if (length > 0)
+            extract_fixed_bytes_.extract_fixed_bytes(in, name.data(), length);
+        module.append_functor_name(name);
     }
     return module;
 }

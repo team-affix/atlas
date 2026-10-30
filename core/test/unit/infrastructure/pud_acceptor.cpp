@@ -7,7 +7,8 @@
 #include "infrastructure/pud_acceptor.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/rule.hpp"
-#include "pud_framed_functor_helper.hpp"
+#include "value_objects/moduled_expr.hpp"
+#include "pud_moduled_functor_helper.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -48,13 +49,13 @@ struct MockMakeCycleDetector {
     MOCK_METHOD(MockCycleDetector&, make_cycle_detector, (MockBindMap&));
 };
 struct MockUnifier {
-    MOCK_METHOD(edited_t, unify, (framed_expr, framed_expr));
+    MOCK_METHOD(edited_t, unify, (moduled_expr, moduled_expr));
 };
 struct MockMakeUnifier {
     MOCK_METHOD(MockUnifier&, make_unifier, (MockBindMap&, MockCycleDetector&));
 };
 struct MockExporter {
-    MOCK_METHOD(const expr*, export_expr, (framed_expr));
+    MOCK_METHOD(const expr*, export_expr, (moduled_expr, pud_module_id));
 };
 struct MockMakeExporter {
     MOCK_METHOD(MockExporter&, make_exporter, (MockBindMap&, uint32_t, translations_t&));
@@ -108,10 +109,10 @@ struct PudAcceptorTest : public ::testing::Test {
         .var_count = 0,
     };
     std::vector<pud_global_node_id> path{pud_test_node(2), pud_test_node(6)};
-    framed_expr entering_call_site{&call_site, 0};
-    framed_expr entered_head{&axiom_head, 10};
-    framed_expr replayed_var{&var_one, 10};
-    framed_expr replayed_value{&substituted_value, 10};
+    moduled_expr entering_call_site{&call_site, 0, k_test_module};
+    moduled_expr entered_head{&axiom_head, 10, k_test_module};
+    moduled_expr replayed_var{&var_one, 10, k_test_module};
+    moduled_expr replayed_value{&substituted_value, 10, k_test_module};
 
     MockExporter& export_three_fresh_variables(MockBindMap&, uint32_t, translations_t& translations) {
         translations.emplace(12, 10);
@@ -131,8 +132,8 @@ struct PudAcceptorTest : public ::testing::Test {
         ON_CALL(make_exporter, make_exporter(_, _, _)).WillByDefault(ReturnRef(exporter));
         ON_CALL(accepted, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(goals, get(pud_test_node(6))).WillByDefault(ReturnRef(callee_goals));
-        ON_CALL(exporter, export_expr((framed_expr{&callee_goal, 10}))).WillByDefault(Return(&exported_goal));
-        ON_CALL(exporter, export_expr((framed_expr{&value, 10}))).WillByDefault(Return(&exported_value));
+        ON_CALL(exporter, export_expr(moduled_expr{&callee_goal, 10, k_test_module}, k_test_module)).WillByDefault(Return(&exported_goal));
+        ON_CALL(exporter, export_expr(moduled_expr{&value, 10, 0}, k_test_module)).WillByDefault(Return(&exported_value));
         ON_CALL(make_var, make_var(1)).WillByDefault(Return(&var_one));
         ON_CALL(make_functor, make_functor(_, _)).WillByDefault(Return(&value));
     }
@@ -171,7 +172,7 @@ TEST_F(PudAcceptorTest, ACallerClassMergedUnderASmallerRepresentativeIsSubstitut
 
 TEST_F(PudAcceptorTest, ACallerClassBoundByTheResolutionIsSubstitutedByItsExportedValue) {
     ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}}}));
-    ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = pud_test_framed_functor(&value, 10)}));
+    ON_CALL(accepted, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = pud_test_moduled_functor(&value, 10)}));
     EXPECT_EQ(
         acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions,
         (std::vector<pud_substitution>{{.var_idx = 4, .value = &exported_value}}));
@@ -179,9 +180,9 @@ TEST_F(PudAcceptorTest, ACallerClassBoundByTheResolutionIsSubstitutedByItsExport
 
 TEST_F(PudAcceptorTest, CalleeClassesAndCallerClassesAlreadyBoundWhenEditedAreNotSubstituted) {
     const ubs_class callee{.root = 12, .size = 1, .rep = 12, .value = std::nullopt};
-    const ubs_class bound_before{.root = 3, .size = 1, .rep = 3, .value = pud_test_framed_functor(&value, 0)};
+    const ubs_class bound_before{.root = 3, .size = 1, .rep = 3, .value = pud_test_moduled_functor(&value, 0)};
     ON_CALL(unifier, unify(entering_call_site, entered_head)).WillByDefault(Return(edited_t{std::vector<ubs_class>{callee, bound_before}}));
-    ON_CALL(accepted, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = pud_test_framed_functor(&value, 10)}));
+    ON_CALL(accepted, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = pud_test_moduled_functor(&value, 10)}));
     EXPECT_TRUE(acceptor.accept(pud_test_node(3), 1, caller_state, 10, &call_site, path).substitutions.empty());
 }
 

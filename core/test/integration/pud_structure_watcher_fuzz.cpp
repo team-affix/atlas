@@ -124,7 +124,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
             if (std::holds_alternative<expr::var>(value->content))
                 value = exprs.make_functor(functors.id("w"), {value});
             substitutions.push_back({.var_idx = rep, .value = value});
-            bind_map.instantiate(bind_map.find(rep), framed_functor{std::get_if<expr::functor>(&(value)->content), 0});
+            bind_map.instantiate(bind_map.find(rep), moduled_functor{std::get_if<expr::functor>(&(value)->content), 0, 0});
         }
         return substitutions;
     }
@@ -140,7 +140,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     level make_root(pud_node_id root) {
         const std::vector<const expr*> opened_goals = random_goals({}, 1 + pick(4));
         const pud_goal_list goals = initial_goal_opener.open_goals(opened_goals);
-        return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals), .node = root, .depth = 0};
+        return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals, 0), .node = root, .depth = 0};
     }
 
     level descend_and_check(const level& parent, pud_body_goal_id call_site) {

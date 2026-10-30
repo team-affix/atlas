@@ -92,7 +92,7 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     store_active_state_.store(root, pud_active_state{
         .lvc = axiom.var_count,
         .bindings = bindings,
-        .watch = watch_root_.watch_root(bindings, goals),
+        .watch = watch_root_.watch_root(bindings, goals, root.module),
         .queries = std::move(queries),
     });
     return refuted;

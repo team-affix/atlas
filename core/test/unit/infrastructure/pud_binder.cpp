@@ -4,7 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_binder.hpp"
 #include "value_objects/pud_inference.hpp"
-#include "pud_framed_functor_helper.hpp"
+#include "pud_moduled_functor_helper.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -17,8 +17,8 @@ namespace {
 
 struct MockBindMap {
     MOCK_METHOD(ubs_class, find, (uint32_t));
-    MOCK_METHOD(std::optional<framed_functor>, equate, (const ubs_class&, const ubs_class&));
-    MOCK_METHOD(void, instantiate, (const ubs_class&, framed_functor));
+    MOCK_METHOD(std::optional<moduled_functor>, equate, (const ubs_class&, const ubs_class&));
+    MOCK_METHOD(void, instantiate, (const ubs_class&, moduled_functor));
     MOCK_METHOD(pud_ubs_state, persist, (), (ref(&&)));
 };
 struct MockMakeBindMap {
@@ -68,6 +68,6 @@ TEST_F(PudBinderTest, AVariableSubstitutionEquatesAndATermSubstitutionBindsInOrd
         (ubs_class{.root = 1, .size = 1, .rep = 1, .value = std::nullopt})));
     EXPECT_CALL(bind_map, instantiate(
         (ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}),
-        (pud_test_framed_functor(&value, 0))));
+        (moduled_functor{std::get_if<expr::functor>(&value.content), 0, k_test_module})));
     EXPECT_EQ(binder.bind(parent_state, pud_test_node(8)), child_state);
 }

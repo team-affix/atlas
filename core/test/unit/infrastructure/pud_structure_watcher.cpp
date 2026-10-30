@@ -4,7 +4,7 @@
 #include <gmock/gmock.h>
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "value_objects/pud_inference.hpp"
-#include "pud_framed_functor_helper.hpp"
+#include "pud_moduled_functor_helper.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -72,14 +72,14 @@ struct PudStructureWatcherTest : public ::testing::Test {
 }
 
 TEST_F(PudStructureWatcherTest, ARootWatchesEveryRepresentativeOfEveryGoal) {
-    const pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_EQ(watch.goal_to_reps[0], (immer::set<uint32_t>{}.insert(0).insert(1)));
     EXPECT_EQ(watch.goal_to_reps[1], (immer::set<uint32_t>{}.insert(2)));
 }
 
 TEST_F(PudStructureWatcherTest, NoSubstitutionChangesNoGoal) {
     child_inference.substitutions = {};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         IsEmpty());
@@ -87,7 +87,7 @@ TEST_F(PudStructureWatcherTest, NoSubstitutionChangesNoGoal) {
 
 TEST_F(PudStructureWatcherTest, InstantiatingARepresentativeChangesTheGoalsThatMentionIt) {
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &ground}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         ElementsAre(1u));
@@ -95,7 +95,7 @@ TEST_F(PudStructureWatcherTest, InstantiatingARepresentativeChangesTheGoalsThatM
 
 TEST_F(PudStructureWatcherTest, RenamingToARepresentativeTheGoalDoesNotMentionChangesNothing) {
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &x1}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         IsEmpty());
@@ -103,16 +103,16 @@ TEST_F(PudStructureWatcherTest, RenamingToARepresentativeTheGoalDoesNotMentionCh
 
 TEST_F(PudStructureWatcherTest, MergingTwoRepresentativesOfOneGoalChangesIt) {
     child_inference.substitutions = {pud_substitution{.var_idx = 1, .value = &x0}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherTest, RenamingToABoundVariableInstantiates) {
-    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = pud_test_framed_functor(&ground, 0)}));
+    ON_CALL(bind_map, find(1)).WillByDefault(Return(ubs_class{.root = 1, .size = 2, .rep = 1, .value = pud_test_moduled_functor(&ground, 0)}));
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &x1}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         ElementsAre(1u));
@@ -123,7 +123,7 @@ TEST_F(PudStructureWatcherTest, AGoalChangedTwiceIsReportedOnce) {
         pud_substitution{.var_idx = 0, .value = &ground},
         pud_substitution{.var_idx = 1, .value = &ground},
     };
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         ElementsAre(0u));
@@ -131,7 +131,7 @@ TEST_F(PudStructureWatcherTest, AGoalChangedTwiceIsReportedOnce) {
 
 TEST_F(PudStructureWatcherTest, TheClosedGoalIsNoLongerWatched) {
     child_inference.substitutions = {pud_substitution{.var_idx = 3, .value = &ground}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     EXPECT_THAT(
         watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k).changed_goals,
         IsEmpty());
@@ -139,7 +139,7 @@ TEST_F(PudStructureWatcherTest, TheClosedGoalIsNoLongerWatched) {
 
 TEST_F(PudStructureWatcherTest, AGoalTheChildAddsIsWatchedButNeverReportedChanged) {
     child_inference.substitutions = {pud_substitution{.var_idx = 4, .value = &ground}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_with_k);
     EXPECT_THAT(change.changed_goals, IsEmpty());
     EXPECT_EQ(change.watch.goal_to_reps[3], (immer::set<uint32_t>{}.insert(4)));
@@ -149,7 +149,7 @@ TEST_F(PudStructureWatcherTest, AGoalTheChildAddsIsWatchedButNeverReportedChange
 TEST_F(PudStructureWatcherTest, AnInstantiatedRepresentativeIsReplacedByTheValuesRepresentatives) {
     expr pair{expr::functor{6, {&x3, &x4}}};
     child_inference.substitutions = {pud_substitution{.var_idx = 2, .value = &pair}};
-    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_structure_watch_change change = watcher.descend(root, pud_ubs_state{}, pud_test_node(9), 2, child_goals_without_k);
     EXPECT_EQ(change.watch.goal_to_reps[1], (immer::set<uint32_t>{}.insert(3).insert(4)));
 }

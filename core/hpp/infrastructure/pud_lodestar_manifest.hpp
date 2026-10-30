@@ -16,7 +16,12 @@
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
+#include "infrastructure/pud_functor_demoduler.hpp"
+#include "infrastructure/pud_functor_linker.hpp"
+#include "infrastructure/pud_link_table.hpp"
+#include "infrastructure/pud_symbol_table.hpp"
 #include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
@@ -49,17 +54,29 @@ struct pud_lodestar_manifest {
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
     };
-    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, expr_pool> {
-        using pud_cycle_detector_factory<globalizer, expr_pool>::pud_cycle_detector_factory;
-    };
-    struct unifier_factory_t : pud_unifier_factory<globalizer, expr_pool> {
-        using pud_unifier_factory<globalizer, expr_pool>::pud_unifier_factory;
-    };
-    struct exporter_factory_t : pud_exporter_factory<globalizer, expr_pool, expr_pool> {
-        using pud_exporter_factory<globalizer, expr_pool, expr_pool>::pud_exporter_factory;
-    };
     struct modules_t : pud_modules<pud_module> {
         using pud_modules<pud_module>::pud_modules;
+    };
+    struct demoduler_t;
+    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool> {
+        using pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, expr_pool>::pud_functor_demoduler;
+    };
+    struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
+        using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
+    };
+    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, functor_demoduler_t> {
+        using pud_cycle_detector_factory<globalizer, functor_demoduler_t>::pud_cycle_detector_factory;
+    };
+    using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
+    struct unifier_factory_t : pud_unifier_factory<globalizer, expr_pool, demoduler_t, functor_demoduler_t> {
+        using pud_unifier_factory<globalizer, expr_pool, demoduler_t, functor_demoduler_t>::pud_unifier_factory;
+    };
+    struct exporter_factory_t : pud_exporter_factory<
+        globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
+        pud_symbol_table, pud_symbol_table, modules_t, pud_link_table> {
+        using pud_exporter_factory<
+            globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
+            pud_symbol_table, pud_symbol_table, modules_t, pud_link_table>::pud_exporter_factory;
     };
     struct unit_queries_t : std::deque<pud_mhq_head_id> {
         using std::deque<pud_mhq_head_id>::deque;
@@ -158,12 +175,17 @@ struct pud_lodestar_manifest {
     const expr* solution() const;
     size_t solution_depth() const;
 
+    pud_symbol_table           symbol_table_;
+    pud_link_table             link_table_;
+    functor_demoduler_t        functor_demoduler_;
+    demoduler_t                demoduler_;
+    functor_linker_t           functor_linker_;
     globalizer                 globalizer_;
     cycle_detector_factory_t   cycle_detector_factory_;
     unifier_factory_t          unifier_factory_;
-    exporter_factory_t         exporter_factory_;
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
+    exporter_factory_t         exporter_factory_;
     pud_node_goals             node_goals_;
     pud_node_axioms            node_axioms_;
     pud_goal_resolver          goal_resolver_;
@@ -212,7 +234,7 @@ private:
     void seed_focus_tree();
     const expr* normalized_head(pud_global_node_id leaf) const;
     size_t depth_of(pud_global_node_id leaf) const;
-    const expr* normalize_with_bindings(const ubs_bind_map& bind_map, const expr* skeleton) const;
+    const expr* normalize_with_bindings(const ubs_bind_map& bind_map, const expr* skeleton, pud_module_id module) const;
 };
 
 #endif

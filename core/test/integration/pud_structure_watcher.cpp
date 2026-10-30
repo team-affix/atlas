@@ -51,7 +51,7 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -68,7 +68,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothing) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -85,7 +85,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothi
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingTheRep) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0), var(1)}), functor("h", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -102,7 +102,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingT
 TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWatched) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("g", {var(0)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -132,7 +132,7 @@ TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWat
 TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatRep) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -161,7 +161,7 @@ TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatR
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -178,7 +178,7 @@ TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -195,7 +195,7 @@ TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
 TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -225,7 +225,7 @@ TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivin
 TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSurvivingRep) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -255,7 +255,7 @@ TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSu
 TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(2)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -285,7 +285,7 @@ TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNodesReps) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -315,7 +315,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNode
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -344,7 +344,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep
 TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{var(0), var(1), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = 1,
@@ -386,7 +386,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
 TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -407,7 +407,7 @@ TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone)
 TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOnce) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1), var(2)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -427,7 +427,7 @@ TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOn
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodesReps) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -469,7 +469,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
 TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -499,7 +499,7 @@ TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
 TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOther) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -542,7 +542,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
 TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrder) {
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), var(2), var(3), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -566,7 +566,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSepar
     ASSERT_EQ(first, second);
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{first, second, functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -585,7 +585,7 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
     pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(chain_length)}), functor("go", {})});
     pud_body_goal_id call_site = goals.next_id - 1;
     pud_ubs_state bindings = pud_ubs_state{};
-    pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, goals);
+    pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     std::vector<pud_body_goal_id> changed_goals;
     pud_global_node_id tree_node{.module = k_module, .node = 0};
     for (uint32_t step_index = 0; step_index < chain_length; ++step_index) {
@@ -614,7 +614,7 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
 TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsReplacementIs) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = 0,
@@ -643,7 +643,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsRep
 TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOther) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id mid = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,
@@ -684,7 +684,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOth
 TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThroughItsValue) {
     pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
-    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals);
+    const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
         .parent = 0,
         .call_site = root_call_site,

@@ -19,7 +19,7 @@ using ::testing::ReturnRef;
 namespace {
 
 struct MockEnterReplay {
-    MOCK_METHOD(std::optional<pud_replay>, enter, (const pud_ubs_state&, const expr*, uint32_t, pud_global_node_id));
+    MOCK_METHOD(std::optional<pud_replay>, enter, (const pud_ubs_state&, const expr*, uint32_t, pud_global_node_id, pud_module_id));
 };
 struct MockListVisibleAxioms {
     MOCK_METHOD(const std::vector<pud_global_node_id>&, list_visible_axioms, (pud_module_id), (const));
@@ -66,14 +66,14 @@ struct PudMhqTest : public ::testing::Test {
 }
 
 TEST_F(PudMhqTest, AQueryIsOpenedWithACandidateUnderEveryAxiomItEntersInAxiomOrder) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(20u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -81,14 +81,14 @@ TEST_F(PudMhqTest, AQueryIsOpenedWithACandidateUnderEveryAxiomItEntersInAxiomOrd
 }
 
 TEST_F(PudMhqTest, AnAxiomWhoseHeadDoesNotUnifyIsNotSearched) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(20u));
     EXPECT_CALL(add_candidate, try_add(_)).Times(AnyNumber());
@@ -97,36 +97,36 @@ TEST_F(PudMhqTest, AnAxiomWhoseHeadDoesNotUnifyIsNotSearched) {
 }
 
 TEST_F(PudMhqTest, AnAxiomWithoutACandidateIsLeftOut) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(20u));
     EXPECT_THAT(mhq.candidates(mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value()), ElementsAre(30u, 20u));
 }
 
 TEST_F(PudMhqTest, AQueryWithoutCandidatesIsNotOpened) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     EXPECT_CALL(unit_queries, push_back(_)).Times(0);
     EXPECT_FALSE(mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).has_value());
 }
 
 TEST_F(PudMhqTest, AQueryOpenedWithOneCandidateIsUnit) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(30u));
     EXPECT_CALL(unit_queries, push_back(_));
@@ -134,14 +134,14 @@ TEST_F(PudMhqTest, AQueryOpenedWithOneCandidateIsUnit) {
 }
 
 TEST_F(PudMhqTest, AQueryOpenedWithTwoCandidatesIsNotUnit) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(31u));
     EXPECT_CALL(unit_queries, push_back(_)).Times(0);
@@ -154,14 +154,14 @@ TEST_F(PudMhqTest, InvalidatingALeafIsPassedOnToTheCandidates) {
 }
 
 TEST_F(PudMhqTest, LosingAllButOneCandidateMakesTheQueryUnit) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(31u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -172,9 +172,9 @@ TEST_F(PudMhqTest, LosingAllButOneCandidateMakesTheQueryUnit) {
 }
 
 TEST_F(PudMhqTest, LosingTheLastCandidateRefutesTheQueryUntilItIsRemoved) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -186,16 +186,16 @@ TEST_F(PudMhqTest, LosingTheLastCandidateRefutesTheQueryUntilItIsRemoved) {
 }
 
 TEST_F(PudMhqTest, RefutedCandidatesReachOnlyTheirOwnQuery) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
     const pud_mhq_head_id first = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(40u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(41u));
     const pud_mhq_head_id second = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -205,14 +205,14 @@ TEST_F(PudMhqTest, RefutedCandidatesReachOnlyTheirOwnQuery) {
 }
 
 TEST_F(PudMhqTest, AQueryIsExhaustedOnlyOnceItsLastCandidateIsRefuted) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(31u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -226,14 +226,14 @@ TEST_F(PudMhqTest, AQueryIsExhaustedOnlyOnceItsLastCandidateIsRefuted) {
 }
 
 TEST_F(PudMhqTest, RemovingAQueryRemovesItsCandidates) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(32u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -243,14 +243,14 @@ TEST_F(PudMhqTest, RemovingAQueryRemovesItsCandidates) {
 }
 
 TEST_F(PudMhqTest, AForkForksEachCandidateOntoItsAxiomInTheNewEnvironment) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(32u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -266,31 +266,31 @@ TEST_F(PudMhqTest, AForkForksEachCandidateOntoItsAxiomInTheNewEnvironment) {
 }
 
 TEST_F(PudMhqTest, AForkOnlyEntersTheAxiomsTheForkedQueryStillHasCandidatesUnder) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(32u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
-    EXPECT_CALL(enter, enter(_, _, _, _)).Times(AnyNumber());
-    EXPECT_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1))).Times(0);
+    EXPECT_CALL(enter, enter(_, _, _, _, _)).Times(AnyNumber());
+    EXPECT_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(1), _)).Times(0);
     mhq.try_fork(head, pud_ubs_state{}, &specialized_goal, 9);
 }
 
 TEST_F(PudMhqTest, AForkWithoutCandidatesIsNotOpenedAndLeavesTheForkedQuery) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(32u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -299,14 +299,14 @@ TEST_F(PudMhqTest, AForkWithoutCandidatesIsNotOpenedAndLeavesTheForkedQuery) {
 }
 
 TEST_F(PudMhqTest, AForkKeepingOneCandidateIsUnit) {
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(32u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
@@ -320,22 +320,22 @@ TEST_F(PudMhqTest, AxiomsFromAnotherModuleAreNotVisible) {
     const pud_global_node_id foreign{.module = other_module, .node = 0};
     const std::vector<pud_global_node_id> other_visible_axioms{foreign};
     ON_CALL(axioms, list_visible_axioms(other_module)).WillByDefault(ReturnRef(other_visible_axioms));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(0), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(0)))).WillByDefault(Return(30u));
-    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &goal, 7u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2)))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, pud_test_node(2), _))
         .WillByDefault(Return(pud_replay{.node = pud_test_node(2), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(2)))).WillByDefault(Return(20u));
-    ON_CALL(enter, enter(_, &goal, 7u, foreign))
+    ON_CALL(enter, enter(_, &goal, 7u, foreign, _))
         .WillByDefault(Return(pud_replay{.node = foreign, .frame_offset = 7u, .ubs_state = {}}));
-    ON_CALL(enter, enter(_, &specialized_goal, 9u, foreign))
+    ON_CALL(enter, enter(_, &specialized_goal, 9u, foreign, _))
         .WillByDefault(Return(pud_replay{.node = foreign, .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, foreign))).WillByDefault(Return(40u));
-    EXPECT_CALL(enter, enter(_, _, _, _)).Times(::testing::AnyNumber());
-    EXPECT_CALL(enter, enter(_, _, _, foreign)).Times(0);
+    EXPECT_CALL(enter, enter(_, _, _, _, _)).Times(::testing::AnyNumber());
+    EXPECT_CALL(enter, enter(_, _, _, foreign, _)).Times(0);
     EXPECT_THAT(mhq.candidates(mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value()), ElementsAre(30u, 20u));
 }

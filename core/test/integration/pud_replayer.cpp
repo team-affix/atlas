@@ -13,7 +13,9 @@
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
+#include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
@@ -21,9 +23,11 @@
 // axiom of its own module; inferences are stored under the node each test descends from.
 struct PudReplayerIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, expr_pool>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool>;
-    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool>;
+    using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
+    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
+    using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, copy_demoduler_t>;
     using modules_t = pud_modules<pud_module>;
 
     static constexpr pud_module_id k_scratch_module = 0;
@@ -31,10 +35,12 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     test_functors functors;
     expr_pool exprs;
     globalizer globalize;
+    copy_demoduler_t copy_demoduler{exprs};
+    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
-    cycle_detector_factory_t cycle_detectors{globalize, exprs};
-    unifier_factory_t unifiers{globalize, exprs};
-    normalizer_factory_t normalizers{globalize, exprs, exprs};
+    cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
+    unifier_factory_t unifiers{globalize, exprs, demoduler};
+    normalizer_factory_t normalizers{globalize, exprs, exprs, copy_demoduler};
     pud_module scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     std::deque<pud_module> opened_modules;
     modules_t modules;
@@ -71,7 +77,7 @@ TEST_F(PudReplayerIntegrationTest, SpecsReplayLiftedToFrameOffset) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -106,8 +112,8 @@ TEST_F(PudReplayerIntegrationTest, DifferentFrameOffsetsStayIndependent) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> at_one = replayer.enter({}, var(0), 1u, root_one);
-    std::optional<pud_replay> at_five = replayer.enter({}, var(0), 5u, root_five);
+    std::optional<pud_replay> at_one = replayer.enter({}, var(0), 1u, root_one, 0);
+    std::optional<pud_replay> at_five = replayer.enter({}, var(0), 5u, root_five, 0);
     ASSERT_TRUE(at_one.has_value());
     ASSERT_TRUE(at_five.has_value());
     std::optional<pud_replay> replay_child_one = replayer.descend(*at_one, child_one);
@@ -158,7 +164,7 @@ TEST_F(PudReplayerIntegrationTest, OpeningFlowFromBindingDescentState) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter(caller_binding, var(0), frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter(caller_binding, var(0), frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
 
     EXPECT_TRUE(replayer.descend(*opened, agree_child).has_value());
@@ -179,7 +185,7 @@ TEST_F(PudReplayerIntegrationTest, ContradictsInheritedCallerBindingRefutes) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 1, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 1, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     EXPECT_FALSE(replayer.descend(*opened, child).has_value());
 }
@@ -204,7 +210,7 @@ TEST_F(PudReplayerIntegrationTest, ContradictsEarlierReplayedSpecRefutes) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_good = replayer.descend(*opened, good_child);
     ASSERT_TRUE(at_good.has_value());
@@ -230,7 +236,7 @@ TEST_F(PudReplayerIntegrationTest, ManySpecsReplay) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -269,7 +275,7 @@ TEST_F(PudReplayerIntegrationTest, ForkedDescentsFromSharedPrefixStayIndependent
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, query, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, query, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_bob = replayer.descend(*opened, bob_child);
     std::optional<pud_replay> at_x = replayer.descend(*opened, x_child);
@@ -299,7 +305,7 @@ TEST_F(PudReplayerIntegrationTest, CallerVarThroughHeadBindingSeesCalleeFunctor)
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, query, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, query, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -321,7 +327,7 @@ TEST_F(PudReplayerIntegrationTest, VarSpecEquatesCalleeVarsAtTheFrameOffset) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -365,7 +371,7 @@ TEST_F(PudReplayerIntegrationTest, SpecValueVarsAreLiftedToTheFrameOffset) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -404,7 +410,7 @@ TEST_F(PudReplayerIntegrationTest, SiblingStillDescendsAfterARefutedChild) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 1, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 1, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     ASSERT_FALSE(replayer.descend(*opened, bad_child).has_value());
     std::optional<pud_replay> at_good = replayer.descend(*opened, good_child);
@@ -426,7 +432,7 @@ TEST_F(PudReplayerIntegrationTest, NodeWithNoSpecsKeepsTheBindings) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 4, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, functor("a", {}), 4, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -462,7 +468,7 @@ TEST_F(PudReplayerIntegrationTest, ThreeLevelReplayAccumulates) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> at = replayer.enter({}, head, frame_offset, last_root);
+    std::optional<pud_replay> at = replayer.enter({}, head, frame_offset, last_root, 0);
     for (pud_global_node_id level_node : {first, second, third}) {
         ASSERT_TRUE(at.has_value()) << "node " << level_node.node;
         at = replayer.descend(*at, level_node);
@@ -511,7 +517,7 @@ TEST_F(PudReplayerIntegrationTest, RefutationDeepInTheChainLeavesEarlierLevelsUs
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, frame_offset, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_two = replayer.descend(*opened, first);
     ASSERT_TRUE(at_two.has_value());
@@ -548,7 +554,7 @@ TEST_F(PudReplayerIntegrationTest, AgreesWithTheBindingDescentAtFrameZero) {
         .var_count = 0,
     });
     const pud_ubs_state binding = binder.bind(binder.bind(pud_ubs_state{}, first), second);
-    std::optional<pud_replay> replay = replayer.enter({}, head, 0u, last_root);
+    std::optional<pud_replay> replay = replayer.enter({}, head, 0u, last_root, 0);
     ASSERT_TRUE(replay.has_value());
     replay = replayer.descend(*replay, first);
     ASSERT_TRUE(replay.has_value());
@@ -577,7 +583,7 @@ TEST_F(PudReplayerIntegrationTest, ParentUnchangedByChild) {
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, 2u, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, 2u, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());
@@ -593,7 +599,7 @@ TEST_F(PudReplayerIntegrationTest, OpenedReplayIsAtTheRoot) {
     opened_modules.emplace_back(module, std::vector<pud_module_id>{}, std::vector<rule>{rule(head, {}, 0)});
     modules.register_module(opened_modules.back());
     last_root = modules.list_axioms(module).front();
-    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     EXPECT_EQ(opened->node, last_root);
 }
@@ -618,7 +624,7 @@ TEST_F(PudReplayerIntegrationTest, DescendedReplayIsAtTheChildAndTheParentStays)
         .body_goals = {},
         .var_count = 0,
     });
-    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root);
+    std::optional<pud_replay> opened = replayer.enter({}, head, 0u, last_root, 0);
     ASSERT_TRUE(opened.has_value());
     std::optional<pud_replay> at_child = replayer.descend(*opened, child);
     ASSERT_TRUE(at_child.has_value());

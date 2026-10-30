@@ -1,6 +1,6 @@
 #include "infrastructure/pud_lodestar_manifest.hpp"
 
-#include "value_objects/framed_functor.hpp"
+#include "value_objects/moduled_functor.hpp"
 #include "value_objects/rule.hpp"
 #include "value_objects/ubs_class.hpp"
 
@@ -10,12 +10,19 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold,
     size_t max_node_depth)
-    : globalizer_()
-    , cycle_detector_factory_(globalizer_, expr_pool)
-    , unifier_factory_(globalizer_, expr_pool)
-    , exporter_factory_(globalizer_, expr_pool, expr_pool)
+    : symbol_table_()
+    , link_table_()
+    , functor_demoduler_(demoduler_, link_table_, link_table_, expr_pool)
+    , demoduler_(functor_demoduler_, expr_pool)
+    , functor_linker_(symbol_table_, link_table_)
+    , globalizer_()
+    , cycle_detector_factory_(globalizer_, functor_demoduler_)
+    , unifier_factory_(globalizer_, expr_pool, demoduler_)
     , bind_map_factory_()
     , modules_()
+    , exporter_factory_(
+          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, link_table_, symbol_table_,
+          symbol_table_, modules_, link_table_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()
@@ -63,6 +70,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , stopped_(false) {}
 
 void pud_lodestar_manifest::register_module(pud_module& module) {
+    functor_linker_.link(module);
     modules_.register_module(module);
     if (module.get_module_id() == focus_axiom_.module)
         seed_focus_tree();
@@ -125,26 +133,27 @@ std::optional<pud_global_node_id> pud_lodestar_manifest::unreported_answer() con
 }
 
 const expr* pud_lodestar_manifest::normalize_with_bindings(
-    const ubs_bind_map& bind_map, const expr* skeleton) const {
+    const ubs_bind_map& bind_map, const expr* skeleton, pud_module_id module) const {
     if (const expr::var* variable = std::get_if<expr::var>(&skeleton->content)) {
         const ubs_class variable_class = bind_map.find(variable->index);
         if (!variable_class.value.has_value())
             return exprs_.make_var(variable_class.rep);
-        const expr::functor& functor = *variable_class.value->functor;
-        const expr* parent = exprs_.make_functor(functor.id, functor.args);
-        return normalize_with_bindings(bind_map, parent);
+        const expr bound_term{expr::functor{*variable_class.value->functor}};
+        return normalize_with_bindings(bind_map, &bound_term, variable_class.value->module);
     }
     const expr::functor& term = std::get<expr::functor>(skeleton->content);
+    const uint32_t global_functor_id = link_table_.get_global_functor_id_from_local_functor_id(module, term.id);
     std::vector<const expr*> args;
     for (const expr* arg : term.args)
-        args.push_back(normalize_with_bindings(bind_map, arg));
-    return exprs_.make_functor(term.id, args);
+        args.push_back(normalize_with_bindings(bind_map, arg, module));
+    return exprs_.make_functor(global_functor_id, args);
 }
 
 const expr* pud_lodestar_manifest::normalized_head(pud_global_node_id leaf) const {
-    const rule& axiom = modules_.get_axiom(node_axioms_.get(leaf));
+    const pud_global_node_id axiom = node_axioms_.get(leaf);
+    const rule& axiom_rule = modules_.get_axiom(axiom);
     const ubs_bind_map bindings{active_states_.get(leaf).bindings};
-    return normalize_with_bindings(bindings, axiom.head);
+    return normalize_with_bindings(bindings, axiom_rule.head, axiom.module);
 }
 
 size_t pud_lodestar_manifest::depth_of(pud_global_node_id leaf) const {

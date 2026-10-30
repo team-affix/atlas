@@ -49,7 +49,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolGroundAtomsUnifyWithoutBindM
     EXPECT_NE(left, right);
     pud_ubs_state before = std::move(stack.bind_map).persist();
     stack.bind_map = ubs_bind_map{before};
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     pud_ubs_state after_snap = std::move(stack.bind_map).persist();
     stack.bind_map = ubs_bind_map{after_snap};
     EXPECT_TRUE(before == after_snap);
@@ -59,7 +59,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolVarsMergeByGlobalIndexNotPoi
     const expr* left = pool_a.var(0);
     const expr* right = pool_b.var(1);
     EXPECT_NE(left, right);
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     const expr* rep = stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u});
     EXPECT_TRUE(same_structure(rep, stack.normalizer.normalize(framed_expr{stack.pool.make_var(1u), 0u})));
     EXPECT_TRUE(same_structure(rep, canonical.var(0)));
@@ -75,7 +75,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolDeepMirrorBindsAllLocals) {
         pool_b.var(3),
     });
     EXPECT_NE(left, right);
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     EXPECT_TRUE(same_structure(
         stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u}), canonical.var(0)));
     EXPECT_TRUE(same_structure(
@@ -90,7 +90,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, VarWithForeignFunctorStoresNormalized
     const expr* foreign_head = foreign_a.make_functor(functors.id("h"), {pool_a.var(0), pool_a.atom("a")});
     const expr* foreign_var = pool_b.var(4);
     EXPECT_NE(foreign_var, pool_a.var(4));
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{foreign_var, 0}, framed_expr{foreign_head, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{foreign_var, 0, 0}, moduled_expr{foreign_head, 0, 0}));
     const expr* bound = stack.normalizer.normalize(framed_expr{stack.pool.make_var(4u), 0u});
     EXPECT_NE(bound, foreign_head);
     const expr* expected = stack.pool.make_functor(functors.id("h"), {canonical.var(0), canonical.atom("a")});
@@ -102,7 +102,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, ForeignFunctorLeftVarRightSameNormali
     const expr* foreign_var = pool_a.var(2);
     const expr* stack_head = stack.pool.make_functor(functors.id("p"), {canonical.var(0), canonical.atom("b")});
     const expr* foreign_head = foreign_b.make_functor(functors.id("p"), {pool_b.var(0), pool_b.atom("b")});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{foreign_head, 0}, framed_expr{foreign_var, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{foreign_head, 0, 0}, moduled_expr{foreign_var, 0, 0}));
     const expr* bound = stack.normalizer.normalize(framed_expr{stack.pool.make_var(2u), 0u});
     EXPECT_NE(bound, foreign_head);
     EXPECT_TRUE(same_structure(bound, stack_head));
@@ -110,10 +110,10 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, ForeignFunctorLeftVarRightSameNormali
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, SecondUnifyReusesBindingAcrossForeignSkeletons) {
     const expr* foreign_var = pool_a.var(1);
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{foreign_var, 0}, framed_expr{pool_b.atom("k"), 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{foreign_var, 0, 0}, moduled_expr{pool_b.atom("k"), 0, 0}));
     const expr* probe = foreign_b.make_functor(functors.id("wrap"), {pool_b.var(1)});
     const expr* target = foreign_a.make_functor(functors.id("wrap"), {pool_a.atom("k")});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{probe, 0}, framed_expr{target, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{probe, 0, 0}, moduled_expr{target, 0, 0}));
     EXPECT_TRUE(same_structure(
         stack.normalizer.normalize(framed_expr{stack.pool.make_var(1u), 0u}), canonical.atom("k")));
 }
@@ -132,8 +132,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolSwapSidesSameStructuralResul
     const expr* rev_left = foreign_b.make_functor(functors.id("q"), {rev_b.atom("t"), rev_b.var(1)});
     const expr* rev_right = reverse.pool.make_functor(functors.id("q"), {rev_a.var(0), rev_a.atom("t")});
 
-    EXPECT_TRUE(forward.unifier.unify(framed_expr{fwd_left, 0}, framed_expr{fwd_right, 0}));
-    EXPECT_TRUE(reverse.unifier.unify(framed_expr{rev_left, 0}, framed_expr{rev_right, 0}));
+    EXPECT_TRUE(forward.unifier.unify(moduled_expr{fwd_left, 0, 0}, moduled_expr{fwd_right, 0, 0}));
+    EXPECT_TRUE(reverse.unifier.unify(moduled_expr{rev_left, 0, 0}, moduled_expr{rev_right, 0, 0}));
 
     for (uint32_t global_var = 0; global_var < 4u; ++global_var) {
         const expr* forward_value = forward.normalizer.normalize(
@@ -147,7 +147,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolSwapSidesSameStructuralResul
 TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolFrameOffsetsUseGlobalsNotPoolIdentity) {
     const expr* left = foreign_a.make_functor(functors.id("f"), {pool_a.var(0)});
     const expr* right = foreign_b.make_functor(functors.id("f"), {pool_b.var(0)});
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 10}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 10, 0}));
     const uint32_t global_zero = stack.globalize.globalize(0, 0);
     const uint32_t global_ten = stack.globalize.globalize(10, 0);
     EXPECT_TRUE(same_structure(
@@ -161,7 +161,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, MergedClassForeignMembersSkipRedundan
     stack.bind_map = ubs_bind_map{before};
     const expr* left = pool_a.var(2);
     const expr* right = pool_b.var(5);
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     pud_ubs_state after_snap = std::move(stack.bind_map).persist();
     stack.bind_map = ubs_bind_map{after_snap};
     EXPECT_TRUE(before == after_snap);
@@ -172,7 +172,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolMismatchBindsFirstArgThenFai
     const expr* right = foreign_b.make_functor(functors.id("pair"), {pool_b.atom("b"), pool_b.var(0)});
     pud_ubs_state before = std::move(stack.bind_map).persist();
     stack.bind_map = ubs_bind_map{before};
-    EXPECT_FALSE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_FALSE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     EXPECT_TRUE(same_structure(
         stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u}), canonical.atom("b")));
     EXPECT_FALSE(same_structure(stack.normalizer.normalize(framed_expr{stack.pool.make_var(0u), 0u}), canonical.atom("a")));
@@ -184,7 +184,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, CrossPoolMismatchBindsFirstArgThenFai
 TEST_F(PudUnifierCrossPoolIntegrationTest, OccursFailureWithForeignCyclicRhs) {
     const expr* foreign_loop = foreign_a.make_functor(functors.id("loop"), {pool_a.var(0)});
     const expr* foreign_var = pool_b.var(0);
-    EXPECT_FALSE(stack.unifier.unify(framed_expr{foreign_var, 0}, framed_expr{foreign_loop, 0}));
+    EXPECT_FALSE(stack.unifier.unify(moduled_expr{foreign_var, 0, 0}, moduled_expr{foreign_loop, 0, 0}));
 }
 
 TEST_F(PudUnifierCrossPoolIntegrationTest, WideCrossPoolArityFiftySucceedsStructurally) {
@@ -197,7 +197,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, WideCrossPoolArityFiftySucceedsStruct
     }
     const expr* left = foreign_a.make_functor(pid, left_args);
     const expr* right = foreign_b.make_functor(pid, right_args);
-    EXPECT_TRUE(stack.unifier.unify(framed_expr{left, 0}, framed_expr{right, 0}));
+    EXPECT_TRUE(stack.unifier.unify(moduled_expr{left, 0, 0}, moduled_expr{right, 0, 0}));
     for (uint32_t global_var = 0; global_var < 4u; ++global_var)
         EXPECT_TRUE(same_structure(
             stack.normalizer.normalize(framed_expr{stack.pool.make_var(global_var), 0u}),
@@ -241,7 +241,7 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, RandomMirroredCrossPoolMatchesSingleP
             right_term = right_pool.make_functor(nest_id, {right_term, right_builder.var(slot)});
         }
         EXPECT_NE(left_term, right_term);
-        const bool cross_ok = cross_stack.unifier.unify(framed_expr{left_term, 0}, framed_expr{right_term, 0}).has_value();
+        const bool cross_ok = cross_stack.unifier.unify(moduled_expr{left_term, 0, 0}, moduled_expr{right_term, 0, 0}).has_value();
         EXPECT_EQ(reference_ok, cross_ok);
 
         if (!reference_ok)
@@ -273,8 +273,8 @@ TEST_F(PudUnifierCrossPoolIntegrationTest, IndependentStacksWithCrossPoolInputsS
     const expr* two_right = stack_two.pool.make_functor(
         functors.id("m"), {stack_two.pool.make_var(1u), stack_two.pool.make_functor(functors.id("a"), {})});
 
-    EXPECT_TRUE(stack_one.unifier.unify(framed_expr{one_left, 0}, framed_expr{one_right, 0}));
-    EXPECT_TRUE(stack_two.unifier.unify(framed_expr{two_left, 0}, framed_expr{two_right, 0}));
+    EXPECT_TRUE(stack_one.unifier.unify(moduled_expr{one_left, 0, 0}, moduled_expr{one_right, 0, 0}));
+    EXPECT_TRUE(stack_two.unifier.unify(moduled_expr{two_left, 0, 0}, moduled_expr{two_right, 0, 0}));
 
     for (uint32_t global_var = 0; global_var < 4u; ++global_var) {
         EXPECT_TRUE(same_structure(

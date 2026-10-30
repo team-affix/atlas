@@ -33,7 +33,7 @@ struct MockStoreActiveState {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_active_state));
 };
 struct MockWatchRoot {
-    MOCK_METHOD(pud_structure_watch, watch_root, (const pud_ubs_state&, const pud_goal_list&));
+    MOCK_METHOD(pud_structure_watch, watch_root, (const pud_ubs_state&, const pud_goal_list&, pud_module_id));
 };
 struct MockOpenQuery {
     MOCK_METHOD(std::optional<pud_mhq_head_id>, try_open, (pud_module_id, const pud_ubs_state&, const expr*, uint32_t));
@@ -70,7 +70,7 @@ struct PudRootActivatorTest : public ::testing::Test {
         root_watch.goal_to_reps = root_watch.goal_to_reps.set(0, {});
         ON_CALL(axioms, get_axiom(pud_test_node(2))).WillByDefault(ReturnRef(axiom));
         ON_CALL(open_goals, open_goals(axiom.body)).WillByDefault(Return(root_goals));
-        ON_CALL(watcher, watch_root(_, _)).WillByDefault(Return(root_watch));
+        ON_CALL(watcher, watch_root(_, _, _)).WillByDefault(Return(root_watch));
         ON_CALL(queries, try_open(k_test_module, pud_ubs_state{}, &goal_a, 3)).WillByDefault(Return(50));
         ON_CALL(queries, try_open(k_test_module, pud_ubs_state{}, &goal_b, 3)).WillByDefault(Return(51));
     }
@@ -98,7 +98,7 @@ TEST_F(PudRootActivatorTest, EachGoalsQueryIsOpenedInTheAxiomsModuleFromEmptyBin
 }
 
 TEST_F(PudRootActivatorTest, TheWatchCoversTheAxiomsGoals) {
-    EXPECT_CALL(watcher, watch_root(pud_ubs_state{}, root_goals));
+    EXPECT_CALL(watcher, watch_root(pud_ubs_state{}, root_goals, _));
     activator.activate_root(pud_test_node(2));
 }
 

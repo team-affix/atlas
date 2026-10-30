@@ -9,7 +9,12 @@
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_child_activator.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
+#include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
+#include "infrastructure/pud_functor_demoduler.hpp"
+#include "infrastructure/pud_functor_linker.hpp"
+#include "infrastructure/pud_link_table.hpp"
+#include "infrastructure/pud_symbol_table.hpp"
 #include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
@@ -36,10 +41,20 @@
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
     using bind_map_factory_t = pud_bind_map_factory;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, IExprPool>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, IExprPool>;
-    using exporter_factory_t = pud_exporter_factory<globalizer, IExprPool, IExprPool>;
     using modules_t = pud_modules<IModule>;
+    struct demoduler_t;
+    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, IExprPool> {
+        using pud_functor_demoduler<demoduler_t, pud_link_table, pud_link_table, IExprPool>::pud_functor_demoduler;
+    };
+    struct demoduler_t : pud_demoduler<functor_demoduler_t, IExprPool> {
+        using pud_demoduler<functor_demoduler_t, IExprPool>::pud_demoduler;
+    };
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, functor_demoduler_t>;
+    using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, IExprPool, demoduler_t, functor_demoduler_t>;
+    using exporter_factory_t = pud_exporter_factory<
+        globalizer, IExprPool, IExprPool, pud_link_table, pud_link_table, pud_link_table, pud_link_table,
+        pud_symbol_table, pud_symbol_table, modules_t, pud_link_table>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
     using refutation_propagator_t = pud_refutation_propagator<modules_t, pud_node_live_child_counts, modules_t>;
@@ -75,12 +90,17 @@ struct pud_manifest {
 
     pud_manifest(IExprPool& expr_pool);
 
+    pud_symbol_table           symbol_table_;
+    pud_link_table             link_table_;
+    functor_demoduler_t        functor_demoduler_;
+    demoduler_t                demoduler_;
+    functor_linker_t           functor_linker_;
     globalizer                 globalizer_;
     cycle_detector_factory_t   cycle_detector_factory_;
     unifier_factory_t          unifier_factory_;
-    exporter_factory_t         exporter_factory_;
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
+    exporter_factory_t         exporter_factory_;
     pud_node_goals             node_goals_;
     pud_node_axioms            node_axioms_;
     pud_goal_resolver          goal_resolver_;
@@ -111,12 +131,19 @@ struct pud_manifest {
 
 template<typename IModule, typename IExprPool>
 pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
-    : globalizer_()
-    , cycle_detector_factory_(globalizer_, expr_pool)
-    , unifier_factory_(globalizer_, expr_pool)
-    , exporter_factory_(globalizer_, expr_pool, expr_pool)
+    : symbol_table_()
+    , link_table_()
+    , functor_demoduler_(demoduler_, link_table_, link_table_, expr_pool)
+    , demoduler_(functor_demoduler_, expr_pool)
+    , functor_linker_(symbol_table_, link_table_)
+    , globalizer_()
+    , cycle_detector_factory_(globalizer_, functor_demoduler_)
+    , unifier_factory_(globalizer_, expr_pool, demoduler_)
     , bind_map_factory_()
     , modules_()
+    , exporter_factory_(
+          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, link_table_, symbol_table_,
+          symbol_table_, modules_, link_table_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()

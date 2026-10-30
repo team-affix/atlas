@@ -7,10 +7,10 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/framed_expr_hash.hpp"
-#include "value_objects/framed_functor.hpp"
+#include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-template<typename IGlobalize, typename IFind, typename IMakeFunctor>
+template<typename IGlobalize, typename IFind, typename IDemoduleFunctor>
 struct pud_cycle_detector {
     struct visitation {
         visitation();
@@ -22,7 +22,7 @@ struct pud_cycle_detector {
         friend struct pud_cycle_detector;
     };
 
-    pud_cycle_detector(IGlobalize& globalize, IFind& find, IMakeFunctor& make_functor);
+    pud_cycle_detector(IGlobalize& globalize, IFind& find, IDemoduleFunctor& demodule_functor);
     bool find_cycle_from_class(uint32_t instantiated_class_root, visitation& visitation);
 private:
     struct frame {
@@ -35,22 +35,22 @@ private:
 
     IGlobalize& globalize_;
     IFind& find_;
-    IMakeFunctor& make_functor_;
+    IDemoduleFunctor& demodule_functor_;
 };
 
-template<typename IG, typename IF, typename IMF>
-pud_cycle_detector<IG, IF, IMF>::visitation::visitation()
+template<typename IG, typename IF, typename IDF>
+pud_cycle_detector<IG, IF, IDF>::visitation::visitation()
     : class_marks_()
     , term_marks_() {}
 
-template<typename IG, typename IF, typename IMF>
-pud_cycle_detector<IG, IF, IMF>::pud_cycle_detector(IG& globalize, IF& find, IMF& make_functor)
+template<typename IG, typename IF, typename IDF>
+pud_cycle_detector<IG, IF, IDF>::pud_cycle_detector(IG& globalize, IF& find, IDF& demodule_functor)
     : globalize_(globalize)
     , find_(find)
-    , make_functor_(make_functor) {}
+    , demodule_functor_(demodule_functor) {}
 
-template<typename IG, typename IF, typename IMF>
-bool pud_cycle_detector<IG, IF, IMF>::find_cycle_from_class(
+template<typename IG, typename IF, typename IDF>
+bool pud_cycle_detector<IG, IF, IDF>::find_cycle_from_class(
     uint32_t instantiated_class_root, visitation& visitation) {
     std::vector<frame> path;
     if (enter_class(find_.find(instantiated_class_root), visitation, path))
@@ -70,8 +70,8 @@ bool pud_cycle_detector<IG, IF, IMF>::find_cycle_from_class(
     return false;
 }
 
-template<typename IG, typename IF, typename IMF>
-bool pud_cycle_detector<IG, IF, IMF>::enter_term(
+template<typename IG, typename IF, typename IDF>
+bool pud_cycle_detector<IG, IF, IDF>::enter_term(
     framed_expr term, visitation& visitation, std::vector<frame>& path) {
     if (const expr::var* var = std::get_if<expr::var>(&term.skeleton->content))
         return enter_class(
@@ -89,16 +89,17 @@ bool pud_cycle_detector<IG, IF, IMF>::enter_term(
     return false;
 }
 
-template<typename IG, typename IF, typename IMF>
-bool pud_cycle_detector<IG, IF, IMF>::enter_class(
+template<typename IG, typename IF, typename IDF>
+bool pud_cycle_detector<IG, IF, IDF>::enter_class(
     const ubs_class& entered, visitation& visitation, std::vector<frame>& path) {
     const auto [mark, unseen] = visitation.class_marks_.try_emplace(entered.root, false);
     if (!unseen)
         return !mark->second;
     frame class_frame{&mark->second, {}};
     if (entered.value.has_value()) {
-        const expr::functor& f = *entered.value->functor;
-        const expr* reconstructed = make_functor_.make_functor(f.id, f.args);
+        const expr::functor& functor = *entered.value->functor;
+        const expr* reconstructed = demodule_functor_.demodule(
+            moduled_functor{&functor, entered.value->frame_offset, entered.value->module});
         class_frame.pending.push_back(framed_expr{reconstructed, entered.value->frame_offset});
     }
     path.push_back(std::move(class_frame));

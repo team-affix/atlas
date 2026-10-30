@@ -22,6 +22,7 @@ struct pud_modules {
     void mark_refuted(pud_global_node_id node);
     const rule& get_axiom(pud_global_node_id axiom) const;
     const pud_inference& get_inference(pud_global_node_id inference) const;
+    IModule& get_module(pud_module_id module) const;
     std::optional<pud_global_node_id> get_parent(pud_global_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_global_node_id node) const;
     bool check_leaf(pud_global_node_id node) const;
@@ -94,6 +95,11 @@ const rule& pud_modules<IModule>::get_axiom(pud_global_node_id axiom) const {
 template<typename IModule>
 const pud_inference& pud_modules<IModule>::get_inference(pud_global_node_id inference) const {
     return modules_.at(inference.module).data->get_inference(inference.node);
+}
+
+template<typename IModule>
+IModule& pud_modules<IModule>::get_module(pud_module_id module) const {
+    return *modules_.at(module).data;
 }
 
 template<typename IModule>
