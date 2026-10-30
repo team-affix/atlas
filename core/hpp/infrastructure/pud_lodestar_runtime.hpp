@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_lodestar_manifest.hpp"
 #include "infrastructure/pud_module.hpp"
@@ -20,6 +21,7 @@ struct pud_lodestar_runtime {
     bool next();
     const expr* solution() const;
     size_t solution_depth() const;
+    const std::string& functor_name(uint32_t global_functor_id) const;
 private:
     pud_lodestar_manifest manifest_;
 };

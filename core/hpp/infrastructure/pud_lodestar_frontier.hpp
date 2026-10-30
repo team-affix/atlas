@@ -10,6 +10,7 @@ struct pud_lodestar_frontier {
     void apply_register(const pud_frontier_change& change);
     void apply_unfold(pud_global_node_id parent, const pud_frontier_change& change);
     void erase_refuted(const std::vector<pud_global_node_id>& refuted);
+    void erase(pud_global_node_id node);
     const std::set<pud_global_node_id>& live() const;
 private:
     std::set<pud_global_node_id> live_;

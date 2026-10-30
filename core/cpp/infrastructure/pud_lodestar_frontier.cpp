@@ -19,6 +19,10 @@ void pud_lodestar_frontier::erase_refuted(const std::vector<pud_global_node_id>&
         live_.erase(node);
 }
 
+void pud_lodestar_frontier::erase(pud_global_node_id node) {
+    live_.erase(node);
+}
+
 const std::set<pud_global_node_id>& pud_lodestar_frontier::live() const {
     return live_;
 }

@@ -12,19 +12,19 @@ lodestar_command_handler::lodestar_command_handler(
     size_t sim_progress_interval)
     : loaded_(module_paths)
     , focus_(pud_focus{}.parse(focus_text))
-    , print_var_()
-    , print_functor_()
-    , printer_(std::cout, print_var_, print_functor_)
-    , clock_()
-    , solve_timer_(clock_)
-    , progress_(solve_timer_)
-    , solve_loop_(progress_, progress_, progress_, solve_timer_, solve_timer_, sim_progress_interval)
     , runtime_(
           loaded_.exprs(),
           focus_,
           max_unfolds,
           non_conjecture_unfolds_per_conjecture_unfold,
-          max_node_depth) {
+          max_node_depth)
+    , print_var_()
+    , print_functor_(runtime_)
+    , printer_(std::cout, print_var_, print_functor_)
+    , clock_()
+    , solve_timer_(clock_)
+    , progress_(solve_timer_)
+    , solve_loop_(progress_, progress_, progress_, solve_timer_, solve_timer_, sim_progress_interval) {
     require_focus_node();
     for (pud_module& module : loaded_.modules())
         runtime_.register_module(module);

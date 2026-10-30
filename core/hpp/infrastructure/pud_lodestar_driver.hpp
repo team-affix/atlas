@@ -68,7 +68,7 @@ pud_lodestar_driver<IManifest>::pud_lodestar_driver(
 
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::on_focus(pud_global_node_id node) const {
-    return manifest_.on_focus(node);
+    return manifest_.focus_set_.contains(node);
 }
 
 template<typename IManifest>
@@ -140,7 +140,7 @@ void pud_lodestar_driver<IManifest>::push_witness_slot(
         .eligible = false,
     };
     const std::optional<pud_body_goal_id> ready = smallest_ready_goal(leaf);
-    if (ready.has_value() && manifest_.within_depth(leaf) && manifest_.open_goals_within_bound(leaf)) {
+    if (ready.has_value() && manifest_.unfold_allower_.allow(leaf)) {
         choice.body_goal = ready.value();
         choice.eligible = true;
     }
@@ -211,7 +211,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             },
             .leaf = query.node,
             .body_goal = query.goal,
-            .eligible = manifest_.within_depth(query.node) && manifest_.open_goals_within_bound(query.node),
+            .eligible = manifest_.unfold_allower_.allow(query.node),
         });
     }
     std::sort(ring.begin(), ring.end(), [](const pud_lodestar_choice& left, const pud_lodestar_choice& right) {
@@ -222,14 +222,14 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
 
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
-    if (!manifest_.within_depth(choice.leaf) || !manifest_.open_goals_within_bound(choice.leaf)) {
+    if (!manifest_.unfold_allower_.allow(choice.leaf)) {
         last_refuted_ = 0;
         last_unfold_on_focus_ = false;
         return false;
     }
     const pud_frontier_change change = manifest_.unfolder_.unfold(choice.leaf, choice.body_goal);
     frontier_.apply_unfold(choice.leaf, change);
-    manifest_.note_offspring(choice.leaf, change.offspring);
+    manifest_.focus_extender_.extend(choice.leaf, change.offspring);
     last_refuted_ = change.refuted.size();
     last_unfold_on_focus_ = on_focus(choice.leaf);
     if (last_unfold_on_focus_)
@@ -255,9 +255,7 @@ bool pud_lodestar_driver<IManifest>::propagate_unit() {
                 continue;
             if (manifest_.modules_.check_refuted(leaf))
                 continue;
-            if (!manifest_.within_depth(leaf))
-                continue;
-            if (!manifest_.open_goals_within_bound(leaf))
+            if (!manifest_.unfold_allower_.allow(leaf))
                 continue;
             ready.push_back(leaf);
         }
