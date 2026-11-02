@@ -54,9 +54,10 @@ cli/entry/main.cpp            CLI11 subcommand → options struct → handler(..
   `solution()` / bindings after each one.
 - When you add a solver, add a new manifest + runtime + command handler + `main.cpp` subcommand
   instead of changing an existing one. Duplicate wiring across manifests if needed.
-- Solver policy types (e.g. `pud_lodestar_driver<IManifest>`) may take the whole manifest and read
-  its members directly. This is a deliberate, localized exception to the one-capability-per-parameter rule
-  (decision 3 in `docs/pud-solver-architecture.md`).
+- Solver policy types take capabilities like everything else. `docs/pud-solver-architecture.md`
+  (decision 3) still allows a heuristic to read its own manifest's internals, but Lodestar no longer needs to:
+  its driver is a small orchestrator over injected parts (query lister, ring builder, round-robins,
+  unit propagator, unfold applier).
 
 ### Sim-based engine (`docs/solving-loop.md`, `docs/lifecycle.md`)
 
@@ -73,8 +74,12 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
   plus `pud_query_holders`. This plane is rebuilt by activation on load and never persisted.
 - **Search stack per query head:** `pud_mhq` → `pud_mhcs` → `pud_mhws` → `pud_replayer`, which walks stored inferences.
 - `unfold(leaf, body_goal)` materializes a child via resolver/acceptor, moves activity to the
-  children and retires the parent. Lodestar's driver decides which unfolds to make.
-- `pud_runtime` / `pud_manifest` are the manual test harness (planned rename to `pud_manual_*`).
+  children (`pud_activity_mover`) and retires the parent. Lodestar's driver decides which unfolds to make.
+- A live leaf holds a query for every goal: a failed open or fork refutes the node. Code asserts this
+  (`DEBUG_ASSERT`) rather than guarding the impossible case.
+- `pud_runtime` / `pud_manifest` are the manual harness tests drive; they live in `core/test/`.
+- Lodestar sessions end with a `pud_lodestar_stop_reason`: `refuted`, `exhausted` (node limits block every
+  unfold), or `budget_spent` (`--max-unfolds` counts every unfold). See `docs/pud-solver-architecture.md`.
 
 ## Build & test
 
@@ -140,7 +145,8 @@ no overloads, no default args, no default member initializers. Paired operations
 - Only `pud_module` is persisted, and it holds no solver-specific fields. Live frontier and solver state are rebuilt on load.
 - **Do not grow `pud_runtime` for a solver.** Each solver gets its own `pud_<name>_manifest`.
   Duplicating kernel wiring across manifests is acceptable. Heuristics may read their own manifest's internals.
-- When a solver needs variant behavior, add `pud_<solver>_*` forwarding types rather than editing shared `pud_*` kernel types.
+- When a solver needs variant behavior, prefer `pud_<solver>_*` forwarding types. A small read-only query on a
+  kernel type is fine when re-deriving the answer outside it would be wrong (e.g. `pud_mhws::find_witness`).
 - A recent direction: break big manifests into small single-purpose infra types (`*_taker`, `*_finder`,
   `*_store`, `*_seeder`, `*_stepper`), each with its own unit test.
 

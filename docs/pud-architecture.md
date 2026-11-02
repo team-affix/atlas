@@ -34,7 +34,7 @@ flowchart LR
   unfold --> stored
 ```
 
-**Stored:** `pud_modules` registers `pud_module` instances. Each node has body goals (`pud_node_goals`), optional axiom head (`pud_node_axioms`), and inferences appended when unfold succeeds. Nodes are never deleted; refutation is a flag on the tree.
+**Stored:** `pud_modules` registers `pud_module` instances. Each node has its body goals and its root axiom (both `pud_node_table`s, filled on activation), and inferences are appended when unfold succeeds. Nodes are never deleted; refutation is a flag on the tree.
 
 **Live:** Only leaves (and the transient parent during an unfold step) have `pud_active_state`: a binding snapshot (`pud_ubs_state`), a structure watch, and a map from `pud_body_goal_id` to an MHQ head. `pud_query_holders` records which leaves hold which heads so admitting or refuting a query can find every dependent leaf.
 
@@ -44,7 +44,7 @@ flowchart LR
 
 ## Composition and entry
 
-Callers own `expr_pool` and module payloads. `pud_runtime` is a thin facade; `pud_manifest` is the composition root that wires every `pud_*` collaborator via template injection.
+Callers own `expr_pool` and module payloads. Each solver has its own manifest, the composition root that wires the kernel by template injection, and a runtime facade over it: Lodestar's are `pud_lodestar_manifest` and `pud_lodestar_runtime`. The diagrams below use `pud_runtime` / `pud_manifest`, the manual harness that tests drive; it lives in `core/test/`.
 
 ```mermaid
 flowchart TB
@@ -150,13 +150,15 @@ flowchart TB
 
 Small **factories** (`pud_bind_map_factory`, `pud_cycle_detector_factory`, `pud_unifier_factory`, `pud_normalizer_factory`, `pud_exporter_factory`) each expose one `make_*` so tests can mock a single capability. Accept/replay paths edit the map and record which caller classes were unbound when touched; exporter rebuilds goal expressions in the caller’s LVC with a translation map for fresh variables.
 
+Functor ids are module-local in stored terms. `pud_symbol_table` interns global functor names, and `pud_link_table` maps each module's local ids to global ids. `pud_functor_linker` fills both when a module is registered. `pud_unifier` compares head functors by their global ids, `pud_demoduler` rewrites a module-local term into global ids (used by the cycle detector and the normalizer), and `pud_functor_relinker` maps a functor into another module, appending its name and link when that module lacks it (used by the exporter).
+
 `pud_structure_watcher` (with `expr_pool` for functor shape) tracks which body goals changed under the child substitution so MHQ can fork or reopen heads without rescanning the whole goal list blindly.
 
 ---
 
 ## Where code lives
 
-Infrastructure behavior is header-first under `core/hpp/infrastructure/pud_*.hpp` (plus `pud_bind_map_factory.cpp`). Shared shapes and ids live in `core/hpp/value_objects/pud_*.hpp`. `pud_manifest.hpp` is the map of how types connect; start there, then follow the unfold chain (`unfolder` → `resolver` → `acceptor`) or the activation chain (`root_activator` / `child_activator` → `binder`, `structure_watcher`, `mhq`). Integration coverage is `core/test/integration/pud_*.cpp`; unit tests mock collaborators in `core/test/unit/infrastructure/pud_*.cpp`. `pud_term_stack.hpp` bundles real term factories for tests.
+Templated infrastructure lives in headers under `core/hpp/infrastructure/pud_*.hpp`; non-templated types have their definitions in `core/cpp/infrastructure/pud_*.cpp`. Shared shapes and ids live in `core/hpp/value_objects/pud_*.hpp`. `pud_lodestar_manifest.hpp` (or `core/test/pud_manifest.hpp` for the manual harness) is the map of how types connect; start there, then follow the unfold chain (`unfolder` → `resolver` → `acceptor`) or the activation chain (`root_activator` / `child_activator` → `binder`, `structure_watcher`, `mhq`). Integration coverage is `core/test/integration/pud_*.cpp`; unit tests mock collaborators in `core/test/unit/infrastructure/pud_*.cpp`. `pud_term_stack.hpp` bundles real term factories for tests.
 
 ---
 
