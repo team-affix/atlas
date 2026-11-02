@@ -12,7 +12,7 @@
 #include "reference_pud_frontier.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_runtime.hpp"
+#include "pud_runtime.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_inference.hpp"
@@ -56,7 +56,7 @@ struct PudModuleInsertExtractIntegrationTest : public ::testing::Test {
         EXPECT_EQ(original.count_nodes(), loaded.count_nodes());
         for (pud_node_id node = 0; node < original.count_nodes(); ++node) {
             EXPECT_EQ(original.get_children(node), loaded.get_children(node));
-            EXPECT_EQ(original.check_refuted(node), loaded.check_refuted(node));
+            EXPECT_EQ(original.is_refuted(node), loaded.is_refuted(node));
         }
         EXPECT_EQ(serialize(original), serialize(loaded));
     }

@@ -11,10 +11,18 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/moduled_expr.hpp"
+#include "value_objects/moduled_expr_hash.hpp"
 #include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle, typename IMakeFunctor, typename IDemodule>
+template<
+    typename IGlobalize,
+    typename IFind,
+    typename IEquate,
+    typename IInstantiate,
+    typename IDetectCycle,
+    typename IMakeFunctor,
+    typename IGetGlobalFunctorIdFromLocalFunctorId>
 struct pud_unifier {
     pud_unifier(
         IGlobalize& globalize,
@@ -23,7 +31,7 @@ struct pud_unifier {
         IInstantiate& instantiate,
         IDetectCycle& detect_cycle,
         IMakeFunctor& make_functor,
-        IDemodule& demodule);
+        IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id);
     std::optional<std::vector<ubs_class>> unify(moduled_expr lhs, moduled_expr rhs);
 private:
     using pair_t = std::pair<moduled_expr, moduled_expr>;
@@ -39,14 +47,14 @@ private:
     IInstantiate& instantiate_;
     IDetectCycle& detect_cycle_;
     IMakeFunctor& make_functor_;
-    IDemodule& demodule_;
+    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
 };
 
 #define PUD_UNIFIER_TEMPLATE                                                                     \
     template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate,      \
-             typename IDetectCycle, typename IMakeFunctor, typename IDemodule>
+             typename IDetectCycle, typename IMakeFunctor, typename IGetGlobalFunctorIdFromLocalFunctorId>
 #define PUD_UNIFIER                                                                                  \
-    pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle, IMakeFunctor, IDemodule>
+    pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle, IMakeFunctor, IGetGlobalFunctorIdFromLocalFunctorId>
 
 PUD_UNIFIER_TEMPLATE
 PUD_UNIFIER::pud_unifier(
@@ -56,14 +64,14 @@ PUD_UNIFIER::pud_unifier(
     IInstantiate& instantiate,
     IDetectCycle& detect_cycle,
     IMakeFunctor& make_functor,
-    IDemodule& demodule)
+    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id)
     : globalize_(globalize)
     , find_(find)
     , equate_(equate)
     , instantiate_(instantiate)
     , detect_cycle_(detect_cycle)
     , make_functor_(make_functor)
-    , demodule_(demodule) {}
+    , get_global_functor_id_(get_global_functor_id) {}
 
 PUD_UNIFIER_TEMPLATE
 std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, moduled_expr rhs) {
@@ -71,7 +79,6 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
     std::unordered_set<pair_t, pair_hash> unified_functors;
     std::vector<ubs_class> edited;
     std::vector<uint32_t> touched_class_roots;
-    typename IDetectCycle::visitation binding_cycle_visitation;
     while (!pending.empty()) {
         const auto [left, right] = pending.back();
         pending.pop_back();
@@ -115,13 +122,13 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
             continue;
         }
 
-        const expr* left_global = demodule_.demodule(left);
-        const expr* right_global = demodule_.demodule(right);
-        const expr::functor& left_global_functor = std::get<expr::functor>(left_global->content);
-        const expr::functor& right_global_functor = std::get<expr::functor>(right_global->content);
         const expr::functor& left_functor = std::get<expr::functor>(left.skeleton->content);
         const expr::functor& right_functor = std::get<expr::functor>(right.skeleton->content);
-        if (left_global_functor.id != right_global_functor.id || left_functor.args.size() != right_functor.args.size())
+        const uint32_t left_global_id =
+            get_global_functor_id_.get_global_functor_id_from_local_functor_id(left.module, left_functor.id);
+        const uint32_t right_global_id =
+            get_global_functor_id_.get_global_functor_id_from_local_functor_id(right.module, right_functor.id);
+        if (left_global_id != right_global_id || left_functor.args.size() != right_functor.args.size())
             return std::nullopt;
         if (left_functor.args.empty() || !unified_functors.insert({left, right}).second)
             continue;
@@ -130,25 +137,15 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
                 moduled_expr{left_functor.args[arg], left.frame_offset, left.module},
                 moduled_expr{right_functor.args[arg], right.frame_offset, right.module});
     }
-    for (uint32_t class_root : touched_class_roots) {
-        if (detect_cycle_.find_cycle_from_class(class_root, binding_cycle_visitation))
-            return std::nullopt;
-    }
+    if (detect_cycle_.find_cycle_from_classes(touched_class_roots))
+        return std::nullopt;
     return edited;
 }
 
 PUD_UNIFIER_TEMPLATE
 size_t PUD_UNIFIER::pair_hash::operator()(const pair_t& pair) const noexcept {
-    const size_t left_skeleton = std::hash<const expr*>{}(pair.first.skeleton);
-    const size_t left_frame = left_skeleton ^ (std::hash<uint32_t>{}(pair.first.frame_offset) + 0x9e3779b97f4a7c15ull
-        + (left_skeleton << 6) + (left_skeleton >> 2));
-    const size_t left_hash = left_frame ^ (std::hash<pud_module_id>{}(pair.first.module) + 0x9e3779b97f4a7c15ull
-        + (left_frame << 6) + (left_frame >> 2));
-    const size_t right_skeleton = std::hash<const expr*>{}(pair.second.skeleton);
-    const size_t right_frame = right_skeleton ^ (std::hash<uint32_t>{}(pair.second.frame_offset) + 0x9e3779b97f4a7c15ull
-        + (right_skeleton << 6) + (right_skeleton >> 2));
-    const size_t right_hash = right_frame ^ (std::hash<pud_module_id>{}(pair.second.module) + 0x9e3779b97f4a7c15ull
-        + (right_frame << 6) + (right_frame >> 2));
+    const size_t left_hash = moduled_expr_hash{}(pair.first);
+    const size_t right_hash = moduled_expr_hash{}(pair.second);
     return left_hash ^ (right_hash + 0x9e3779b97f4a7c15ull + (left_hash << 6) + (left_hash >> 2));
 }
 

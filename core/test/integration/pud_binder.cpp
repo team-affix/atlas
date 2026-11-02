@@ -7,7 +7,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_module_registry.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
@@ -20,7 +20,7 @@ inline const expr* expr_from_moduled_functor(expr_pool& pool, const moduled_func
 // axiom of the test's module.
 struct PudBinderIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
 
     static constexpr pud_module_id k_module = 0;
 
@@ -29,8 +29,8 @@ struct PudBinderIntegrationTest : public ::testing::Test {
     globalizer globalize;
     bind_map_factory_t bind_maps;
     pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
-    modules_t modules;
-    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
+    module_registry_t modules;
+    pud_binder<bind_map_factory_t, module_registry_t> binder{bind_maps, modules};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 

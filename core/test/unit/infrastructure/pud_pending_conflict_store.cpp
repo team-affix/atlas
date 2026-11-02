@@ -1,21 +1,17 @@
 #include <gtest/gtest.h>
 #include "infrastructure/pud_pending_conflict_store.hpp"
 
-namespace {
-
-struct PudPendingConflictStoreTest : public ::testing::Test {
-    pud_pending_conflict_store conflicts;
-};
-
+TEST(PudPendingConflictStoreTest, ANewStoreHasNothingToTake) {
+    pud_pending_conflict_store store;
+    EXPECT_FALSE(store.try_take());
 }
 
-TEST_F(PudPendingConflictStoreTest, ANewStoreHasNoPendingConflicts) {
-    EXPECT_EQ(conflicts.get(), 0u);
-}
-
-TEST_F(PudPendingConflictStoreTest, SetReplacesTheCount) {
-    conflicts.set(3);
-    EXPECT_EQ(conflicts.get(), 3u);
-    conflicts.set(0);
-    EXPECT_EQ(conflicts.get(), 0u);
+TEST(PudPendingConflictStoreTest, EachAddedConflictIsTakenOnce) {
+    pud_pending_conflict_store store;
+    store.add(2);
+    store.add(1);
+    EXPECT_TRUE(store.try_take());
+    EXPECT_TRUE(store.try_take());
+    EXPECT_TRUE(store.try_take());
+    EXPECT_FALSE(store.try_take());
 }

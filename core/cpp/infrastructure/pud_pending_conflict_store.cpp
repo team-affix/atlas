@@ -3,10 +3,13 @@
 pud_pending_conflict_store::pud_pending_conflict_store()
     : pending_conflicts_(0) {}
 
-size_t pud_pending_conflict_store::get() const {
-    return pending_conflicts_;
+void pud_pending_conflict_store::add(size_t conflicts) {
+    pending_conflicts_ += conflicts;
 }
 
-void pud_pending_conflict_store::set(size_t pending_conflicts) {
-    pending_conflicts_ = pending_conflicts;
+bool pud_pending_conflict_store::try_take() {
+    if (pending_conflicts_ == 0)
+        return false;
+    --pending_conflicts_;
+    return true;
 }

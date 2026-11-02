@@ -4,52 +4,83 @@
 #include <cstddef>
 #include <iostream>
 #include "value_objects/expr.hpp"
+#include "value_objects/pud_search_stop_reason.hpp"
 
-template<typename IRuntime,
-         typename IExprPrinter,
-         typename IOnTick,
-         typename IPrintStats,
-         typename IFinishPrintingLine,
-         typename IPauseTimer,
-         typename IResumeTimer>
+// Ticks a PUD solver session to its end, printing every solution and waiting for Enter after each.
+// The last line says how the session ended: REFUTED, EXHAUSTED, or nothing when the unfold budget
+// ran out (so a caller can run the session again with more budget).
+template<
+    typename INextTick,
+    typename IGetSolution,
+    typename IGetSolutionDepth,
+    typename IGetStopReason,
+    typename IPrintExpr,
+    typename IOnTick,
+    typename IPrintStats,
+    typename IPauseTimer,
+    typename IResumeTimer>
 struct pud_solve_loop {
     pud_solve_loop(
+        INextTick& next_tick,
+        IGetSolution& get_solution,
+        IGetSolutionDepth& get_solution_depth,
+        IGetStopReason& get_stop_reason,
+        IPrintExpr& print_expr,
         IOnTick& on_tick,
         IPrintStats& print_stats,
-        IFinishPrintingLine& finish_printing_line,
         IPauseTimer& pause_timer,
         IResumeTimer& resume_timer,
         size_t interval);
-    void run(IRuntime& runtime, IExprPrinter& printer);
+    void run();
 private:
+    INextTick& next_tick_;
+    IGetSolution& get_solution_;
+    IGetSolutionDepth& get_solution_depth_;
+    IGetStopReason& get_stop_reason_;
+    IPrintExpr& print_expr_;
     IOnTick& on_tick_;
     IPrintStats& print_stats_;
-    IFinishPrintingLine& finish_printing_line_;
     IPauseTimer& pause_timer_;
     IResumeTimer& resume_timer_;
     size_t interval_;
 };
 
-template<typename IR, typename IEP, typename IOT, typename IPS, typename IFPL, typename IPT, typename IRT>
-pud_solve_loop<IR, IEP, IOT, IPS, IFPL, IPT, IRT>::pud_solve_loop(
-    IOT& on_tick,
-    IPS& print_stats,
-    IFPL& finish_printing_line,
-    IPT& pause_timer,
-    IRT& resume_timer,
+#define PUD_SOLVE_LOOP_TEMPLATE                                                                     \
+    template<typename INextTick, typename IGetSolution, typename IGetSolutionDepth, typename IGetStopReason, \
+             typename IPrintExpr, typename IOnTick, typename IPrintStats, typename IPauseTimer,     \
+             typename IResumeTimer>
+#define PUD_SOLVE_LOOP                                                                              \
+    pud_solve_loop<INextTick, IGetSolution, IGetSolutionDepth, IGetStopReason, IPrintExpr, IOnTick, \
+        IPrintStats, IPauseTimer, IResumeTimer>
+
+PUD_SOLVE_LOOP_TEMPLATE
+PUD_SOLVE_LOOP::pud_solve_loop(
+    INextTick& next_tick,
+    IGetSolution& get_solution,
+    IGetSolutionDepth& get_solution_depth,
+    IGetStopReason& get_stop_reason,
+    IPrintExpr& print_expr,
+    IOnTick& on_tick,
+    IPrintStats& print_stats,
+    IPauseTimer& pause_timer,
+    IResumeTimer& resume_timer,
     size_t interval)
-    : on_tick_(on_tick)
+    : next_tick_(next_tick)
+    , get_solution_(get_solution)
+    , get_solution_depth_(get_solution_depth)
+    , get_stop_reason_(get_stop_reason)
+    , print_expr_(print_expr)
+    , on_tick_(on_tick)
     , print_stats_(print_stats)
-    , finish_printing_line_(finish_printing_line)
     , pause_timer_(pause_timer)
     , resume_timer_(resume_timer)
     , interval_(interval) {}
 
-template<typename IR, typename IEP, typename IOT, typename IPS, typename IFPL, typename IPT, typename IRT>
-void pud_solve_loop<IR, IEP, IOT, IPS, IFPL, IPT, IRT>::run(IR& runtime, IEP& printer) {
+PUD_SOLVE_LOOP_TEMPLATE
+void PUD_SOLVE_LOOP::run() {
     resume_timer_.resume();
     size_t total_ticks = 0;
-    while (runtime.next()) {
+    while (next_tick_.next()) {
         ++total_ticks;
         if (interval_ > 0) {
             on_tick_.on_tick();
@@ -57,25 +88,28 @@ void pud_solve_loop<IR, IEP, IOT, IPS, IFPL, IPT, IRT>::run(IR& runtime, IEP& pr
             if (boundary)
                 print_stats_.print();
         }
-        const expr* head = runtime.solution();
+        const expr* head = get_solution_.solution();
         if (head == nullptr)
             continue;
-        if (interval_ > 0)
-            finish_printing_line_.finish_line();
         std::cout << "SOLVED\n";
-        printer.print(head);
+        print_expr_.print(head);
         std::cout << '\n';
-        std::cout << "depth " << runtime.solution_depth() << '\n';
+        std::cout << "depth " << get_solution_depth_.solution_depth() << '\n';
         std::cout << "[press Enter for next solution]";
         pause_timer_.pause();
         std::cin.get();
         resume_timer_.resume();
     }
-    if (interval_ > 0 && total_ticks > 0) {
+    if (interval_ > 0 && total_ticks > 0)
         print_stats_.print();
-        finish_printing_line_.finish_line();
-    }
-    std::cout << "REFUTED\n";
+    const pud_search_stop_reason reason = get_stop_reason_.stop_reason();
+    if (reason == pud_search_stop_reason::refuted)
+        std::cout << "REFUTED\n";
+    if (reason == pud_search_stop_reason::exhausted)
+        std::cout << "EXHAUSTED\n";
 }
+
+#undef PUD_SOLVE_LOOP
+#undef PUD_SOLVE_LOOP_TEMPLATE
 
 #endif

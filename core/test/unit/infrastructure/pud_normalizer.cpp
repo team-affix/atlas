@@ -31,7 +31,7 @@ struct MockFind {
 };
 
 struct MockDemoduleFunctor {
-    MOCK_METHOD(const expr*, demodule, (moduled_functor));
+    MOCK_METHOD(const expr*, demodule_functor, (moduled_functor));
 };
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
@@ -63,7 +63,7 @@ struct PudNormalizerTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
-        ON_CALL(demodule_functor, demodule(_)).WillByDefault([this](moduled_functor bound) {
+        ON_CALL(demodule_functor, demodule_functor(_)).WillByDefault([this](moduled_functor bound) {
             return functor(bound.functor->id, bound.functor->args);
         });
     }
@@ -91,7 +91,7 @@ TEST_F(PudNormalizerTest, BoundVarNormalizesThroughItsValue) {
     const expr* canonical = functor(9, {});
     ON_CALL(find, find(1)).WillByDefault(Return(ubs_class{
         .root = 1, .size = 1, .rep = 1, .value = pud_test_moduled_functor(bound_shape, 0)}));
-    EXPECT_CALL(demodule_functor, demodule(_)).WillOnce(Return(bound_shape));
+    EXPECT_CALL(demodule_functor, demodule_functor(_)).WillOnce(Return(bound_shape));
     EXPECT_CALL(make_functor, make_functor(9u, _)).WillOnce(Return(canonical));
     EXPECT_EQ(normalizer.normalize({var(1), 0}), canonical);
 }
@@ -104,7 +104,7 @@ TEST_F(PudNormalizerTest, ABoundValueIsReadInItsOwnFrame) {
         .root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(bound_shape, 10)}));
     ON_CALL(find, find(12)).WillByDefault(Return(ubs_class{.root = 12, .size = 1, .rep = 12, .value = std::nullopt}));
     InSequence in_order;
-    EXPECT_CALL(demodule_functor, demodule(_)).WillOnce(Return(bound_shape));
+    EXPECT_CALL(demodule_functor, demodule_functor(_)).WillOnce(Return(bound_shape));
     ON_CALL(make_var, make_var(12)).WillByDefault(Return(rep));
     EXPECT_CALL(make_functor, make_functor(3u, std::vector<const expr*>{rep})).WillOnce(Return(rebuilt));
     EXPECT_EQ(normalizer.normalize({var(0), 0}), rebuilt);

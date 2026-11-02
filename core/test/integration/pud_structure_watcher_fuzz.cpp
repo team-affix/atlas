@@ -12,9 +12,9 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_goal_resolver.hpp"
-#include "infrastructure/pud_initial_goal_opener.hpp"
+#include "infrastructure/pud_module_registry.hpp"
+#include "infrastructure/pud_child_goal_list_builder.hpp"
+#include "infrastructure/pud_root_goal_list_builder.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
@@ -24,7 +24,7 @@
 // with unbound classes numbered by first occurrence, differs between parent and child.
 struct PudStructureWatcherFuzzTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
 
     struct level {
         pud_ubs_state bindings;
@@ -43,11 +43,11 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     globalizer globalize;
     bind_map_factory_t bind_maps;
     std::deque<pud_module> module_data;
-    modules_t modules;
-    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
-    pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool> watcher{bind_maps, modules, exprs};
-    pud_goal_resolver goal_resolver;
-    pud_initial_goal_opener initial_goal_opener;
+    module_registry_t modules;
+    pud_binder<bind_map_factory_t, module_registry_t> binder{bind_maps, modules};
+    pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool> watcher{bind_maps, modules, exprs};
+    pud_child_goal_list_builder child_goal_lists;
+    pud_root_goal_list_builder root_goal_lists;
     std::mt19937 rng{0};
     uint32_t checked_nodes = 0;
     uint32_t observed_changes = 0;
@@ -139,7 +139,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
 
     level make_root(pud_node_id root) {
         const std::vector<const expr*> opened_goals = random_goals({}, 1 + pick(4));
-        const pud_goal_list goals = initial_goal_opener.open_goals(opened_goals);
+        const pud_goal_list goals = root_goal_lists.build(opened_goals);
         return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals, 0), .node = root, .depth = 0};
     }
 
@@ -153,7 +153,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
         const std::vector<const expr*> added_goals = random_goals(child_bindings, pick(4));
-        const pud_goal_list goals = goal_resolver.resolve_goal(parent.goals, call_site, added_goals);
+        const pud_goal_list goals = child_goal_lists.build(parent.goals, call_site, added_goals);
 
         std::set<pud_body_goal_id> expected;
         for (const auto& [inherited_id, inherited_goal] : parent.goals.goals) {

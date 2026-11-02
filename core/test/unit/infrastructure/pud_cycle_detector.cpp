@@ -28,7 +28,7 @@ struct MockMakeFunctor {
 };
 
 struct MockDemoduleFunctor {
-    MOCK_METHOD(const expr*, demodule, (moduled_functor));
+    MOCK_METHOD(const expr*, demodule_functor, (moduled_functor));
 };
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
@@ -51,7 +51,7 @@ struct PudCycleDetectorTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(demodule_functor, demodule(_)).WillByDefault([this](moduled_functor bound) {
+        ON_CALL(demodule_functor, demodule_functor(_)).WillByDefault([this](moduled_functor bound) {
             return functor(bound.functor->id, bound.functor->args);
         });
     }
@@ -70,46 +70,33 @@ struct PudCycleDetectorTest : public ::testing::Test {
 }
 
 TEST_F(PudCycleDetectorTest, NoEntryRootsHaveNoCycle) {
-    test_cycle_detector_t::visitation visitation;
-    bool found_cycle = false;
-    for (uint32_t class_root : std::vector<uint32_t>{}) {
-        if (detector.find_cycle_from_class(class_root, visitation)) {
-            found_cycle = true;
-            break;
-        }
-    }
-    EXPECT_FALSE(found_cycle);
+    EXPECT_FALSE(detector.find_cycle_from_classes({}));
 }
 
 TEST_F(PudCycleDetectorTest, AnUnboundClassHasNoCycle) {
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_FALSE(detector.find_cycle_from_class(4, visitation));
+    EXPECT_FALSE(detector.find_cycle_from_classes({4}));
 }
 
 TEST_F(PudCycleDetectorTest, AClassBoundToATermWithoutItselfHasNoCycle) {
     ON_CALL(find, find(0)).WillByDefault(
         Return(ubs_class{
             .root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {var(1), functor(2, {})}), 0)}));
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
+    EXPECT_FALSE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, AClassBoundToATermContainingItselfIsACycle) {
     ON_CALL(find, find(0)).WillByDefault(
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {var(0)}), 0)}));
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_TRUE(detector.find_cycle_from_class(0, visitation));
+    EXPECT_TRUE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, AValueIsReadInItsOwnFrame) {
     ON_CALL(find, find(0)).WillByDefault(
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {var(0)}), 5)}));
-    test_cycle_detector_t::visitation visitation_first;
-    EXPECT_FALSE(detector.find_cycle_from_class(0, visitation_first));
+    EXPECT_FALSE(detector.find_cycle_from_classes({0}));
     ON_CALL(find, find(5)).WillByDefault(
         Return(ubs_class{.root = 5, .size = 1, .rep = 5, .value = pud_test_moduled_functor(functor(1, {var(0)}), 5)}));
-    test_cycle_detector_t::visitation visitation_second;
-    EXPECT_TRUE(detector.find_cycle_from_class(0, visitation_second));
+    EXPECT_TRUE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ACycleThroughTwoClassesIsFound) {
@@ -117,8 +104,7 @@ TEST_F(PudCycleDetectorTest, ACycleThroughTwoClassesIsFound) {
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {var(1)}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
         Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_moduled_functor(functor(2, {var(0)}), 0)}));
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_TRUE(detector.find_cycle_from_class(1, visitation));
+    EXPECT_TRUE(detector.find_cycle_from_classes({1}));
 }
 
 TEST_F(PudCycleDetectorTest, TwoRoutesToOneClassAreNoCycle) {
@@ -126,8 +112,7 @@ TEST_F(PudCycleDetectorTest, TwoRoutesToOneClassAreNoCycle) {
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {var(1), var(1)}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
         Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_moduled_functor(functor(2, {}), 0)}));
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
+    EXPECT_FALSE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
@@ -136,8 +121,7 @@ TEST_F(PudCycleDetectorTest, ASharedSubtermIsSearchedOnce) {
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {shared, shared}), 0)}));
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(1)).Times(1);
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
+    EXPECT_FALSE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, ASharedSubtermReachedFromInsideItselfIsACycle) {
@@ -146,8 +130,7 @@ TEST_F(PudCycleDetectorTest, ASharedSubtermReachedFromInsideItselfIsACycle) {
         Return(ubs_class{.root = 0, .size = 1, .rep = 0, .value = pud_test_moduled_functor(functor(1, {shared}), 0)}));
     ON_CALL(find, find(1)).WillByDefault(
         Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_moduled_functor(shared, 0)}));
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_TRUE(detector.find_cycle_from_class(0, visitation));
+    EXPECT_TRUE(detector.find_cycle_from_classes({0}));
 }
 
 TEST_F(PudCycleDetectorTest, AClassSearchedFromAnEarlierRootIsNotSearchedAgain) {
@@ -157,7 +140,5 @@ TEST_F(PudCycleDetectorTest, AClassSearchedFromAnEarlierRootIsNotSearchedAgain) 
         Return(ubs_class{.root = 1, .size = 1, .rep = 1, .value = pud_test_moduled_functor(functor(2, {var(2)}), 0)}));
     EXPECT_CALL(find, find(_)).Times(AnyNumber());
     EXPECT_CALL(find, find(2)).Times(1);
-    test_cycle_detector_t::visitation visitation;
-    EXPECT_FALSE(detector.find_cycle_from_class(0, visitation));
-    EXPECT_FALSE(detector.find_cycle_from_class(1, visitation));
+    EXPECT_FALSE(detector.find_cycle_from_classes({0, 1}));
 }

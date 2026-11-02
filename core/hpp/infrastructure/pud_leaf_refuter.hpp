@@ -8,46 +8,46 @@ template<
     typename IMarkLeafRefuted,
     typename IPropagateRefutation,
     typename IDeactivateNode,
-    typename ICheckNodeLeaf,
-    typename ICheckLeafRefuted>
+    typename IIsNodeLeaf,
+    typename IIsNodeRefuted>
 struct pud_leaf_refuter {
     pud_leaf_refuter(
         IMarkLeafRefuted& mark_leaf_refuted,
         IPropagateRefutation& propagate_refutation,
         IDeactivateNode& deactivate_node,
-        ICheckNodeLeaf& check_node_leaf,
-        ICheckLeafRefuted& check_leaf_refuted);
+        IIsNodeLeaf& is_node_leaf,
+        IIsNodeRefuted& is_node_refuted);
     std::vector<pud_global_node_id> refute(pud_global_node_id leaf);
 private:
     IMarkLeafRefuted& mark_leaf_refuted_;
     IPropagateRefutation& propagate_refutation_;
     IDeactivateNode& deactivate_node_;
-    ICheckNodeLeaf& check_node_leaf_;
-    ICheckLeafRefuted& check_leaf_refuted_;
+    IIsNodeLeaf& is_node_leaf_;
+    IIsNodeRefuted& is_node_refuted_;
 };
 
 #define PUD_LEAF_REFUTER_TEMPLATE                                                          \
     template<typename IMarkLeafRefuted, typename IPropagateRefutation, typename IDeactivateNode, \
-             typename ICheckNodeLeaf, typename ICheckLeafRefuted>
+             typename IIsNodeLeaf, typename IIsNodeRefuted>
 #define PUD_LEAF_REFUTER                                                                   \
-    pud_leaf_refuter<IMarkLeafRefuted, IPropagateRefutation, IDeactivateNode, ICheckNodeLeaf, ICheckLeafRefuted>
+    pud_leaf_refuter<IMarkLeafRefuted, IPropagateRefutation, IDeactivateNode, IIsNodeLeaf, IIsNodeRefuted>
 
 PUD_LEAF_REFUTER_TEMPLATE
 PUD_LEAF_REFUTER::pud_leaf_refuter(
     IMarkLeafRefuted& mark_leaf_refuted,
     IPropagateRefutation& propagate_refutation,
     IDeactivateNode& deactivate_node,
-    ICheckNodeLeaf& check_node_leaf,
-    ICheckLeafRefuted& check_leaf_refuted)
+    IIsNodeLeaf& is_node_leaf,
+    IIsNodeRefuted& is_node_refuted)
     : mark_leaf_refuted_(mark_leaf_refuted)
     , propagate_refutation_(propagate_refutation)
     , deactivate_node_(deactivate_node)
-    , check_node_leaf_(check_node_leaf)
-    , check_leaf_refuted_(check_leaf_refuted) {}
+    , is_node_leaf_(is_node_leaf)
+    , is_node_refuted_(is_node_refuted) {}
 
 PUD_LEAF_REFUTER_TEMPLATE
 std::vector<pud_global_node_id> PUD_LEAF_REFUTER::refute(pud_global_node_id leaf) {
-    const bool left_alone = !check_node_leaf_.check_leaf(leaf) || check_leaf_refuted_.check_refuted(leaf);
+    const bool left_alone = !is_node_leaf_.is_leaf(leaf) || is_node_refuted_.is_refuted(leaf);
     if (left_alone)
         return {};
     mark_leaf_refuted_.mark_refuted(leaf);

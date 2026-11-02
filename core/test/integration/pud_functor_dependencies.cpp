@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_demoduler.hpp"
-#include "infrastructure/pud_functor_demoduler.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
@@ -59,7 +58,7 @@ TEST_F(PudFunctorDependencyTest, TheSameLocalIdInADiamondDoesNotUnifyDifferentNa
     append_names(modules[1], {"[]", "cons", "left_c", "left_only"});
     append_names(modules[2], {"[]", "cons", "right_c", "right_only"});
     append_names(modules[3], {"[]", "cons", "query", "left_only"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -80,7 +79,7 @@ TEST_F(PudFunctorDependencyTest, TheSameNameAtDifferentLocalIdsUnifies) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{rule(query_head, {query_body}, 1)});
     append_names(modules[0], {"[]", "cons", "top_c", "nat"});
     append_names(modules[1], {"[]", "cons", "query", "spare", "nat"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -103,7 +102,7 @@ TEST_F(PudFunctorDependencyTest, AFactInTopIsVisibleThroughBothSidesOfTheDiamond
     append_names(modules[1], {"[]", "cons", "left_c", "pad", "nat"});
     append_names(modules[2], {"[]", "cons", "right_c"});
     append_names(modules[3], {"[]", "cons", "query", "nat"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -129,7 +128,7 @@ TEST_F(PudFunctorDependencyTest, AMiddleModulePermutesLocalIdsAndTheQueryStillSo
     append_names(modules[0], {"[]", "cons", "z"});
     append_names(modules[1], {"[]", "cons", "nat", "z"});
     append_names(modules[2], {"[]", "cons", "query", "nat"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 12, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 12, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -146,7 +145,7 @@ TEST_F(PudFunctorDependencyTest, ALocalIdOfZeroIsNotTheNilGlobalId) {
     modules.emplace_back(0, std::vector<pud_module_id>{1}, std::vector<rule>{rule(query_head, {query_body}, 0)});
     append_names(modules[0], {"odd_pred"});
     append_names(modules[1], {"[]", "cons", "query", "odd_pred"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 0, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 0, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -166,7 +165,7 @@ TEST_F(PudFunctorDependencyTest, ANestedForeignTermIsAdoptedOnceIntoTheAcceptor)
     modules.emplace_back(4, std::vector<pud_module_id>{2}, std::vector<rule>{rule(query_head, {query_body}, 1)});
     append_names(modules[0], {"[]", "cons", "left_c", "pair", "left_only"});
     append_names(modules[1], {"[]", "cons", "query", "left_only"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -204,7 +203,7 @@ TEST_F(PudFunctorDependencyTest, ACalleeBodyGoalIsStoredWithTheAcceptorsLocalIds
     modules.emplace_back(4, std::vector<pud_module_id>{2}, std::vector<rule>{rule(query_head, {query_body}, 1)});
     append_names(modules[0], {"[]", "cons", "left_c", "left_only", "mark"});
     append_names(modules[1], {"[]", "cons", "query", "left_only"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 4, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -232,7 +231,7 @@ TEST_F(PudFunctorDependencyTest, AnUnboundVariableInsideAForeignTermStaysAVariab
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{rule(query_head, {query_body}, 1)});
     append_names(modules[0], {"[]", "cons", "box", "holds"});
     append_names(modules[1], {"[]", "cons", "query", "holds"});
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules)
         runtime.register_module(module);
 
@@ -250,21 +249,7 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
     pud_symbol_table symbols;
     pud_link_table links;
     pud_functor_linker<pud_symbol_table, pud_link_table> linker{symbols, links};
-    struct linked_demoduler {
-        struct demoduler_t;
-        struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool> {
-            using pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool>::pud_functor_demoduler;
-        };
-        struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
-            using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
-        };
-        functor_demoduler_t functor_demoduler;
-        demoduler_t demoduler;
-        linked_demoduler(pud_link_table& links, expr_pool& exprs)
-            : functor_demoduler(demoduler, links, exprs)
-            , demoduler(functor_demoduler, exprs) {}
-    };
-    linked_demoduler linked{links, exprs};
+    pud_demoduler<pud_link_table, expr_pool, expr_pool> demoduler{links, exprs, exprs};
     const expr* shared = functor(2, {});
     std::deque<pud_module> modules;
     modules.emplace_back(1, std::vector<pud_module_id>{}, std::vector<rule>{rule(shared, {}, 0)});
@@ -274,10 +259,10 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
     linker.link(modules[0]);
     linker.link(modules[1]);
 
-    const expr* add = linked.demoduler.demodule(moduled_expr{shared, 0, 1});
-    const expr* mul = linked.demoduler.demodule(moduled_expr{shared, 0, 2});
+    const expr* add = demoduler.demodule(moduled_expr{shared, 0, 1});
+    const expr* mul = demoduler.demodule(moduled_expr{shared, 0, 2});
     EXPECT_EQ(std::get<expr::functor>(add->content).id, 2u);
     EXPECT_EQ(std::get<expr::functor>(mul->content).id, 3u);
     EXPECT_NE(add, mul);
-    EXPECT_EQ(linked.demoduler.demodule(moduled_expr{shared, 0, 1}), add);
+    EXPECT_EQ(demoduler.demodule(moduled_expr{shared, 0, 1}), add);
 }

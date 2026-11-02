@@ -57,18 +57,15 @@ void pud_module_inspect_command_handler::operator()() {
     const size_t inference_count = node_count - axiom_count;
     size_t refuted_count = 0;
     for (pud_node_id node = 0; node < node_count; ++node) {
-        if (module.check_refuted(node))
+        if (module.is_refuted(node))
             ++refuted_count;
     }
     std::cout << "axioms: " << axiom_count << '\n';
     std::cout << "inferences: " << inference_count << '\n';
     std::cout << "nodes: " << node_count << '\n';
     std::cout << "refuted: " << refuted_count << '\n';
-    if (detailed_)
-        print_nodes(module);
-}
-
-void pud_module_inspect_command_handler::print_nodes(const pud_module& module) const {
+    if (!detailed_)
+        return;
     functor_names names;
     const std::vector<std::string>& stored_names = module.functor_names();
     for (uint32_t functor_id = 0; functor_id < stored_names.size(); ++functor_id)
@@ -77,8 +74,6 @@ void pud_module_inspect_command_handler::print_nodes(const pud_module& module) c
     named_functor_printer<functor_names> print_functor{names};
     expr_printer<id_var_printer, named_functor_printer<functor_names>> print_expr{std::cout, print_var, print_functor};
     rule_printer<expr_printer<id_var_printer, named_functor_printer<functor_names>>> print_rule{std::cout, print_expr};
-    const size_t axiom_count = module.count_axioms();
-    const size_t node_count = module.count_nodes();
     for (pud_node_id node = 0; node < node_count; ++node) {
         std::cout << "node " << node << ' ';
         if (node < axiom_count) {

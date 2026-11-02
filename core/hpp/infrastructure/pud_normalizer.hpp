@@ -84,7 +84,7 @@ std::optional<const expr*> PUD_NORMALIZER::enter(framed_expr framed, const memo_
         if (!var_class.value.has_value())
             return make_var_.make_var(var_class.rep);
         const expr::functor& functor = *var_class.value->functor;
-        const expr* reconstructed = demodule_functor_.demodule(
+        const expr* reconstructed = demodule_functor_.demodule_functor(
             moduled_functor{&functor, var_class.value->frame_offset, var_class.value->module});
         framed = framed_expr{reconstructed, var_class.value->frame_offset};
     }

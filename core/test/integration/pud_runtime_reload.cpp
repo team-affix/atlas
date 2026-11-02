@@ -14,7 +14,7 @@
 #include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_runtime.hpp"
+#include "pud_runtime.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Not;
@@ -1402,7 +1402,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NothingBelowARefutedInteriorNodeCome
         if (module.get_module_id() == 8001)
             base = &module;
     }
-    ASSERT_TRUE(base->check_refuted(2));
+    ASSERT_TRUE(base->is_refuted(2));
     ASSERT_THAT(base->get_children(2), Not(IsEmpty()));
     std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
     TypeParam reloaded_runtime(this->exprs);
@@ -1458,7 +1458,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationThatCrossedModulesStaysOn
         if (module.get_module_id() == 8002)
             dep_module = &module;
     }
-    ASSERT_TRUE(dep_module->check_refuted(0));
+    ASSERT_TRUE(dep_module->is_refuted(0));
     std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
     TypeParam reloaded_runtime(this->exprs);
     std::set<pud_global_node_id> reloaded_live;
@@ -2860,7 +2860,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsReloadsFaithfullyAfterAnyNumbe
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -2943,7 +2944,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticReloadsFaithfullyAfterAnyN
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3032,7 +3034,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsReloadsFaithfullyAfterAnyNumber
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3113,7 +3116,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphReloadsFaithfullyAfterAnyNumber
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3191,7 +3195,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersReloadsFaithfullyAfterAnyNumber
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3274,7 +3279,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsReloadsFaithfullyAfterAnyNum
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3351,7 +3357,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsReloadsFaithfullyAfterAny
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3426,7 +3433,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeReloadsFaithfullyAfterAnyNumb
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3522,7 +3530,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulReloadsFaithfullyAfterAnyNum
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3618,7 +3627,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersReloadsFaithfullyAfterAny
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3696,7 +3706,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesReloadsFaithfullyAfterAny
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3796,7 +3807,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainReloadsFaithfullyAft
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3894,7 +3906,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendReloadsFaithfullyAfterAn
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -3978,7 +3991,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryReloadsFaithfullyAfterAn
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 30; ++taken) {
+    const size_t unfold_count = rng() % 30;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -5050,7 +5064,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyRefutesTh
         if (module.get_module_id() == 8002)
             dep_module = &module;
     }
-    EXPECT_TRUE(dep_module->check_refuted(0));
+    EXPECT_TRUE(dep_module->is_refuted(0));
     EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
 
 }
@@ -6756,7 +6770,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ColorsResumesLikeTheOriginalFromAnyP
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -6880,7 +6895,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ArithmeticResumesLikeTheOriginalFrom
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7010,7 +7026,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListsResumesLikeTheOriginalFromAnyPo
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7132,7 +7149,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, GraphResumesLikeTheOriginalFromAnyPo
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7251,7 +7269,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TiersResumesLikeTheOriginalFromAnyPo
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7375,7 +7394,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SiblingsResumesLikeTheOriginalFromAn
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7493,7 +7513,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, RefutationsResumesLikeTheOriginalFro
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7609,7 +7630,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, CascadeResumesLikeTheOriginalFromAny
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7746,7 +7768,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, PeanoMulResumesLikeTheOriginalFromAn
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -7883,7 +7906,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ListMembersResumesLikeTheOriginalFro
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -8002,7 +8026,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, MirrorTreesResumesLikeTheOriginalFro
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -8143,7 +8168,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NestedUnaryChainResumesLikeTheOrigin
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -8282,7 +8308,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, TripleAppendResumesLikeTheOriginalFr
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -8407,7 +8434,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, SharedBinaryResumesLikeTheOriginalFr
             live.erase(refuted);
     }
     size_t taken = 0;
-    for (; taken < rng() % 25; ++taken) {
+    const size_t unfold_count = rng() % 25;
+    for (; taken < unfold_count; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;

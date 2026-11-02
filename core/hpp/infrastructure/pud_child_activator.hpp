@@ -14,6 +14,7 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
+#include "debug_assert.hpp"
 
 template<
     typename IGetActiveState,
@@ -21,8 +22,7 @@ template<
     typename IGetInference,
     typename IGetNodeGoals,
     typename IGetNodeAxiom,
-    typename IResolveGoal,
-    typename IFindNodeGoal,
+    typename IBuildChildGoalList,
     typename IStoreNodeGoals,
     typename IStoreNodeAxiom,
     typename IIncrementLiveChildCount,
@@ -31,7 +31,7 @@ template<
     typename IForkQuery,
     typename IOpenQuery,
     typename IHoldQuery,
-    typename ICheckQueryExhausted>
+    typename IIsQueryExhausted>
 struct pud_child_activator {
     pud_child_activator(
         IGetActiveState& get_active_state,
@@ -39,8 +39,7 @@ struct pud_child_activator {
         IGetInference& get_inference,
         IGetNodeGoals& get_node_goals,
         IGetNodeAxiom& get_node_axiom,
-        IResolveGoal& resolve_goal,
-        IFindNodeGoal& find_node_goal,
+        IBuildChildGoalList& build_child_goal_list,
         IStoreNodeGoals& store_node_goals,
         IStoreNodeAxiom& store_node_axiom,
         IIncrementLiveChildCount& increment_live_child_count,
@@ -49,7 +48,7 @@ struct pud_child_activator {
         IForkQuery& fork_query,
         IOpenQuery& open_query,
         IHoldQuery& hold_query,
-        ICheckQueryExhausted& check_query_exhausted);
+        IIsQueryExhausted& is_query_exhausted);
     bool activate_child(pud_global_node_id parent, pud_global_node_id child);
 private:
     IGetActiveState& get_active_state_;
@@ -57,8 +56,7 @@ private:
     IGetInference& get_inference_;
     IGetNodeGoals& get_node_goals_;
     IGetNodeAxiom& get_node_axiom_;
-    IResolveGoal& resolve_goal_;
-    IFindNodeGoal& find_node_goal_;
+    IBuildChildGoalList& build_child_goal_list_;
     IStoreNodeGoals& store_node_goals_;
     IStoreNodeAxiom& store_node_axiom_;
     IIncrementLiveChildCount& increment_live_child_count_;
@@ -67,21 +65,21 @@ private:
     IForkQuery& fork_query_;
     IOpenQuery& open_query_;
     IHoldQuery& hold_query_;
-    ICheckQueryExhausted& check_query_exhausted_;
+    IIsQueryExhausted& is_query_exhausted_;
 };
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
     template<typename IGetActiveState, typename IStoreActiveState, typename IGetInference,     \
-             typename IGetNodeGoals, typename IGetNodeAxiom, typename IResolveGoal,           \
-             typename IFindNodeGoal, typename IStoreNodeGoals, typename IStoreNodeAxiom,       \
+             typename IGetNodeGoals, typename IGetNodeAxiom, typename IBuildChildGoalList,           \
+             typename IStoreNodeGoals, typename IStoreNodeAxiom,                               \
              typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
              typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                    \
-             typename ICheckQueryExhausted>
+             typename IIsQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetActiveState, IStoreActiveState, IGetInference, IGetNodeGoals,      \
-        IGetNodeAxiom, IResolveGoal, IFindNodeGoal, IStoreNodeGoals, IStoreNodeAxiom,        \
+        IGetNodeAxiom, IBuildChildGoalList, IStoreNodeGoals, IStoreNodeAxiom,        \
         IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IHoldQuery,    \
-        ICheckQueryExhausted>
+        IIsQueryExhausted>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
@@ -90,8 +88,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IGetInference& get_inference,
     IGetNodeGoals& get_node_goals,
     IGetNodeAxiom& get_node_axiom,
-    IResolveGoal& resolve_goal,
-    IFindNodeGoal& find_node_goal,
+    IBuildChildGoalList& build_child_goal_list,
     IStoreNodeGoals& store_node_goals,
     IStoreNodeAxiom& store_node_axiom,
     IIncrementLiveChildCount& increment_live_child_count,
@@ -100,14 +97,13 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IForkQuery& fork_query,
     IOpenQuery& open_query,
     IHoldQuery& hold_query,
-    ICheckQueryExhausted& check_query_exhausted)
+    IIsQueryExhausted& is_query_exhausted)
     : get_active_state_(get_active_state)
     , store_active_state_(store_active_state)
     , get_inference_(get_inference)
     , get_node_goals_(get_node_goals)
     , get_node_axiom_(get_node_axiom)
-    , resolve_goal_(resolve_goal)
-    , find_node_goal_(find_node_goal)
+    , build_child_goal_list_(build_child_goal_list)
     , store_node_goals_(store_node_goals)
     , store_node_axiom_(store_node_axiom)
     , increment_live_child_count_(increment_live_child_count)
@@ -116,14 +112,14 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , fork_query_(fork_query)
     , open_query_(open_query)
     , hold_query_(hold_query)
-    , check_query_exhausted_(check_query_exhausted) {}
+    , is_query_exhausted_(is_query_exhausted) {}
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
     const pud_inference& inference = get_inference_.get_inference(child);
-    const pud_goal_list goals = resolve_goal_.resolve_goal(
-        get_node_goals_.get(parent), inference.call_site, inference.body_goals);
+    const pud_goal_list& parent_goals = get_node_goals_.get(parent);
+    const pud_goal_list goals = build_child_goal_list_.build(parent_goals, inference.call_site, inference.body_goals);
     store_node_goals_.store(child, goals);
     store_node_axiom_.store(child, get_node_axiom_.get(parent));
     increment_live_child_count_.increment(parent);
@@ -133,25 +129,31 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
     immer::map<pud_body_goal_id, pud_mhq_head_id> queries = parent_state.queries.erase(inference.call_site);
     bool refuted = false;
     for (pud_body_goal_id goal : watched.changed_goals) {
-        if (queries.find(goal) == nullptr)
+        const pud_mhq_head_id* head = queries.find(goal);
+        if (head == nullptr)
             continue;
-        const std::optional<pud_mhq_head_id> forked =
-            fork_query_.try_fork(queries.at(goal), bindings, find_node_goal_.find(child, goal), lvc);
-        refuted = refuted || !forked.has_value();
-        queries = forked.has_value() ? queries.set(goal, forked.value()) : queries.erase(goal);
+        const std::optional<pud_mhq_head_id> forked = fork_query_.try_fork(*head, bindings, goals.goals.at(goal), lvc);
+        if (!forked.has_value()) {
+            refuted = true;
+            queries = queries.erase(goal);
+            continue;
+        }
+        queries = queries.set(goal, forked.value());
     }
     for (const auto& [id, goal] : goals.goals) {
         if (parent_state.queries.find(id) != nullptr)
             continue;
+        DEBUG_ASSERT(id >= parent_goals.next_id);
         const std::optional<pud_mhq_head_id> opened = open_query_.try_open(child.module, bindings, goal, lvc);
-        refuted = refuted || !opened.has_value();
-        if (!opened.has_value())
+        if (!opened.has_value()) {
+            refuted = true;
             continue;
+        }
         queries = queries.set(id, opened.value());
     }
     for (const auto& [goal, head_id] : queries) {
         hold_query_.hold(head_id, child, goal);
-        refuted = refuted || check_query_exhausted_.check_exhausted(head_id);
+        refuted = refuted || is_query_exhausted_.is_exhausted(head_id);
     }
     store_active_state_.store(child, pud_active_state{
         .lvc = lvc,

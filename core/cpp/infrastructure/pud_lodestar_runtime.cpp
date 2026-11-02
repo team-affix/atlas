@@ -5,11 +5,14 @@ pud_lodestar_runtime::pud_lodestar_runtime(
     pud_global_node_id focus_axiom,
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold,
-    size_t max_node_depth)
-    : manifest_(exprs, focus_axiom, max_unfolds, non_conjecture_unfolds_per_conjecture_unfold, max_node_depth) {}
+    size_t max_node_depth,
+    size_t max_open_goals)
+    : manifest_(
+          exprs, focus_axiom, max_unfolds, non_conjecture_unfolds_per_conjecture_unfold, max_node_depth,
+          max_open_goals) {}
 
 void pud_lodestar_runtime::register_module(pud_module& module) {
-    manifest_.module_registrar_.register_module(module);
+    manifest_.module_loader_.load(module);
 }
 
 bool pud_lodestar_runtime::next() {
@@ -22,6 +25,10 @@ const expr* pud_lodestar_runtime::solution() const {
 
 size_t pud_lodestar_runtime::solution_depth() const {
     return manifest_.solution_store_.solution_depth();
+}
+
+pud_search_stop_reason pud_lodestar_runtime::stop_reason() const {
+    return manifest_.search_stepper_.stop_reason();
 }
 
 const std::string& pud_lodestar_runtime::functor_name(uint32_t global_functor_id) const {

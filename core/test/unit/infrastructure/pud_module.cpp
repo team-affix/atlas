@@ -84,7 +84,7 @@ TEST_F(PudModuleTest, AnInferenceIsStoredAsItsDeltaUnderItsParent) {
 }
 
 TEST_F(PudModuleTest, ANodeIsALeafUntilItsFirstChildIsStored) {
-    EXPECT_TRUE(data.check_leaf(0));
+    EXPECT_TRUE(data.is_leaf(0));
     EXPECT_THAT(data.get_children(0), IsEmpty());
     const pud_node_id child = data.store_inference(pud_inference{
         .parent = 0,
@@ -93,8 +93,8 @@ TEST_F(PudModuleTest, ANodeIsALeafUntilItsFirstChildIsStored) {
         .body_goals = {&goal},
         .var_count = 1,
     });
-    EXPECT_FALSE(data.check_leaf(0));
-    EXPECT_TRUE(data.check_leaf(child));
+    EXPECT_FALSE(data.is_leaf(0));
+    EXPECT_TRUE(data.is_leaf(child));
 }
 
 TEST_F(PudModuleTest, ChildrenAreKeptInTheOrderTheyAreStored) {
@@ -131,9 +131,9 @@ TEST_F(PudModuleTest, NoNodeStartsRefuted) {
         .body_goals = {&goal},
         .var_count = 1,
     });
-    EXPECT_FALSE(data.check_refuted(0));
-    EXPECT_FALSE(data.check_refuted(1));
-    EXPECT_FALSE(data.check_refuted(child));
+    EXPECT_FALSE(data.is_refuted(0));
+    EXPECT_FALSE(data.is_refuted(1));
+    EXPECT_FALSE(data.is_refuted(child));
 }
 
 TEST_F(PudModuleTest, ANodeMarkedRefutedStaysRefutedAndOnlyItIs) {
@@ -159,15 +159,15 @@ TEST_F(PudModuleTest, ANodeMarkedRefutedStaysRefutedAndOnlyItIs) {
         .body_goals = {&goal},
         .var_count = 1,
     });
-    EXPECT_TRUE(data.check_refuted(child));
-    EXPECT_FALSE(data.check_refuted(sibling));
-    EXPECT_FALSE(data.check_refuted(0));
+    EXPECT_TRUE(data.is_refuted(child));
+    EXPECT_FALSE(data.is_refuted(sibling));
+    EXPECT_FALSE(data.is_refuted(0));
 }
 
 TEST_F(PudModuleTest, AnAxiomCanBeRefuted) {
     data.mark_refuted(1);
-    EXPECT_TRUE(data.check_refuted(1));
-    EXPECT_FALSE(data.check_refuted(0));
+    EXPECT_TRUE(data.is_refuted(1));
+    EXPECT_FALSE(data.is_refuted(0));
 }
 
 TEST_F(PudModuleTest, StoredNodesStayInPlaceWhileLaterNodesAreStored) {

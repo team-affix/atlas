@@ -9,17 +9,17 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_child_activator.hpp"
-#include "infrastructure/pud_goal_resolver.hpp"
-#include "infrastructure/pud_initial_goal_opener.hpp"
+#include "infrastructure/pud_child_goal_list_builder.hpp"
+#include "infrastructure/pud_root_goal_list_builder.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
-#include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_node_axioms.hpp"
-#include "infrastructure/pud_node_goals.hpp"
+#include "infrastructure/pud_module_registry.hpp"
+#include "infrastructure/pud_node_table.hpp"
+#include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_query_holders.hpp"
@@ -27,7 +27,6 @@
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
-#include "infrastructure/pud_demoduler.hpp"
 #include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "value_objects/rule.hpp"
@@ -42,25 +41,24 @@ using ::testing::UnorderedElementsAre;
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
     using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
-    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
     using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, pud_identity_global_functor_ids, cycle_detector_factory_t::cycle_detector_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
     using replayer_t =
-        pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
+        pud_replayer<module_registry_t, module_registry_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
+    using mhws_t = pud_mhws<replayer_t, module_registry_t, module_registry_t, module_registry_t>;
     using mhcs_t =
-        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
-    using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
-    using binder_t = pud_binder<bind_map_factory_t, modules_t>;
-    using watcher_t = pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool>;
+        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t, module_registry_t>;
+    using mhq_t = pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
+    using binder_t = pud_binder<bind_map_factory_t, module_registry_t>;
+    using watcher_t = pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool>;
     using root_activator_t = pud_root_activator<
-        modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, watcher_t, mhq_t,
+        module_registry_t, pud_root_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_active_states, watcher_t, mhq_t,
         pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_axioms, pud_goal_resolver,
-        pud_node_goals, pud_node_goals, pud_node_axioms, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
+        pud_active_states, pud_active_states, module_registry_t, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_child_goal_list_builder,
+        pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
         mhq_t, pud_query_holders, mhq_t>;
     using node_deactivator_t =
         pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
@@ -72,16 +70,16 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     copy_demoduler_t copy_demoduler{exprs};
-    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
     cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
-    unifier_factory_t unifiers{globalize, exprs, demoduler};
+    pud_identity_global_functor_ids global_functor_ids;
+    unifier_factory_t unifiers{globalize, exprs, global_functor_ids};
     std::deque<pud_module> module_data;
-    modules_t modules;
-    pud_node_goals node_goals;
-    pud_node_axioms node_axioms;
-    pud_goal_resolver goal_resolver;
-    pud_initial_goal_opener initial_goal_opener;
+    module_registry_t modules;
+    pud_node_table<pud_goal_list> node_goals;
+    pud_node_table<pud_global_node_id> node_axioms;
+    pud_child_goal_list_builder child_goal_lists;
+    pud_root_goal_list_builder root_goal_lists;
     pud_node_live_child_counts live_child_counts;
     unit_queries_t unit_queries;
     pud_active_states active_states;
@@ -93,9 +91,9 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     binder_t binder{bind_maps, modules};
     watcher_t structure_watcher{bind_maps, modules, exprs};
     root_activator_t root_activator{
-        modules, initial_goal_opener, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
+        modules, root_goal_lists, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{
-        active_states, active_states, modules, node_goals, node_axioms, goal_resolver, node_goals, node_goals,
+        active_states, active_states, modules, node_goals, node_axioms, child_goal_lists, node_goals,
         node_axioms, live_child_counts, binder, structure_watcher, mhq, mhq, query_holders, mhq};
     node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
@@ -302,11 +300,11 @@ TEST_F(PudLeafActivationIntegrationTest, ActivationRecordsEachNodesGoalsFromItsP
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(nephew).value(), nephew));
-    const pud_goal_list root_goals = initial_goal_opener.open_goals({p0, q12});
-    const pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, 0, {r3});
+    const pud_goal_list root_goals = root_goal_lists.build({p0, q12});
+    const pud_goal_list child_goals = child_goal_lists.build(root_goals, 0, {r3});
     EXPECT_EQ(node_goals.get(root), root_goals);
     EXPECT_EQ(node_goals.get(child), child_goals);
-    EXPECT_EQ(node_goals.get(nephew), goal_resolver.resolve_goal(child_goals, 2, {s}));
+    EXPECT_EQ(node_goals.get(nephew), child_goal_lists.build(child_goals, 2, {s}));
 }
 
 TEST_F(PudLeafActivationIntegrationTest, ActivationGivesEachNodeItsParentsLvcPlusItsOwnVariables) {
@@ -322,7 +320,7 @@ TEST_F(PudLeafActivationIntegrationTest, ADeactivatedNodesGoalsAreKept) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     node_deactivator.deactivate(root);
-    EXPECT_EQ(node_goals.get(root), initial_goal_opener.open_goals({p0, q12}));
+    EXPECT_EQ(node_goals.get(root), root_goal_lists.build({p0, q12}));
 }
 
 TEST_F(PudLeafActivationIntegrationTest, EveryActivatedChildCountsAsALiveChildOfItsParent) {

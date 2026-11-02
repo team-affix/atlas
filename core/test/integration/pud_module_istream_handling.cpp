@@ -189,9 +189,9 @@ TEST_F(PudModuleIstreamHandlingIntegrationTest, HandBuiltAxiomPlusOneInferenceRe
 
 TEST_F(PudModuleIstreamHandlingIntegrationTest, RefutedFlagsAppliedAfterReplay) {
     const pud_module module = deserialize_pool(axiom_plus_inference_blob(functors.id("h"), 0, 1), pool);
-    EXPECT_FALSE(module.check_refuted(0));
-    EXPECT_FALSE(module.check_refuted(1));
-    EXPECT_TRUE(module.check_refuted(2));
+    EXPECT_FALSE(module.is_refuted(0));
+    EXPECT_FALSE(module.is_refuted(1));
+    EXPECT_TRUE(module.is_refuted(2));
 }
 
 TEST_F(PudModuleIstreamHandlingIntegrationTest, ReadingVarExprCallsMakeVarOnce) {

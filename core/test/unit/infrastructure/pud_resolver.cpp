@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_resolver.hpp"
+#include "value_objects/pud_goal_list.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -15,8 +16,8 @@ namespace {
 struct MockGetActiveState {
     MOCK_METHOD(const pud_active_state&, get, (pud_global_node_id));
 };
-struct MockFindNodeGoal {
-    MOCK_METHOD(const expr*, find, (pud_global_node_id, pud_body_goal_id));
+struct MockGetNodeGoals {
+    MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id), (const));
 };
 struct MockGetQueryCandidates {
     MOCK_METHOD(std::vector<pud_mhcs_head_id>, candidates, (pud_mhq_head_id));
@@ -24,10 +25,10 @@ struct MockGetQueryCandidates {
 struct MockGetCandidatePath {
     MOCK_METHOD(const std::vector<pud_global_node_id>&, path, (pud_mhcs_head_id));
 };
-struct MockAcceptCandidate {
+struct MockBuildInference {
     MOCK_METHOD(
         pud_inference,
-        accept,
+        build,
         (pud_global_node_id,
          pud_body_goal_id,
          const pud_ubs_state&,
@@ -37,17 +38,18 @@ struct MockAcceptCandidate {
 };
 
 using test_resolver_t = pud_resolver<
-    NiceMock<MockGetActiveState>, NiceMock<MockFindNodeGoal>, NiceMock<MockGetQueryCandidates>,
-    NiceMock<MockGetCandidatePath>, NiceMock<MockAcceptCandidate>>;
+    NiceMock<MockGetActiveState>, NiceMock<MockGetNodeGoals>, NiceMock<MockGetQueryCandidates>,
+    NiceMock<MockGetCandidatePath>, NiceMock<MockBuildInference>>;
 
 struct PudResolverTest : public ::testing::Test {
     NiceMock<MockGetActiveState> states;
-    NiceMock<MockFindNodeGoal> goals;
+    NiceMock<MockGetNodeGoals> goals;
     NiceMock<MockGetQueryCandidates> candidates;
     NiceMock<MockGetCandidatePath> paths;
-    NiceMock<MockAcceptCandidate> acceptor;
-    test_resolver_t resolver{states, goals, candidates, paths, acceptor};
+    NiceMock<MockBuildInference> inference_builder;
+    test_resolver_t resolver{states, goals, candidates, paths, inference_builder};
     expr goal{expr::functor{1, {}}};
+    pud_goal_list leaf_goals{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(2, &goal), .next_id = 3};
     pud_active_state state{
         .lvc = 8, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
     std::vector<pud_global_node_id> first_path{pud_test_node(0), pud_test_node(3)};
@@ -57,7 +59,7 @@ struct PudResolverTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(states, get(pud_test_node(5))).WillByDefault(ReturnRef(state));
-        ON_CALL(goals, find(pud_test_node(5), 2)).WillByDefault(Return(&goal));
+        ON_CALL(goals, get(pud_test_node(5))).WillByDefault(ReturnRef(leaf_goals));
         ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30, 31}));
         ON_CALL(paths, path(30)).WillByDefault(ReturnRef(first_path));
         ON_CALL(paths, path(31)).WillByDefault(ReturnRef(second_path));
@@ -68,9 +70,9 @@ struct PudResolverTest : public ::testing::Test {
 
 TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrderAtTheLeafsLvc) {
     InSequence in_order;
-    EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
         .WillOnce(Return(first_delta));
-    EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
         .WillOnce(Return(second_delta));
     EXPECT_EQ(resolver.resolve(pud_test_node(5), 2), (std::vector<pud_inference>{first_delta, second_delta}));
 }

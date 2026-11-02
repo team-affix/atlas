@@ -39,12 +39,11 @@ struct MockInstantiate {
     MOCK_METHOD(void, instantiate, (const ubs_class&, moduled_functor));
 };
 struct MockDetectCycle {
-    struct visitation {};
-    MOCK_METHOD(bool, find_cycle_from_class, (uint32_t, visitation&));
+    MOCK_METHOD(bool, find_cycle_from_classes, (const std::vector<uint32_t>&));
 };
 
-struct MockDemodule {
-    MOCK_METHOD(const expr*, demodule, (moduled_expr));
+struct MockGetGlobalFunctorId {
+    MOCK_METHOD(uint32_t, get_global_functor_id_from_local_functor_id, (pud_module_id, uint32_t));
 };
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
@@ -57,7 +56,7 @@ ubs_class singleton(uint32_t var) {
 
 using test_unifier_t = pud_unifier<
     NiceMock<MockGlobalize>, NiceMock<MockFind>, NiceMock<MockEquate>,
-    NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>, NiceMock<MockMakeFunctor>, NiceMock<MockDemodule>>;
+    NiceMock<MockInstantiate>, NiceMock<MockDetectCycle>, NiceMock<MockMakeFunctor>, NiceMock<MockGetGlobalFunctorId>>;
 
 struct PudUnifierTest : public ::testing::Test {
     NiceMock<MockGlobalize> globalize;
@@ -66,19 +65,20 @@ struct PudUnifierTest : public ::testing::Test {
     NiceMock<MockInstantiate> instantiate;
     NiceMock<MockDetectCycle> detect_cycle;
     NiceMock<MockMakeFunctor> make_functor;
-    NiceMock<MockDemodule> demodule;
-    test_unifier_t unifier{globalize, find, equate, instantiate, detect_cycle, make_functor, demodule};
+    NiceMock<MockGetGlobalFunctorId> global_functor_ids;
+    test_unifier_t unifier{globalize, find, equate, instantiate, detect_cycle, make_functor, global_functor_ids};
     std::deque<expr> owned;
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(equate, equate(_, _)).WillByDefault(Return(std::nullopt));
-        ON_CALL(detect_cycle, find_cycle_from_class(_, _)).WillByDefault(Return(false));
+        ON_CALL(detect_cycle, find_cycle_from_classes(_)).WillByDefault(Return(false));
         ON_CALL(make_functor, make_functor(_, _)).WillByDefault([this](uint32_t id, const std::vector<const expr*>& args) {
             return functor(id, args);
         });
-        ON_CALL(demodule, demodule(_)).WillByDefault(Invoke([](moduled_expr term) { return term.skeleton; }));
+        ON_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(_, _))
+            .WillByDefault(Invoke([](pud_module_id, uint32_t local_id) { return local_id; }));
     }
 
     const expr* var(uint32_t index) {
@@ -97,7 +97,7 @@ struct PudUnifierTest : public ::testing::Test {
 TEST_F(PudUnifierTest, EqualGroundTermsSucceedWithoutBinding) {
     EXPECT_CALL(equate, equate(_, _)).Times(0);
     EXPECT_CALL(instantiate, instantiate(_, _)).Times(0);
-    EXPECT_CALL(detect_cycle, find_cycle_from_class(_, _)).Times(0);
+    EXPECT_CALL(detect_cycle, find_cycle_from_classes(IsEmpty())).WillOnce(Return(false));
     const expr* term = functor(1, {functor(2, {})});
     EXPECT_TRUE(unifier.unify({term, 0, 0}, {term, 5, 0}));
 }
@@ -203,15 +203,14 @@ TEST_F(PudUnifierTest, DeepMismatchFails) {
 }
 
 TEST_F(PudUnifierTest, EveryBoundOrMergedClassIsCheckedForCyclesOnce) {
-    EXPECT_CALL(detect_cycle, find_cycle_from_class(0u, _)).WillOnce(Return(false));
-    EXPECT_CALL(detect_cycle, find_cycle_from_class(1u, _)).WillOnce(Return(false));
+    EXPECT_CALL(detect_cycle, find_cycle_from_classes(UnorderedElementsAre(0u, 1u))).WillOnce(Return(false));
     EXPECT_TRUE(unifier.unify(
         {functor(1, {var(0), var(1)}), 0, 0},
         {functor(1, {functor(2, {}), var(5)}), 0, 0}));
 }
 
 TEST_F(PudUnifierTest, ACycleFailsTheUnification) {
-    EXPECT_CALL(detect_cycle, find_cycle_from_class(0u, _)).WillOnce(Return(true));
+    EXPECT_CALL(detect_cycle, find_cycle_from_classes(ElementsAre(0u))).WillOnce(Return(true));
     EXPECT_FALSE(unifier.unify({var(0), 0, 0}, {functor(1, {var(0)}), 0, 0}));
 }
 
@@ -248,28 +247,27 @@ TEST_F(PudUnifierTest, AFailedUnificationReportsNoEdits) {
 }
 
 TEST_F(PudUnifierTest, AFailedUnificationSkipsTheCycleCheck) {
-    EXPECT_CALL(detect_cycle, find_cycle_from_class(_, _)).Times(0);
+    EXPECT_CALL(detect_cycle, find_cycle_from_classes(_)).Times(0);
     EXPECT_FALSE(unifier.unify({functor(1, {}), 0, 0}, {functor(2, {}), 0, 0}));
 }
 
-TEST_F(PudUnifierTest, FunctorsDemoduledToTheSameGlobalIdUnify) {
+TEST_F(PudUnifierTest, FunctorsWithTheSameGlobalIdUnify) {
     const expr* left = functor(5, {});
     const expr* right = functor(9, {});
-    const expr* global = functor(3, {});
-    EXPECT_CALL(demodule, demodule(moduled_expr{left, 0, 1})).WillOnce(Return(global));
-    EXPECT_CALL(demodule, demodule(moduled_expr{right, 0, 2})).WillOnce(Return(global));
+    EXPECT_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(1, 5)).WillOnce(Return(3));
+    EXPECT_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(2, 9)).WillOnce(Return(3));
     EXPECT_TRUE(unifier.unify({left, 0, 1}, {right, 0, 2}));
 }
 
-TEST_F(PudUnifierTest, FunctorsDemoduledToDifferentGlobalIdsDoNotUnify) {
+TEST_F(PudUnifierTest, FunctorsWithDifferentGlobalIdsDoNotUnify) {
     const expr* left = functor(5, {});
     const expr* right = functor(5, {});
-    EXPECT_CALL(demodule, demodule(moduled_expr{left, 0, 1})).WillOnce(Return(functor(3, {})));
-    EXPECT_CALL(demodule, demodule(moduled_expr{right, 0, 2})).WillOnce(Return(functor(4, {})));
+    EXPECT_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(1, 5)).WillOnce(Return(3));
+    EXPECT_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(2, 5)).WillOnce(Return(4));
     EXPECT_FALSE(unifier.unify({left, 0, 1}, {right, 0, 2}));
 }
 
-TEST_F(PudUnifierTest, UnifyingTwoVariablesDoesNotDemodule) {
-    EXPECT_CALL(demodule, demodule(_)).Times(0);
+TEST_F(PudUnifierTest, UnifyingTwoVariablesLooksUpNoFunctorIds) {
+    EXPECT_CALL(global_functor_ids, get_global_functor_id_from_local_functor_id(_, _)).Times(0);
     EXPECT_TRUE(unifier.unify({var(1), 0, 4}, {var(2), 3, 9}));
 }

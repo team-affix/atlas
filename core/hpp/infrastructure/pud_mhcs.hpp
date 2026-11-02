@@ -22,8 +22,8 @@ template<
     typename IAdvanceWitnessSearch,
     typename IRemoveWitnessSearch,
     typename IInvalidateWitnessLeaf,
-    typename ICheckNodeLeaf,
-    typename ICheckNodeRefuted,
+    typename IIsNodeLeaf,
+    typename IIsNodeRefuted,
     typename IGetChildren>
 struct pud_mhcs {
     pud_mhcs(
@@ -33,8 +33,8 @@ struct pud_mhcs {
         IAdvanceWitnessSearch& advance_witness_search,
         IRemoveWitnessSearch& remove_witness_search,
         IInvalidateWitnessLeaf& invalidate_witness_leaf,
-        ICheckNodeLeaf& check_node_leaf,
-        ICheckNodeRefuted& check_node_refuted,
+        IIsNodeLeaf& is_node_leaf,
+        IIsNodeRefuted& is_node_refuted,
         IGetChildren& get_children);
     std::optional<pud_mhcs_head_id> try_add(pud_replay axiom_root);
     std::optional<pud_mhcs_head_id> try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root);
@@ -75,8 +75,8 @@ private:
     IAdvanceWitnessSearch& advance_witness_search_;
     IRemoveWitnessSearch& remove_witness_search_;
     IInvalidateWitnessLeaf& invalidate_witness_leaf_;
-    ICheckNodeLeaf& check_node_leaf_;
-    ICheckNodeRefuted& check_node_refuted_;
+    IIsNodeLeaf& is_node_leaf_;
+    IIsNodeRefuted& is_node_refuted_;
     IGetChildren& get_children_;
 
     pud_mhcs_head_id next_head_id_;
@@ -89,11 +89,11 @@ private:
     template<typename IDescendReplay, typename ITryAddWitnessSearch,                       \
              typename ITryForkWitnessSearch, typename IAdvanceWitnessSearch,               \
              typename IRemoveWitnessSearch, typename IInvalidateWitnessLeaf,             \
-             typename ICheckNodeLeaf, typename ICheckNodeRefuted, typename IGetChildren>
+             typename IIsNodeLeaf, typename IIsNodeRefuted, typename IGetChildren>
 #define PUD_MHCS                                                                           \
     pud_mhcs<IDescendReplay, ITryAddWitnessSearch, ITryForkWitnessSearch,                  \
         IAdvanceWitnessSearch, IRemoveWitnessSearch, IInvalidateWitnessLeaf,             \
-        ICheckNodeLeaf, ICheckNodeRefuted, IGetChildren>
+        IIsNodeLeaf, IIsNodeRefuted, IGetChildren>
 
 PUD_MHCS_TEMPLATE
 PUD_MHCS::pud_mhcs(
@@ -103,8 +103,8 @@ PUD_MHCS::pud_mhcs(
     IAdvanceWitnessSearch& advance_witness_search,
     IRemoveWitnessSearch& remove_witness_search,
     IInvalidateWitnessLeaf& invalidate_witness_leaf,
-    ICheckNodeLeaf& check_node_leaf,
-    ICheckNodeRefuted& check_node_refuted,
+    IIsNodeLeaf& is_node_leaf,
+    IIsNodeRefuted& is_node_refuted,
     IGetChildren& get_children)
     : descend_replay_(descend_replay)
     , try_add_witness_search_(try_add_witness_search)
@@ -112,8 +112,8 @@ PUD_MHCS::pud_mhcs(
     , advance_witness_search_(advance_witness_search)
     , remove_witness_search_(remove_witness_search)
     , invalidate_witness_leaf_(invalidate_witness_leaf)
-    , check_node_leaf_(check_node_leaf)
-    , check_node_refuted_(check_node_refuted)
+    , is_node_leaf_(is_node_leaf)
+    , is_node_refuted_(is_node_refuted)
     , get_children_(get_children)
     , next_head_id_(0)
     , candidates_()
@@ -209,11 +209,11 @@ PUD_MHCS_TEMPLATE
 bool PUD_MHCS::try_justify(candidate& justified) {
     while (true) {
         const pud_global_node_id node = justified.current.node;
-        if (check_node_refuted_.check_refuted(node)) {
+        if (is_node_refuted_.is_refuted(node)) {
             release_witnesses(justified);
             return false;
         }
-        if (check_node_leaf_.check_leaf(node)) {
+        if (is_node_leaf_.is_leaf(node)) {
             justified.witnesses = std::nullopt;
             return true;
         }

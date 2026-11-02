@@ -11,6 +11,8 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
+inline constexpr char k_pud_module_blob_magic[4] = {'P', 'U', 'D', 'M'};
+
 struct pud_module {
     pud_module(pud_module_id module_id, std::vector<pud_module_id> dependencies, std::vector<rule> axioms);
     pud_module_id get_module_id() const;
@@ -23,8 +25,8 @@ struct pud_module {
     const pud_inference& get_inference(pud_node_id inference) const;
     std::optional<pud_node_id> get_parent(pud_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_node_id node) const;
-    bool check_leaf(pud_node_id node) const;
-    bool check_refuted(pud_node_id node) const;
+    bool is_leaf(pud_node_id node) const;
+    bool is_refuted(pud_node_id node) const;
     const std::vector<std::string>& functor_names() const;
     uint32_t append_functor_name(const std::string& name);
 private:

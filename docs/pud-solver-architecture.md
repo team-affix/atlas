@@ -4,11 +4,21 @@
 
 ## Lodestar
 
-Lodestar is a PUD solver runtime. It exposes `next()`, `solution()`, and `solution_depth()`. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
+Lodestar is a PUD solver runtime. It exposes `next()`, `solution()`, `solution_depth()`, and `stop_reason()`. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
 
-The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types. No existing `pud_*` type is edited.
+The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types over the kernel's `pud_mhws` and `pud_mhcs`. A witness slot's leaf is the leaf that `pud_mhws::find_witness` reports for the search.
 
 Unfolds of witnesses that conjecture queries rest on are dealt out by a round-robin over candidate slots. `non_conjecture_unfolds_per_conjecture_unfold` of those happen for each unfold inside the conjecture module. A new runtime starts that schedule from the first slot, including when the modules already contain inferences. The previous runtime's cursor is not restored.
+
+### Session limits and how a session ends
+
+- `max_unfolds` (`atlas lodestar --max-unfolds`) bounds every unfold the session makes, inside the conjecture module or outside it.
+- `max_node_depth` (`--max-node-depth`) and `max_open_goals` (`--max-open-goals`, no limit by default) bound which nodes may be unfolded. A node over either limit is never refuted for it: it stays live, so its ancestors stay unrefuted too. The limits are not stored in modules.
+- When `next()` returns false, `stop_reason()` says why:
+  - `refuted`: no open conjecture leaf is left. The CLI prints `REFUTED`.
+  - `exhausted`: open conjecture leaves remain, but the node limits forbid every unfold. The CLI prints `EXHAUSTED`.
+  - `budget_spent`: `max_unfolds` unfolds were made. The CLI prints no final line and exits 0.
+- `atlas lodestar` does not write unfolds back to module files, so a later run starts from the stored modules again.
 
 Correctness tests live in [`pud_runtime_test_suite.cpp`](../core/test/unit/infrastructure/pud_runtime_test_suite.cpp), a parameterized suite copied from the legacy runtime tests. The legacy suite is not edited.
 
@@ -38,7 +48,7 @@ Adding accessors to a shared runtime for each new heuristic (witness counts, que
 ### 3. One composition root per solver (and per manual driver)
 
 - Each **automated PUD solver** (and each distinct **manual driver**, if any) gets its own **`pud_<name>_manifest`** as the **entry point**, same pattern as `horizon_manifest` vs `ridge_manifest`.
-- Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_modules`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
+- Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_module_registry`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
 - Heuristic code may read **manifest internals directly** (query holders, MHQ, active states, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
 
 ### 4. Manual stack vs solver stacks (planned naming)
@@ -63,7 +73,7 @@ Integration tests that keep a `live` set and call `unfold` are the model for man
 ### 6. Module access pattern (unchanged, intentional)
 
 - Callers **own** `pud_module` (or test doubles).
-- **`pud_modules<IModule>`** registers **`IModule&`**, stores **`IModule*`**, exposes tree operations via **`pud_global_node_id`**.
+- **`pud_module_registry<IModule>`** registers **`IModule&`**, stores **`IModule*`**, exposes tree operations via **`pud_global_node_id`**.
 - Downstream components use **capability-style DI**; production usually passes the **same `modules_` registry** in many template slots.
 - **Future reactive behavior** (e.g. intercept writes): provide an alternate **`IModule`** (or wrapper) that delegates to real storage and hooks `store_inference` / `mark_refuted`, without changing the unfolder's public shape.
 
@@ -79,7 +89,7 @@ Serde and CLI use **concrete `pud_module`**; the live engine uses the registry p
 
 | CHC | PUD (direction) |
 |-----|------------------|
-| `db` + resolution infra | `pud_manifest` kernel + `pud_modules` |
+| `db` + resolution infra | `pud_manifest` kernel + `pud_module_registry` |
 | Per-solver manifest + `run_sim` | Per-solver manifest + driver loop (`unfold` steps) |
 | Session state in memory | Session state in memory; **modules** persisted |
 | Weak external boundary for heuristics | Same for heuristics **inside manifests**; **stronger** persistence boundary (`pud_module`) |
@@ -95,4 +105,4 @@ Serde and CLI use **concrete `pud_module`**; the live engine uses the registry p
 - [pud-architecture.md](pud-architecture.md) — stored vs live planes, manifest composition.
 - `core/hpp/infrastructure/pud_runtime.hpp` — current manual facade (to rename).
 - `core/hpp/infrastructure/pud_manifest.hpp` — kernel composition root.
-- `core/hpp/infrastructure/pud_modules.hpp` — `IModule` registry pattern.
+- `core/hpp/infrastructure/pud_module_registry.hpp` — `IModule` registry pattern.

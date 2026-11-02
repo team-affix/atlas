@@ -7,7 +7,7 @@
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/global_functor_name_printer.hpp"
 #include "infrastructure/id_var_printer.hpp"
-#include "infrastructure/pud_focus.hpp"
+#include "infrastructure/pud_focus_parser.hpp"
 #include "infrastructure/pud_loaded_modules.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
 #include "infrastructure/pud_solve_loop.hpp"
@@ -23,17 +23,17 @@ struct lodestar_command_handler {
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
         size_t max_node_depth,
+        size_t max_open_goals,
         size_t sim_progress_interval);
     void operator()();
 private:
-    void require_focus_node();
-
     using functor_printer_t = global_functor_name_printer<pud_lodestar_runtime>;
     using printer_t = expr_printer<id_var_printer, functor_printer_t>;
     using timer_t = solve_timer<steady_now>;
     using progress_t = pud_tick_progress<timer_t>;
     using loop_t = pud_solve_loop<
-        pud_lodestar_runtime, printer_t, progress_t, progress_t, progress_t, timer_t, timer_t>;
+        pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, printer_t, progress_t,
+        progress_t, timer_t, timer_t>;
 
     pud_loaded_modules loaded_;
     pud_global_node_id focus_;

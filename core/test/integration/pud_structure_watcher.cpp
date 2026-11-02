@@ -7,9 +7,9 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_goal_resolver.hpp"
-#include "infrastructure/pud_initial_goal_opener.hpp"
+#include "infrastructure/pud_module_registry.hpp"
+#include "infrastructure/pud_child_goal_list_builder.hpp"
+#include "infrastructure/pud_root_goal_list_builder.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "value_objects/pud_goal_list.hpp"
@@ -22,7 +22,7 @@ using ::testing::UnorderedElementsAre;
 // node here carries a ground `go` goal as the call site its child closes.
 struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
 
     static constexpr pud_module_id k_module = 0;
 
@@ -31,11 +31,11 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
     globalizer globalize;
     bind_map_factory_t bind_maps;
     pud_module data{k_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
-    modules_t modules;
-    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
-    pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool> watcher{bind_maps, modules, exprs};
-    pud_goal_resolver goal_resolver;
-    pud_initial_goal_opener initial_goal_opener;
+    module_registry_t modules;
+    pud_binder<bind_map_factory_t, module_registry_t> binder{bind_maps, modules};
+    pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool> watcher{bind_maps, modules, exprs};
+    pud_child_goal_list_builder child_goal_lists;
+    pud_root_goal_list_builder root_goal_lists;
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }
 
@@ -49,7 +49,7 @@ struct PudStructureWatcherIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -59,14 +59,14 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAWatchedRepChangesIt) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothing) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -76,14 +76,14 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiatingAnOutsideRepChangesNothi
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingTheRep) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0), var(1)}), functor("h", {var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0), var(1)}), functor("h", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -93,14 +93,14 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationChangesEveryGoalSharingT
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, UnorderedElementsAre(0u, 1u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWatched) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("g", {var(0)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("g", {var(0)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -110,7 +110,7 @@ TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWat
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -122,7 +122,7 @@ TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWat
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -130,7 +130,7 @@ TEST_F(PudStructureWatcherIntegrationTest, RepsIntroducedByAnInstantiationAreWat
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatRep) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -140,7 +140,7 @@ TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatR
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -151,7 +151,7 @@ TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatR
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -159,7 +159,7 @@ TEST_F(PudStructureWatcherIntegrationTest, GroundInstantiationStopsWatchingThatR
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -169,14 +169,14 @@ TEST_F(PudStructureWatcherIntegrationTest, UpdatingTwoRepsOfTheGoalChangesIt) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -186,14 +186,14 @@ TEST_F(PudStructureWatcherIntegrationTest, UpdatingAnOutsideRepChangesNothing) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivingRep) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -203,7 +203,7 @@ TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivin
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -215,7 +215,7 @@ TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivin
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -223,7 +223,7 @@ TEST_F(PudStructureWatcherIntegrationTest, DemotedRepIsWatchedThroughTheSurvivin
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSurvivingRep) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -233,7 +233,7 @@ TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSu
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -245,7 +245,7 @@ TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSu
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -253,7 +253,7 @@ TEST_F(PudStructureWatcherIntegrationTest, MergingRepsOfTwoGoalsLinksBothToTheSu
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(2)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(2)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -263,7 +263,7 @@ TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -275,7 +275,7 @@ TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -283,7 +283,7 @@ TEST_F(PudStructureWatcherIntegrationTest, CollapseAcrossTwoLevels) {
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNodesReps) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -293,7 +293,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNode
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("h", {functor("f", {var(3)})}), functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("h", {functor("f", {var(3)})}), functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -305,7 +305,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNode
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -313,7 +313,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildIsWatchedInThatNode
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -323,7 +323,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("h", {var(4), var(0)}), functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("h", {var(4), var(0)}), functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -334,7 +334,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);
@@ -342,7 +342,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AGoalAddedAtAChildUsesTheSurvivingRep
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{var(0), var(1), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{var(0), var(1), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -352,7 +352,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, 1, std::vector<const expr*>{functor("g", {var(6)})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, 1, std::vector<const expr*>{functor("g", {var(6)})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, 1, child_goals);
     EXPECT_THAT(child_change.changed_goals, ElementsAre(0u));
@@ -363,7 +363,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, root_call_site, std::vector<const expr*>{var(5), functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, root_call_site, std::vector<const expr*>{var(5), functor("go", {})});
     const pud_body_goal_id grandchild_call_site = grandchild_goals.next_id - 1;
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
@@ -376,7 +376,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list great_grandchild_goals = goal_resolver.resolve_goal(grandchild_goals, grandchild_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list great_grandchild_goals = child_goal_lists.build(grandchild_goals, grandchild_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state great_grandchild_bindings = binder.bind(grandchild_bindings, great_grandchild);
     const pud_structure_watch_change great_grandchild_change = watcher.descend(
         grandchild_change.watch, great_grandchild_bindings, great_grandchild, grandchild_call_site, great_grandchild_goals);
@@ -384,7 +384,7 @@ TEST_F(PudStructureWatcherIntegrationTest, WatchUnwatchAcrossThreeLevels) {
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -398,14 +398,14 @@ TEST_F(PudStructureWatcherIntegrationTest, UnrelatedBindingsLeaveStructureAlone)
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, IsEmpty());
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOnce) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1), var(2)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1), var(2)}), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -418,14 +418,14 @@ TEST_F(PudStructureWatcherIntegrationTest, GoalChangedTwiceAtOneNodeIsReportedOn
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, ElementsAre(0u));
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodesReps) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -435,7 +435,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -446,7 +446,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id grandchild_call_site = grandchild_goals.next_id - 1;
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
@@ -459,7 +459,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list great_grandchild_goals = goal_resolver.resolve_goal(grandchild_goals, grandchild_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list great_grandchild_goals = child_goal_lists.build(grandchild_goals, grandchild_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state great_grandchild_bindings = binder.bind(grandchild_bindings, great_grandchild);
     const pud_structure_watch_change great_grandchild_change = watcher.descend(
         grandchild_change.watch, great_grandchild_bindings, great_grandchild, grandchild_call_site, great_grandchild_goals);
@@ -467,7 +467,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InstantiationValueIsWrittenInTheNodes
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -477,7 +477,7 @@ TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_probe_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_probe_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_probe_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_probe_change =
         watcher.descend(root_watch, child_probe_bindings, child, root_call_site, child_probe_goals);
@@ -489,7 +489,7 @@ TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list sibling_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list sibling_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
     const pud_structure_watch_change sibling_change =
         watcher.descend(root_watch, sibling_bindings, sibling, root_call_site, sibling_goals);
@@ -497,7 +497,7 @@ TEST_F(PudStructureWatcherIntegrationTest, SiblingBranchesSeeTheirOwnChanges) {
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOther) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -507,7 +507,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_probe_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_probe_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_probe_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_probe_change =
         watcher.descend(root_watch, child_probe_bindings, child, root_call_site, child_probe_goals);
@@ -519,7 +519,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list sibling_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list sibling_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id sibling_call_site = sibling_goals.next_id - 1;
     const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
     const pud_structure_watch_change sibling_change =
@@ -532,7 +532,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(sibling_goals, sibling_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(sibling_goals, sibling_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(sibling_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(sibling_change.watch, grandchild_bindings, grandchild, sibling_call_site, grandchild_goals);
@@ -540,7 +540,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangeInOneBranchDoesNotLeakIntoTheOt
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrder) {
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(1)}), var(2), var(3), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(1)}), var(2), var(3), functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -554,7 +554,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ChangesFollowTheStoredSubstitutionOrd
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, ElementsAre(1u, 0u, 2u));
@@ -564,7 +564,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSepar
     const expr* first = functor("f", {var(0)});
     const expr* second = functor("f", {var(0)});
     ASSERT_EQ(first, second);
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{first, second, functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{first, second, functor("go", {})});
     const pud_body_goal_id root_call_site = goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -574,7 +574,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSepar
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
     EXPECT_THAT(change.changed_goals, UnorderedElementsAre(0u, 1u));
@@ -582,7 +582,7 @@ TEST_F(PudStructureWatcherIntegrationTest, InternedDuplicateGoalsAreWatchedSepar
 
 TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) {
     const uint32_t chain_length = 200;
-    pud_goal_list goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0), var(chain_length)}), functor("go", {})});
+    pud_goal_list goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0), var(chain_length)}), functor("go", {})});
     pud_body_goal_id call_site = goals.next_id - 1;
     pud_ubs_state bindings = pud_ubs_state{};
     pud_structure_watch watch = watcher.watch_root(pud_ubs_state{}, goals, 0);
@@ -598,7 +598,7 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
             .body_goals = {},
             .var_count = 0,
         });
-        pud_goal_list step_goals = goal_resolver.resolve_goal(goals, closed, std::vector<const expr*>{functor("go", {})});
+        pud_goal_list step_goals = child_goal_lists.build(goals, closed, std::vector<const expr*>{functor("go", {})});
         call_site = step_goals.next_id - 1;
         bindings = binder.bind(bindings, level_node);
         const pud_structure_watch_change change = watcher.descend(watch, bindings, level_node, closed, step_goals);
@@ -612,7 +612,7 @@ TEST_F(PudStructureWatcherIntegrationTest, LongRenamingChainAcrossStoredLevels) 
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsReplacementIs) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(4)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -622,7 +622,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsRep
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, 0, std::vector<const expr*>{functor("f", {var(2)})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, 0, std::vector<const expr*>{functor("f", {var(2)})});
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, 0, child_goals);
     ASSERT_THAT(child_change.changed_goals, IsEmpty());
@@ -633,7 +633,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsRep
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, root_call_site, grandchild_goals);
@@ -641,7 +641,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AClosedGoalIsNoLongerWatchedButItsRep
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOther) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0)}), functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("f", {var(0)}), functor("g", {var(0)}), functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id mid = modules.store_inference(k_module, pud_inference{
@@ -651,7 +651,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOth
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list mid_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list mid_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state mid_bindings = binder.bind(pud_ubs_state{}, mid);
     const pud_structure_watch_change mid_change =
         watcher.descend(root_watch, mid_bindings, mid, root_call_site, mid_goals);
@@ -662,7 +662,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOth
         .body_goals = {},
         .var_count = 0,
     });
-    const pud_goal_list child_closing_goals = goal_resolver.resolve_goal(mid_goals, 0, std::vector<const expr*>{});
+    const pud_goal_list child_closing_goals = child_goal_lists.build(mid_goals, 0, std::vector<const expr*>{});
     const pud_ubs_state child_closing_bindings = binder.bind(mid_bindings, child);
     const pud_structure_watch_change child_closing_change =
         watcher.descend(mid_change.watch, child_closing_bindings, child, 0, child_closing_goals);
@@ -674,7 +674,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOth
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list sibling_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list sibling_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state sibling_bindings = binder.bind(pud_ubs_state{}, sibling);
     const pud_structure_watch_change sibling_change =
         watcher.descend(root_watch, sibling_bindings, sibling, root_call_site, sibling_goals);
@@ -682,7 +682,7 @@ TEST_F(PudStructureWatcherIntegrationTest, ClosingInOneBranchDoesNotAffectTheOth
 }
 
 TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThroughItsValue) {
-    pud_goal_list root_goals = initial_goal_opener.open_goals(std::vector<const expr*>{functor("go", {})});
+    pud_goal_list root_goals = root_goal_lists.build(std::vector<const expr*>{functor("go", {})});
     const pud_body_goal_id root_call_site = root_goals.next_id - 1;
     const pud_structure_watch root_watch = watcher.watch_root(pud_ubs_state{}, root_goals, 0);
     const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
@@ -692,7 +692,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThro
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list child_goals = goal_resolver.resolve_goal(root_goals, root_call_site, std::vector<const expr*>{functor("g", {var(0)}), functor("go", {})});
+    pud_goal_list child_goals = child_goal_lists.build(root_goals, root_call_site, std::vector<const expr*>{functor("g", {var(0)}), functor("go", {})});
     const pud_body_goal_id child_call_site = child_goals.next_id - 1;
     const pud_ubs_state child_bindings = binder.bind(pud_ubs_state{}, child);
     const pud_structure_watch_change child_change = watcher.descend(root_watch, child_bindings, child, root_call_site, child_goals);
@@ -704,7 +704,7 @@ TEST_F(PudStructureWatcherIntegrationTest, AnAddedGoalOverABoundVarIsWatchedThro
         .body_goals = {},
         .var_count = 0,
     });
-    pud_goal_list grandchild_goals = goal_resolver.resolve_goal(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
+    pud_goal_list grandchild_goals = child_goal_lists.build(child_goals, child_call_site, std::vector<const expr*>{functor("go", {})});
     const pud_ubs_state grandchild_bindings = binder.bind(child_bindings, grandchild);
     const pud_structure_watch_change grandchild_change =
         watcher.descend(child_change.watch, grandchild_bindings, grandchild, child_call_site, grandchild_goals);

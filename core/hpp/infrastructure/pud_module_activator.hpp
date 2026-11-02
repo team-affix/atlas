@@ -11,63 +11,56 @@
 
 template<
     typename IListAxioms,
-    typename ICheckNodeRefuted,
+    typename IIsNodeRefuted,
     typename IGetChildren,
     typename IActivateRoot,
-    typename IActivateChild,
     typename IRefuteLeaf,
-    typename IDeactivateNode>
+    typename IMoveActivity>
 struct pud_module_activator {
     pud_module_activator(
         IListAxioms& list_axioms,
-        ICheckNodeRefuted& check_node_refuted,
+        IIsNodeRefuted& is_node_refuted,
         IGetChildren& get_children,
         IActivateRoot& activate_root,
-        IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
-        IDeactivateNode& deactivate_node);
+        IMoveActivity& move_activity);
     pud_frontier_change activate_module(pud_module_id module);
 private:
     IListAxioms& list_axioms_;
-    ICheckNodeRefuted& check_node_refuted_;
+    IIsNodeRefuted& is_node_refuted_;
     IGetChildren& get_children_;
     IActivateRoot& activate_root_;
-    IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
-    IDeactivateNode& deactivate_node_;
+    IMoveActivity& move_activity_;
 };
 
 #define PUD_MODULE_ACTIVATOR_TEMPLATE                                                      \
-    template<typename IListAxioms, typename ICheckNodeRefuted, typename IGetChildren,      \
-             typename IActivateRoot, typename IActivateChild, typename IRefuteLeaf,        \
-             typename IDeactivateNode>
+    template<typename IListAxioms, typename IIsNodeRefuted, typename IGetChildren,      \
+             typename IActivateRoot, typename IRefuteLeaf, typename IMoveActivity>
 #define PUD_MODULE_ACTIVATOR                                                               \
-    pud_module_activator<IListAxioms, ICheckNodeRefuted, IGetChildren, IActivateRoot, IActivateChild, \
-        IRefuteLeaf, IDeactivateNode>
+    pud_module_activator<IListAxioms, IIsNodeRefuted, IGetChildren, IActivateRoot, IRefuteLeaf, IMoveActivity>
 
 PUD_MODULE_ACTIVATOR_TEMPLATE
 PUD_MODULE_ACTIVATOR::pud_module_activator(
     IListAxioms& list_axioms,
-    ICheckNodeRefuted& check_node_refuted,
+    IIsNodeRefuted& is_node_refuted,
     IGetChildren& get_children,
     IActivateRoot& activate_root,
-    IActivateChild& activate_child,
     IRefuteLeaf& refute_leaf,
-    IDeactivateNode& deactivate_node)
+    IMoveActivity& move_activity)
     : list_axioms_(list_axioms)
-    , check_node_refuted_(check_node_refuted)
+    , is_node_refuted_(is_node_refuted)
     , get_children_(get_children)
     , activate_root_(activate_root)
-    , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
-    , deactivate_node_(deactivate_node) {}
+    , move_activity_(move_activity) {}
 
 PUD_MODULE_ACTIVATOR_TEMPLATE
 pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) {
     std::deque<pud_global_node_id> descending;
     std::vector<pud_global_node_id> axioms_arrived_refuted;
     for (pud_global_node_id axiom : list_axioms_.list_axioms(module)) {
-        if (check_node_refuted_.check_refuted(axiom))
+        if (is_node_refuted_.is_refuted(axiom))
             continue;
         descending.push_back(axiom);
         if (!activate_root_.activate_root(axiom))
@@ -83,7 +76,7 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
     while (!descending.empty()) {
         const pud_global_node_id node = descending.front();
         descending.pop_front();
-        if (check_node_refuted_.check_refuted(node))
+        if (is_node_refuted_.is_refuted(node))
             continue;
         const std::vector<pud_node_id>& stored_children = get_children_.get_children(node);
         if (stored_children.empty()) {
@@ -93,29 +86,17 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
         std::vector<pud_global_node_id> children;
         for (pud_node_id stored_child : stored_children) {
             const pud_global_node_id child{.module = module, .node = stored_child};
-            if (check_node_refuted_.check_refuted(child))
+            if (is_node_refuted_.is_refuted(child))
                 continue;
             children.push_back(child);
         }
         DEBUG_ASSERT(!children.empty());
-        std::vector<pud_global_node_id> children_arrived_refuted;
-        for (pud_global_node_id child : children) {
-            if (!activate_child_.activate_child(node, child))
-                continue;
-            children_arrived_refuted.push_back(child);
-        }
-        for (pud_global_node_id child : children_arrived_refuted) {
-            const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(child);
-            change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
-        }
-        for (pud_global_node_id stranded : deactivate_node_.deactivate(node)) {
-            const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(stranded);
-            change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
-        }
+        const std::vector<pud_global_node_id> refuted = move_activity_.move(node, children);
+        change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
         descending.insert(descending.end(), children.begin(), children.end());
     }
     for (pud_global_node_id leaf : leaves) {
-        if (check_node_refuted_.check_refuted(leaf))
+        if (is_node_refuted_.is_refuted(leaf))
             continue;
         change.offspring.push_back(leaf);
     }

@@ -32,8 +32,7 @@ TEST_F(PudFunctorLinkIntegrationTest, TwoModulesShareOneGlobalIdForTheSameName) 
     const uint32_t right_global = links.get_global_functor_id_from_local_functor_id(2, 3);
     EXPECT_EQ(left_global, right_global);
     EXPECT_EQ(symbols.get_name_by_global_functor_id(left_global), "nat");
-    EXPECT_NE(links.get_local_functor_id_from_global_functor_id(1, left_global),
-        links.get_local_functor_id_from_global_functor_id(2, right_global));
+    EXPECT_NE(links.find_local_functor_id(1, left_global), links.find_local_functor_id(2, right_global));
 }
 
 TEST_F(PudFunctorLinkIntegrationTest, TheSameLocalIdWithDifferentNamesGetsTwoGlobalIds) {

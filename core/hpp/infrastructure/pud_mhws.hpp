@@ -16,18 +16,19 @@
 #include "value_objects/pud_witness_advance.hpp"
 #include "debug_assert.hpp"
 
-template<typename IDescendReplay, typename ICheckNodeLeaf, typename ICheckNodeRefuted, typename IGetChildren>
+template<typename IDescendReplay, typename IIsNodeLeaf, typename IIsNodeRefuted, typename IGetChildren>
 struct pud_mhws {
     pud_mhws(
         IDescendReplay& descend_replay,
-        ICheckNodeLeaf& check_node_leaf,
-        ICheckNodeRefuted& check_node_refuted,
+        IIsNodeLeaf& is_node_leaf,
+        IIsNodeRefuted& is_node_refuted,
         IGetChildren& get_children);
     std::optional<pud_mhws_head_id> try_add(pud_replay search_root);
     std::optional<pud_mhws_head_id> try_fork(pud_mhws_head_id head_id, pud_replay search_root);
     std::optional<pud_witness_advance> advance(pud_mhws_head_id head_id);
     void remove(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
+    std::optional<pud_global_node_id> find_witness(pud_mhws_head_id head_id) const;
 private:
 
     struct frame {
@@ -46,8 +47,8 @@ private:
     void unlink(pud_mhws_head_id head_id);
 
     IDescendReplay& descend_replay_;
-    ICheckNodeLeaf& check_node_leaf_;
-    ICheckNodeRefuted& check_node_refuted_;
+    IIsNodeLeaf& is_node_leaf_;
+    IIsNodeRefuted& is_node_refuted_;
     IGetChildren& get_children_;
 
     pud_mhws_head_id next_head_id_;
@@ -57,19 +58,19 @@ private:
 };
 
 #define PUD_MHWS_TEMPLATE                                                                  \
-    template<typename IDescendReplay, typename ICheckNodeLeaf, typename ICheckNodeRefuted, \
+    template<typename IDescendReplay, typename IIsNodeLeaf, typename IIsNodeRefuted, \
              typename IGetChildren>
-#define PUD_MHWS pud_mhws<IDescendReplay, ICheckNodeLeaf, ICheckNodeRefuted, IGetChildren>
+#define PUD_MHWS pud_mhws<IDescendReplay, IIsNodeLeaf, IIsNodeRefuted, IGetChildren>
 
 PUD_MHWS_TEMPLATE
 PUD_MHWS::pud_mhws(
     IDescendReplay& descend_replay,
-    ICheckNodeLeaf& check_node_leaf,
-    ICheckNodeRefuted& check_node_refuted,
+    IIsNodeLeaf& is_node_leaf,
+    IIsNodeRefuted& is_node_refuted,
     IGetChildren& get_children)
     : descend_replay_(descend_replay)
-    , check_node_leaf_(check_node_leaf)
-    , check_node_refuted_(check_node_refuted)
+    , is_node_leaf_(is_node_leaf)
+    , is_node_refuted_(is_node_refuted)
     , get_children_(get_children)
     , next_head_id_(0)
     , searches_()
@@ -149,9 +150,9 @@ PUD_MHWS_TEMPLATE
 std::optional<pud_global_node_id> PUD_MHWS::resume(search& resumed) {
     if (resumed.frames.empty()) {
         const pud_global_node_id root = resumed.root.node;
-        if (check_node_refuted_.check_refuted(root))
+        if (is_node_refuted_.is_refuted(root))
             return std::nullopt;
-        if (check_node_leaf_.check_leaf(root))
+        if (is_node_leaf_.is_leaf(root))
             return root;
         resumed.frames.push_back(frame{.current = std::nullopt, .next_sibling = 0});
     }
@@ -169,11 +170,11 @@ std::optional<pud_global_node_id> PUD_MHWS::resume(search& resumed) {
             continue;
         }
         const pud_global_node_id node = top.current->node;
-        if (check_node_refuted_.check_refuted(node)) {
+        if (is_node_refuted_.is_refuted(node)) {
             top.current = std::nullopt;
             continue;
         }
-        if (check_node_leaf_.check_leaf(node))
+        if (is_node_leaf_.is_leaf(node))
             return node;
         resumed.frames.push_back(frame{.current = std::nullopt, .next_sibling = 0});
     }
@@ -190,6 +191,14 @@ std::optional<pud_replay> PUD_MHWS::try_descend_sibling(const pud_replay& parent
             return sibling;
     }
     return std::nullopt;
+}
+
+PUD_MHWS_TEMPLATE
+std::optional<pud_global_node_id> PUD_MHWS::find_witness(pud_mhws_head_id head_id) const {
+    const auto found = head_to_witness_.find(head_id);
+    if (found == head_to_witness_.end())
+        return std::nullopt;
+    return found->second;
 }
 
 PUD_MHWS_TEMPLATE

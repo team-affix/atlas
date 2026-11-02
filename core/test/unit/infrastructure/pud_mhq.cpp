@@ -216,13 +216,13 @@ TEST_F(PudMhqTest, AQueryIsExhaustedOnlyOnceItsLastCandidateIsRefuted) {
         .WillByDefault(Return(pud_replay{.node = pud_test_node(1), .frame_offset = 9u, .ubs_state = {}}));
     ON_CALL(add_candidate, try_add(Field(&pud_replay::node, pud_test_node(1)))).WillByDefault(Return(31u));
     const pud_mhq_head_id head = mhq.try_open(k_test_module, pud_ubs_state{}, &goal, 7).value();
-    EXPECT_FALSE(mhq.check_exhausted(head));
+    EXPECT_FALSE(mhq.is_exhausted(head));
     ON_CALL(invalidate_candidates, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30}));
     mhq.invalidate_leaf(pud_test_node(5));
-    EXPECT_FALSE(mhq.check_exhausted(head));
+    EXPECT_FALSE(mhq.is_exhausted(head));
     ON_CALL(invalidate_candidates, invalidate_leaf(_)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{31}));
     mhq.invalidate_leaf(pud_test_node(6));
-    EXPECT_TRUE(mhq.check_exhausted(head));
+    EXPECT_TRUE(mhq.is_exhausted(head));
 }
 
 TEST_F(PudMhqTest, RemovingAQueryRemovesItsCandidates) {

@@ -16,7 +16,7 @@ inline std::set<pud_global_node_id> reference_pud_frontier(const std::deque<pud_
     for (const pud_module& module : modules) {
         std::vector<pud_node_id> pending;
         for (pud_node_id axiom = 0; axiom < module.count_axioms(); ++axiom) {
-            if (!module.check_refuted(axiom))
+            if (!module.is_refuted(axiom))
                 pending.push_back(axiom);
         }
         while (!pending.empty()) {
@@ -28,7 +28,7 @@ inline std::set<pud_global_node_id> reference_pud_frontier(const std::deque<pud_
                 continue;
             }
             for (pud_node_id child : children) {
-                if (!module.check_refuted(child))
+                if (!module.is_refuted(child))
                     pending.push_back(child);
             }
         }
@@ -41,7 +41,7 @@ inline std::vector<pud_global_node_id> reference_pud_stranded_nodes(const std::d
     for (const pud_module& module : modules) {
         std::vector<pud_node_id> pending;
         for (pud_node_id axiom = 0; axiom < module.count_axioms(); ++axiom) {
-            if (!module.check_refuted(axiom))
+            if (!module.is_refuted(axiom))
                 pending.push_back(axiom);
         }
         while (!pending.empty()) {
@@ -52,7 +52,7 @@ inline std::vector<pud_global_node_id> reference_pud_stranded_nodes(const std::d
                 continue;
             size_t live_children = 0;
             for (pud_node_id child : children) {
-                if (module.check_refuted(child))
+                if (module.is_refuted(child))
                     continue;
                 pending.push_back(child);
                 ++live_children;

@@ -18,6 +18,7 @@
 #include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
+#include "debug_assert.hpp"
 
 template<typename IMakeBindMap, typename IGetInference, typename IMakeFunctor>
 struct pud_structure_watcher {
@@ -85,6 +86,7 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
         if (const expr::var* surviving = std::get_if<expr::var>(&value->content)) {
             const ubs_class surviving_class = bind_map.find(surviving->index);
             if (surviving_class.value.has_value()) {
+                DEBUG_ASSERT(surviving_class.value->frame_offset == 0);
                 const expr::functor& functor = *surviving_class.value->functor;
                 value = make_functor_.make_functor(functor.id, functor.args);
                 value_module = surviving_class.value->module;
@@ -190,6 +192,7 @@ immer::set<uint32_t> PUD_STRUCTURE_WATCHER::visit_reps(const expr* visited, pud_
                 continue;
             }
             if (expanded_roots.insert(var_class.root).second) {
+                DEBUG_ASSERT(var_class.value->frame_offset == 0);
                 const expr::functor& functor = *var_class.value->functor;
                 const expr* reconstructed = make_functor_.make_functor(functor.id, functor.args);
                 pending.push_back(walked{reconstructed, var_class.value->module});

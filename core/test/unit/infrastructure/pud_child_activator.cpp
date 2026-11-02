@@ -1,4 +1,5 @@
 #include <optional>
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_child_activator.hpp"
@@ -32,15 +33,12 @@ struct MockGetNodeGoals {
 struct MockGetNodeAxiom {
     MOCK_METHOD(pud_global_node_id, get, (pud_global_node_id), (const));
 };
-struct MockResolveGoal {
+struct MockBuildChildGoalList {
     MOCK_METHOD(
         pud_goal_list,
-        resolve_goal,
+        build,
         (const pud_goal_list&, pud_body_goal_id, (const std::vector<const expr*>&)),
         (const));
-};
-struct MockFindNodeGoal {
-    MOCK_METHOD(const expr*, find, (pud_global_node_id, pud_body_goal_id));
 };
 struct MockStoreNodeGoals {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_goal_list));
@@ -67,16 +65,16 @@ struct MockOpenQuery {
 struct MockHoldQuery {
     MOCK_METHOD(void, hold, (pud_mhq_head_id, pud_global_node_id, pud_body_goal_id));
 };
-struct MockCheckQueryExhausted {
-    MOCK_METHOD(bool, check_exhausted, (pud_mhq_head_id));
+struct MockIsQueryExhausted {
+    MOCK_METHOD(bool, is_exhausted, (pud_mhq_head_id));
 };
 
 using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetActiveState>, NiceMock<MockStoreActiveState>, NiceMock<MockGetInference>,
-    NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockResolveGoal>, NiceMock<MockFindNodeGoal>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockBuildChildGoalList>,
     NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>, NiceMock<MockIncrementLiveChildCount>,
     NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
-    NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
+    NiceMock<MockHoldQuery>, NiceMock<MockIsQueryExhausted>>;
 
 // The parent, node 3 at lvc 5, has goals a and b, holds queries 40 and 41 for them, and the child,
 // node 4, was resolved on goal 0. The child keeps goal 1, adds goal 2 of its own, and two variables.
@@ -86,8 +84,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockGetInference> inferences;
     NiceMock<MockGetNodeGoals> get_goals;
     NiceMock<MockGetNodeAxiom> get_node_axiom;
-    NiceMock<MockResolveGoal> resolve_goal;
-    NiceMock<MockFindNodeGoal> find_goal;
+    NiceMock<MockBuildChildGoalList> child_goal_lists;
     NiceMock<MockStoreNodeGoals> store_goals;
     NiceMock<MockStoreNodeAxiom> store_node_axiom;
     NiceMock<MockIncrementLiveChildCount> live_child_counts;
@@ -96,9 +93,9 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockForkQuery> forker;
     NiceMock<MockOpenQuery> opener;
     NiceMock<MockHoldQuery> holders;
-    NiceMock<MockCheckQueryExhausted> exhausted;
+    NiceMock<MockIsQueryExhausted> exhausted;
     test_child_activator_t activator{
-        get_states, store_states, inferences, get_goals, get_node_axiom, resolve_goal, find_goal, store_goals,
+        get_states, store_states, inferences, get_goals, get_node_axiom, child_goal_lists, store_goals,
         store_node_axiom, live_child_counts, binder, watcher, forker, opener, holders, exhausted};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
@@ -122,15 +119,14 @@ struct PudChildActivatorTest : public ::testing::Test {
         ON_CALL(get_states, get(pud_test_node(3))).WillByDefault(ReturnRef(parent_state));
         ON_CALL(inferences, get_inference(pud_test_node(4))).WillByDefault(ReturnRef(child_inference));
         ON_CALL(get_goals, get(pud_test_node(3))).WillByDefault(ReturnRef(parent_goals));
-        ON_CALL(resolve_goal, resolve_goal(parent_goals, 0u, child_inference.body_goals))
+        ON_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals))
             .WillByDefault(Return(child_goals));
-        ON_CALL(find_goal, find(pud_test_node(4), 1)).WillByDefault(Return(&goal_b));
         ON_CALL(binder, bind(_, pud_test_node(4))).WillByDefault(Return(child_bindings));
         ON_CALL(watcher, descend(_, _, _, _, _))
             .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {}}));
         ON_CALL(opener, try_open(k_test_module, _, &goal_c, 7)).WillByDefault(Return(70));
         ON_CALL(forker, try_fork(41, _, &goal_b, 7)).WillByDefault(Return(60));
-        ON_CALL(exhausted, check_exhausted(_)).WillByDefault(Return(false));
+        ON_CALL(exhausted, is_exhausted(_)).WillByDefault(Return(false));
     }
 };
 
@@ -146,7 +142,7 @@ TEST_F(PudChildActivatorTest, AChildInheritsItsParentsRootAxiom) {
 }
 
 TEST_F(PudChildActivatorTest, AChildsGoalsAreItsParentsButTheCallSiteThenItsOwn) {
-    EXPECT_CALL(resolve_goal, resolve_goal(parent_goals, 0u, child_inference.body_goals)).WillOnce(Return(child_goals));
+    EXPECT_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals)).WillOnce(Return(child_goals));
     EXPECT_CALL(store_goals, store(pud_test_node(4), child_goals));
     activator.activate_child(pud_test_node(3), pud_test_node(4));
 }
@@ -160,7 +156,7 @@ TEST_F(PudChildActivatorTest, AChildsGoalsAreStoredBeforeAnyOfItsQueriesIsForked
     ON_CALL(watcher, descend(_, _, _, _, _))
         .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     InSequence in_order;
-    EXPECT_CALL(resolve_goal, resolve_goal(parent_goals, 0u, child_inference.body_goals)).WillOnce(Return(child_goals));
+    EXPECT_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals)).WillOnce(Return(child_goals));
     EXPECT_CALL(store_goals, store(pud_test_node(4), child_goals));
     EXPECT_CALL(forker, try_fork(_, _, _, _));
     EXPECT_CALL(opener, try_open(_, _, _, _));
@@ -211,20 +207,17 @@ TEST_F(PudChildActivatorTest, AGoalOfItsOwnWithoutCandidatesRefutesTheChild) {
 }
 
 TEST_F(PudChildActivatorTest, AnInheritedQueryAlreadyExhaustedRefutesTheChildButIsStillHeld) {
-    ON_CALL(exhausted, check_exhausted(41u)).WillByDefault(Return(true));
+    ON_CALL(exhausted, is_exhausted(41u)).WillByDefault(Return(true));
     EXPECT_CALL(holders, hold(41u, pud_test_node(4), 1u));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
     EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }
 
-TEST_F(PudChildActivatorTest, AChangedGoalItsParentHoldsNoQueryForIsOpenedInTheChildsEnvironment) {
+// A live parent holds a query for each of its goals (a failed open or fork refutes the node), so a
+// goal it holds no query for can only be one the child added.
+TEST_F(PudChildActivatorTest, AnInheritedGoalItsParentHoldsNoQueryForBreaksTheActivationInvariant) {
     parent_state.queries = queries_t{}.set(0, 40);
-    ON_CALL(watcher, descend(_, _, _, _, _))
-        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
-    EXPECT_CALL(forker, try_fork(_, _, _, _)).Times(0);
-    EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_b, 7u)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_c, 7u)).WillOnce(Return(70));
-    EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
+    EXPECT_THROW(activator.activate_child(pud_test_node(3), pud_test_node(4)), std::logic_error);
 }
 
 TEST_F(PudChildActivatorTest, ARefutedChildStillCountsAsALiveChildUntilItIsRefuted) {

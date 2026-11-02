@@ -6,27 +6,35 @@
 
 template<typename ICountNodeDepth, typename IGetNodeGoals>
 struct pud_unfold_allower {
-    pud_unfold_allower(ICountNodeDepth& count_node_depth, IGetNodeGoals& get_node_goals, size_t max_node_depth);
+    pud_unfold_allower(
+        ICountNodeDepth& count_node_depth,
+        IGetNodeGoals& get_node_goals,
+        size_t max_node_depth,
+        size_t max_open_goals);
     bool allow(pud_global_node_id node) const;
 private:
     ICountNodeDepth& count_node_depth_;
     IGetNodeGoals& get_node_goals_;
     size_t max_node_depth_;
+    size_t max_open_goals_;
 };
 
 template<typename ICountNodeDepth, typename IGetNodeGoals>
 pud_unfold_allower<ICountNodeDepth, IGetNodeGoals>::pud_unfold_allower(
-    ICountNodeDepth& count_node_depth, IGetNodeGoals& get_node_goals, size_t max_node_depth)
+    ICountNodeDepth& count_node_depth,
+    IGetNodeGoals& get_node_goals,
+    size_t max_node_depth,
+    size_t max_open_goals)
     : count_node_depth_(count_node_depth)
     , get_node_goals_(get_node_goals)
-    , max_node_depth_(max_node_depth) {}
+    , max_node_depth_(max_node_depth)
+    , max_open_goals_(max_open_goals) {}
 
 template<typename ICountNodeDepth, typename IGetNodeGoals>
 bool pud_unfold_allower<ICountNodeDepth, IGetNodeGoals>::allow(pud_global_node_id node) const {
-    constexpr size_t k_max_open_goals = 64;
     if (count_node_depth_.count(node) >= max_node_depth_)
         return false;
-    return get_node_goals_.get(node).goals.size() <= k_max_open_goals;
+    return get_node_goals_.get(node).goals.size() <= max_open_goals_;
 }
 
 #endif

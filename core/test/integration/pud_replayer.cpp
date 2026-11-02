@@ -9,11 +9,10 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_module_registry.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
-#include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
@@ -24,11 +23,10 @@
 struct PudReplayerIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
     using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
-    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
     using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, pud_identity_global_functor_ids, cycle_detector_factory_t::cycle_detector_t>;
     using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, copy_demoduler_t>;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
 
     static constexpr pud_module_id k_scratch_module = 0;
 
@@ -36,17 +34,17 @@ struct PudReplayerIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     copy_demoduler_t copy_demoduler{exprs};
-    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
     cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
-    unifier_factory_t unifiers{globalize, exprs, demoduler};
+    pud_identity_global_functor_ids global_functor_ids;
+    unifier_factory_t unifiers{globalize, exprs, global_functor_ids};
     normalizer_factory_t normalizers{globalize, exprs, exprs, copy_demoduler};
     pud_module scratch{k_scratch_module, {}, {rule(exprs.make_functor(functors.id("dummy"), {}), {}, 0)}};
     std::deque<pud_module> opened_modules;
-    modules_t modules;
-    pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>
+    module_registry_t modules;
+    pud_replayer<module_registry_t, module_registry_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>
         replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
-    pud_binder<bind_map_factory_t, modules_t> binder{bind_maps, modules};
+    pud_binder<bind_map_factory_t, module_registry_t> binder{bind_maps, modules};
     pud_global_node_id last_root{.module = k_scratch_module, .node = 0};
 
     const expr* var(uint32_t index) { return exprs.make_var(index); }

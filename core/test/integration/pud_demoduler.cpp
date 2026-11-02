@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_demoduler.hpp"
-#include "infrastructure/pud_functor_demoduler.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/moduled_expr.hpp"
 #include "value_objects/moduled_functor.hpp"
@@ -27,20 +26,13 @@ struct MockMakeVar {
     MOCK_METHOD(const expr*, make_var, (uint32_t));
 };
 
-struct demoduler_t;
-struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, MockGetGlobalFunctorId, MockMakeFunctor> {
-    using pud_functor_demoduler<demoduler_t, MockGetGlobalFunctorId, MockMakeFunctor>::pud_functor_demoduler;
-};
-struct demoduler_t : pud_demoduler<functor_demoduler_t, MockMakeVar> {
-    using pud_demoduler<functor_demoduler_t, MockMakeVar>::pud_demoduler;
-};
+using demoduler_t = pud_demoduler<MockGetGlobalFunctorId, MockMakeVar, MockMakeFunctor>;
 
 struct PudDemodulerTest : public ::testing::Test {
     MockGetGlobalFunctorId global_ids;
     MockMakeFunctor make_functor;
     MockMakeVar make_var;
-    functor_demoduler_t functor_demoduler{demoduler, global_ids, make_functor};
-    demoduler_t demoduler{functor_demoduler, make_var};
+    demoduler_t demoduler{global_ids, make_var, make_functor};
     std::deque<expr> owned;
 
     const expr* var(uint32_t index) {

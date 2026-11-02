@@ -11,7 +11,7 @@
 #include "reference_pud_normalize_with_bindings.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_runtime.hpp"
+#include "pud_runtime.hpp"
 
 using ::testing::IsEmpty;
 
@@ -539,7 +539,7 @@ TYPED_TEST(PudAnswerSetsIntegrationTest, ARefutedNodeNeverHeldAnAnswer) {
     while (!pending.empty()) {
         const pud_node_id node = pending.back();
         pending.pop_back();
-        if (query_module.check_refuted(node)) {
+        if (query_module.is_refuted(node)) {
             std::vector<pud_node_id> descent;
             descent.push_back(node);
             while (!descent.empty()) {

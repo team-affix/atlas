@@ -11,38 +11,28 @@
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_ostream_inserter.hpp"
 #include "infrastructure/rule_ostream_inserter.hpp"
-#include "infrastructure/vector_uint64_ostream_serializer.hpp"
 
 struct pud_module_serializer_stack {
     pud_module_serializer_stack();
     void serialize_module(std::ostream& out, const pud_module& module) const;
 private:
+    using expr_inserter_t = expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>;
+    using rule_inserter_t = rule_ostream_inserter<expr_inserter_t, ostream_uint64_inserter, ostream_uint32_inserter>;
+    using inference_inserter_t =
+        pud_inference_ostream_inserter<expr_inserter_t, ostream_uint64_inserter, ostream_uint32_inserter>;
+
     ostream_uint8_inserter insert_uint8_;
     ostream_uint32_inserter insert_uint32_;
     ostream_uint64_inserter insert_uint64_;
     ostream_fixed_bytes_inserter insert_fixed_bytes_;
-    expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter> insert_expr_;
-    rule_ostream_inserter<
-        expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
-        ostream_uint64_inserter,
-        ostream_uint32_inserter> insert_rule_;
-    pud_inference_ostream_inserter<
-        expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
-        ostream_uint64_inserter,
-        ostream_uint32_inserter> insert_inference_;
-    vector_uint64_ostream_serializer<ostream_uint64_inserter> serialize_vector_uint64_;
+    expr_inserter_t insert_expr_;
+    rule_inserter_t insert_rule_;
+    inference_inserter_t insert_inference_;
     pud_module_ostream_inserter<
         ostream_fixed_bytes_inserter,
         ostream_uint64_inserter,
-        vector_uint64_ostream_serializer<ostream_uint64_inserter>,
-        rule_ostream_inserter<
-            expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
-            ostream_uint64_inserter,
-            ostream_uint32_inserter>,
-        pud_inference_ostream_inserter<
-            expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
-            ostream_uint64_inserter,
-            ostream_uint32_inserter>,
+        rule_inserter_t,
+        inference_inserter_t,
         ostream_uint8_inserter> insert_module_;
 };
 

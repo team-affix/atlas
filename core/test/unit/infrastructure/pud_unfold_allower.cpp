@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_unfold_allower.hpp"
@@ -31,7 +32,7 @@ struct MockGetNodeGoals {
 struct PudUnfoldAllowerTest : public ::testing::Test {
     MockCountNodeDepth depths;
     MockGetNodeGoals goals;
-    pud_unfold_allower<MockCountNodeDepth, MockGetNodeGoals> allower{depths, goals, 4};
+    pud_unfold_allower<MockCountNodeDepth, MockGetNodeGoals> allower{depths, goals, 4, 64};
     pud_goal_list at_cap = goals_of(64);
     pud_goal_list over_cap = goals_of(65);
 };
@@ -60,4 +61,12 @@ TEST_F(PudUnfoldAllowerTest, SixtyFourOpenGoalsAreStillAllowed) {
     EXPECT_CALL(depths, count(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(at_cap));
     EXPECT_TRUE(allower.allow(node()));
+}
+
+TEST_F(PudUnfoldAllowerTest, NoOpenGoalCapAllowsAnyNumberOfGoals) {
+    pud_unfold_allower<MockCountNodeDepth, MockGetNodeGoals> uncapped{
+        depths, goals, 4, std::numeric_limits<size_t>::max()};
+    EXPECT_CALL(depths, count(node())).WillOnce(Return(0u));
+    EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(over_cap));
+    EXPECT_TRUE(uncapped.allow(node()));
 }
