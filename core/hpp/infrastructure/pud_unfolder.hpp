@@ -9,50 +9,34 @@
 #include "value_objects/pud_inference.hpp"
 #include "debug_assert.hpp"
 
-template<
-    typename IResolve,
-    typename IStoreInference,
-    typename IActivateChild,
-    typename IRefuteLeaf,
-    typename IDeactivateNode,
-    typename IIsNodeRefuted>
+template<typename IResolve, typename IStoreInference, typename IMoveActivity, typename IIsNodeRefuted>
 struct pud_unfolder {
     pud_unfolder(
         IResolve& resolve,
         IStoreInference& store_inference,
-        IActivateChild& activate_child,
-        IRefuteLeaf& refute_leaf,
-        IDeactivateNode& deactivate_node,
+        IMoveActivity& move_activity,
         IIsNodeRefuted& is_node_refuted);
     pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal);
 private:
     IResolve& resolve_;
     IStoreInference& store_inference_;
-    IActivateChild& activate_child_;
-    IRefuteLeaf& refute_leaf_;
-    IDeactivateNode& deactivate_node_;
+    IMoveActivity& move_activity_;
     IIsNodeRefuted& is_node_refuted_;
 };
 
-#define PUD_UNFOLDER_TEMPLATE                                                              \
-    template<typename IResolve, typename IStoreInference, typename IActivateChild,        \
-             typename IRefuteLeaf, typename IDeactivateNode, typename IIsNodeRefuted>
-#define PUD_UNFOLDER \
-    pud_unfolder<IResolve, IStoreInference, IActivateChild, IRefuteLeaf, IDeactivateNode, IIsNodeRefuted>
+#define PUD_UNFOLDER_TEMPLATE \
+    template<typename IResolve, typename IStoreInference, typename IMoveActivity, typename IIsNodeRefuted>
+#define PUD_UNFOLDER pud_unfolder<IResolve, IStoreInference, IMoveActivity, IIsNodeRefuted>
 
 PUD_UNFOLDER_TEMPLATE
 PUD_UNFOLDER::pud_unfolder(
     IResolve& resolve,
     IStoreInference& store_inference,
-    IActivateChild& activate_child,
-    IRefuteLeaf& refute_leaf,
-    IDeactivateNode& deactivate_node,
+    IMoveActivity& move_activity,
     IIsNodeRefuted& is_node_refuted)
     : resolve_(resolve)
     , store_inference_(store_inference)
-    , activate_child_(activate_child)
-    , refute_leaf_(refute_leaf)
-    , deactivate_node_(deactivate_node)
+    , move_activity_(move_activity)
     , is_node_refuted_(is_node_refuted) {}
 
 PUD_UNFOLDER_TEMPLATE
@@ -61,22 +45,8 @@ pud_frontier_change PUD_UNFOLDER::unfold(pud_global_node_id leaf, pud_body_goal_
     for (pud_inference& inference : resolve_.resolve(leaf, goal))
         children.push_back(store_inference_.store_inference(leaf.module, std::move(inference)));
     DEBUG_ASSERT(!children.empty());
-    std::vector<pud_global_node_id> arrived_refuted;
-    for (pud_global_node_id child : children) {
-        if (!activate_child_.activate_child(leaf, child))
-            continue;
-        arrived_refuted.push_back(child);
-    }
-    pud_frontier_change change{.offspring = {}, .refuted = {}};
-    for (pud_global_node_id child : arrived_refuted) {
-        const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(child);
-        change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
-    }
-    for (pud_global_node_id stranded : deactivate_node_.deactivate(leaf)) {
-        const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(stranded);
-        change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
-    }
-    for (pud_global_node_id child : children) {
+    pud_frontier_change change{.offspring = {}, .refuted = move_activity_.move(leaf, children)};
+    for (const pud_global_node_id child : children) {
         if (is_node_refuted_.is_refuted(child))
             continue;
         change.offspring.push_back(child);

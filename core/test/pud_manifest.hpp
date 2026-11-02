@@ -4,6 +4,7 @@
 #include <deque>
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_acceptor.hpp"
+#include "infrastructure/pud_activity_mover.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
@@ -79,10 +80,10 @@ struct pud_manifest {
         node_goals_t, modules_t, modules_t, IExprPool, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
         unifier_factory_t, exporter_factory_t>;
     using resolver_t = pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t>;
-    using unfolder_t =
-        pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>;
-    using module_activator_t = pud_module_activator<
-        modules_t, modules_t, modules_t, root_activator_t, child_activator_t, leaf_refuter_t, node_deactivator_t>;
+    using activity_mover_t = pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>;
+    using unfolder_t = pud_unfolder<resolver_t, modules_t, activity_mover_t, modules_t>;
+    using module_activator_t =
+        pud_module_activator<modules_t, modules_t, modules_t, root_activator_t, leaf_refuter_t, activity_mover_t>;
 
     pud_manifest(IExprPool& expr_pool);
 
@@ -121,6 +122,7 @@ struct pud_manifest {
 
     acceptor_t                 acceptor_;
     resolver_t                 resolver_;
+    activity_mover_t           activity_mover_;
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 };
@@ -164,8 +166,8 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
           unifier_factory_, exporter_factory_)
     , resolver_(active_states_, node_goals_, mhq_, mhcs_, acceptor_)
-    , unfolder_(resolver_, modules_, child_activator_, leaf_refuter_, node_deactivator_, modules_)
-    , module_activator_(
-          modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_) {}
+    , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
+    , unfolder_(resolver_, modules_, activity_mover_, modules_)
+    , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_) {}
 
 #endif

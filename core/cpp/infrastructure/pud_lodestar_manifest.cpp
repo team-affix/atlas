@@ -45,9 +45,9 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
           unifier_factory_, exporter_factory_)
     , resolver_(active_states_, node_goals_, mhq_, mhcs_, acceptor_)
-    , unfolder_(resolver_, modules_, child_activator_, leaf_refuter_, node_deactivator_, modules_)
-    , module_activator_(
-          modules_, modules_, modules_, root_activator_, child_activator_, leaf_refuter_, node_deactivator_)
+    , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
+    , unfolder_(resolver_, modules_, activity_mover_, modules_)
+    , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_)
     , focus_set_()
     , unfold_budget_store_()
     , solution_store_()

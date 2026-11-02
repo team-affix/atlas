@@ -7,6 +7,7 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_acceptor.hpp"
+#include "infrastructure/pud_activity_mover.hpp"
 #include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
@@ -160,14 +161,16 @@ struct pud_lodestar_manifest {
     struct resolver_t : pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t> {
         using pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t>::pud_resolver;
     };
-    struct unfolder_t : pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t> {
-        using pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>::pud_unfolder;
+    struct activity_mover_t : pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t> {
+        using pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
+    };
+    struct unfolder_t : pud_unfolder<resolver_t, modules_t, activity_mover_t, modules_t> {
+        using pud_unfolder<resolver_t, modules_t, activity_mover_t, modules_t>::pud_unfolder;
     };
     struct module_activator_t : pud_module_activator<
-        modules_t, modules_t, modules_t, root_activator_t, child_activator_t, leaf_refuter_t, node_deactivator_t> {
+        modules_t, modules_t, modules_t, root_activator_t, leaf_refuter_t, activity_mover_t> {
         using pud_module_activator<
-            modules_t, modules_t, modules_t, root_activator_t, child_activator_t, leaf_refuter_t,
-            node_deactivator_t>::pud_module_activator;
+            modules_t, modules_t, modules_t, root_activator_t, leaf_refuter_t, activity_mover_t>::pud_module_activator;
     };
     using driver_t = pud_lodestar_driver<pud_lodestar_manifest>;
     struct focus_seeder_t : pud_lodestar_focus_seeder<modules_t, pud_lodestar_focus_set, pud_lodestar_focus_set> {
@@ -262,6 +265,7 @@ struct pud_lodestar_manifest {
 
     acceptor_t                 acceptor_;
     resolver_t                 resolver_;
+    activity_mover_t           activity_mover_;
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 
