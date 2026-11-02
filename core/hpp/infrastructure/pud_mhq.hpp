@@ -51,9 +51,12 @@ private:
         pud_global_node_id axiom;
         pud_mhcs_head_id candidate;
     };
+    struct query {
+        pud_module_id module;
+        std::vector<candidacy> candidacies;
+    };
 
-    std::optional<pud_mhq_head_id> admit_candidacy(
-        std::optional<pud_mhq_head_id> head_id, candidacy admitted, pud_module_id module);
+    std::optional<pud_mhq_head_id> admit(pud_module_id module, std::vector<candidacy> candidacies);
 
     IEnterReplay& enter_replay_;
     IListVisibleAxioms& list_visible_axioms_;
@@ -64,9 +67,8 @@ private:
     IPushUnitQuery& push_unit_query_;
 
     pud_mhq_head_id next_head_id_;
-    std::unordered_map<pud_mhq_head_id, std::vector<candidacy>> queries_;
+    std::unordered_map<pud_mhq_head_id, query> queries_;
     std::unordered_map<pud_mhcs_head_id, pud_mhq_head_id> candidate_to_head_;
-    std::unordered_map<pud_mhq_head_id, pud_module_id> module_by_head_;
 };
 
 #define PUD_MHQ_TEMPLATE                                                                   \
@@ -95,8 +97,7 @@ PUD_MHQ::pud_mhq(
     , push_unit_query_(push_unit_query)
     , next_head_id_(0)
     , queries_()
-    , candidate_to_head_()
-    , module_by_head_() {}
+    , candidate_to_head_() {}
 
 PUD_MHQ_TEMPLATE
 std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
@@ -104,7 +105,7 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
-    std::optional<pud_mhq_head_id> head_id;
+    std::vector<candidacy> admitted;
     for (pud_global_node_id axiom : list_visible_axioms_.list_visible_axioms(module)) {
         std::optional<pud_replay> axiom_root = enter_replay_.enter(caller_ubs_state, goal, frame_offset, axiom, module);
         if (!axiom_root.has_value())
@@ -112,13 +113,9 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_open(
         const std::optional<pud_mhcs_head_id> candidate = try_add_candidate_.try_add(std::move(axiom_root.value()));
         if (!candidate.has_value())
             continue;
-        head_id = admit_candidacy(head_id, candidacy{.axiom = axiom, .candidate = candidate.value()}, module);
+        admitted.push_back(candidacy{.axiom = axiom, .candidate = candidate.value()});
     }
-    if (!head_id.has_value())
-        return std::nullopt;
-    if (queries_.at(head_id.value()).size() == 1)
-        push_unit_query_.push_back(head_id.value());
-    return head_id;
+    return admit(module, std::move(admitted));
 }
 
 PUD_MHQ_TEMPLATE
@@ -127,29 +124,26 @@ std::optional<pud_mhq_head_id> PUD_MHQ::try_fork(
     const pud_ubs_state& caller_ubs_state,
     const expr* goal,
     uint32_t frame_offset) {
-    std::optional<pud_mhq_head_id> forked_head_id;
-    for (const candidacy& other : queries_.at(head_id)) {
+    const query& forked = queries_.at(head_id);
+    const pud_module_id module = forked.module;
+    std::vector<candidacy> admitted;
+    for (const candidacy& other : forked.candidacies) {
         std::optional<pud_replay> axiom_root =
-            enter_replay_.enter(caller_ubs_state, goal, frame_offset, other.axiom, module_by_head_.at(head_id));
+            enter_replay_.enter(caller_ubs_state, goal, frame_offset, other.axiom, module);
         if (!axiom_root.has_value())
             continue;
         const std::optional<pud_mhcs_head_id> candidate =
             try_fork_candidate_.try_fork(other.candidate, std::move(axiom_root.value()));
         if (!candidate.has_value())
             continue;
-        forked_head_id = admit_candidacy(
-            forked_head_id, candidacy{.axiom = other.axiom, .candidate = candidate.value()}, module_by_head_.at(head_id));
+        admitted.push_back(candidacy{.axiom = other.axiom, .candidate = candidate.value()});
     }
-    if (!forked_head_id.has_value())
-        return std::nullopt;
-    if (queries_.at(forked_head_id.value()).size() == 1)
-        push_unit_query_.push_back(forked_head_id.value());
-    return forked_head_id;
+    return admit(module, std::move(admitted));
 }
 
 PUD_MHQ_TEMPLATE
 void PUD_MHQ::remove(pud_mhq_head_id head_id) {
-    for (const candidacy& removed : queries_.at(head_id)) {
+    for (const candidacy& removed : queries_.at(head_id).candidacies) {
         candidate_to_head_.erase(removed.candidate);
         remove_candidate_.remove(removed.candidate);
     }
@@ -161,7 +155,7 @@ std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaf(pud_global_node_id leaf) {
     std::vector<pud_mhq_head_id> refuted;
     for (pud_mhcs_head_id candidate : invalidate_candidate_leaf_.invalidate_leaf(leaf)) {
         auto owner = candidate_to_head_.extract(candidate);
-        std::vector<candidacy>& candidacies = queries_.at(owner.mapped());
+        std::vector<candidacy>& candidacies = queries_.at(owner.mapped()).candidacies;
         candidacies.erase(std::ranges::find(candidacies, candidate, &candidacy::candidate));
         if (candidacies.empty()) {
             refuted.push_back(owner.mapped());
@@ -176,26 +170,27 @@ std::vector<pud_mhq_head_id> PUD_MHQ::invalidate_leaf(pud_global_node_id leaf) {
 PUD_MHQ_TEMPLATE
 std::vector<pud_mhcs_head_id> PUD_MHQ::candidates(pud_mhq_head_id head_id) const {
     std::vector<pud_mhcs_head_id> candidate_ids;
-    for (const candidacy& held : queries_.at(head_id))
+    for (const candidacy& held : queries_.at(head_id).candidacies)
         candidate_ids.push_back(held.candidate);
     return candidate_ids;
 }
 
 PUD_MHQ_TEMPLATE
 bool PUD_MHQ::is_exhausted(pud_mhq_head_id head_id) const {
-    return queries_.at(head_id).empty();
+    return queries_.at(head_id).candidacies.empty();
 }
 
 PUD_MHQ_TEMPLATE
-std::optional<pud_mhq_head_id> PUD_MHQ::admit_candidacy(
-    std::optional<pud_mhq_head_id> head_id, candidacy admitted, pud_module_id module) {
-    if (!head_id.has_value()) {
-        head_id = next_head_id_++;
-        queries_.emplace(head_id.value(), std::vector<candidacy>{});
-        module_by_head_.emplace(head_id.value(), module);
-    }
-    candidate_to_head_.emplace(admitted.candidate, head_id.value());
-    queries_.at(head_id.value()).push_back(admitted);
+std::optional<pud_mhq_head_id> PUD_MHQ::admit(pud_module_id module, std::vector<candidacy> candidacies) {
+    if (candidacies.empty())
+        return std::nullopt;
+    const pud_mhq_head_id head_id = next_head_id_++;
+    for (const candidacy& admitted : candidacies)
+        candidate_to_head_.emplace(admitted.candidate, head_id);
+    const bool unit = candidacies.size() == 1;
+    queries_.emplace(head_id, query{.module = module, .candidacies = std::move(candidacies)});
+    if (unit)
+        push_unit_query_.push_back(head_id);
     return head_id;
 }
 
