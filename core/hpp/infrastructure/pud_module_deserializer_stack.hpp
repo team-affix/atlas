@@ -12,7 +12,6 @@
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_istream_extractor.hpp"
 #include "infrastructure/rule_istream_extractor.hpp"
-#include "infrastructure/vector_uint64_istream_deserializer.hpp"
 
 struct pud_module_deserializer_stack {
     pud_module_deserializer_stack();
@@ -34,11 +33,9 @@ private:
     expr_extractor_t extract_expr_;
     rule_extractor_t extract_rule_;
     inference_extractor_t extract_inference_;
-    vector_uint64_istream_deserializer<istream_uint64_extractor> deserialize_vector_uint64_;
     pud_module_istream_extractor<
         istream_fixed_bytes_extractor,
         istream_uint64_extractor,
-        vector_uint64_istream_deserializer<istream_uint64_extractor>,
         rule_extractor_t,
         inference_extractor_t,
         istream_uint8_extractor> extract_module_;

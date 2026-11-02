@@ -20,10 +20,6 @@ struct MockInsertUint64 {
     MOCK_METHOD(void, insert_uint64, (std::ostream&, uint64_t), (const));
 };
 
-struct MockSerializeVectorUint64 {
-    MOCK_METHOD(void, serialize_vector_uint64, (std::ostream&, (const std::vector<uint64_t>&)), (const));
-};
-
 struct MockInsertRule {
     MOCK_METHOD(void, insert_rule, (std::ostream&, const rule&), (const));
 };
@@ -39,7 +35,6 @@ struct MockInsertUint8 {
 using sut_t = pud_module_ostream_inserter<
     MockInsertFixedBytes,
     MockInsertUint64,
-    MockSerializeVectorUint64,
     MockInsertRule,
     MockInsertInference,
     MockInsertUint8>;
@@ -47,14 +42,12 @@ using sut_t = pud_module_ostream_inserter<
 struct PudModuleOstreamInserterTest : public ::testing::Test {
     StrictMock<MockInsertFixedBytes> insert_fixed_bytes;
     StrictMock<MockInsertUint64> insert_uint64;
-    StrictMock<MockSerializeVectorUint64> serialize_vector_uint64;
     StrictMock<MockInsertRule> insert_rule;
     StrictMock<MockInsertInference> insert_inference;
     StrictMock<MockInsertUint8> insert_uint8;
     sut_t sut{
         insert_fixed_bytes,
         insert_uint64,
-        serialize_vector_uint64,
         insert_rule,
         insert_inference,
         insert_uint8};
@@ -68,7 +61,7 @@ TEST_F(PudModuleOstreamInserterTest, EmptyModuleInsertsMagicAndSectionCounts) {
     InSequence seq;
     EXPECT_CALL(insert_fixed_bytes, insert_fixed_bytes(_, _, 4));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 9u));
-    EXPECT_CALL(serialize_vector_uint64, serialize_vector_uint64(_, _));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
@@ -84,7 +77,7 @@ TEST_F(PudModuleOstreamInserterTest, EachAxiomIsInsertedInOrder) {
     InSequence seq;
     EXPECT_CALL(insert_fixed_bytes, insert_fixed_bytes(_, _, 4));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 1u));
-    EXPECT_CALL(serialize_vector_uint64, serialize_vector_uint64(_, _));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 2u));
     EXPECT_CALL(insert_rule, insert_rule(_, _));
     EXPECT_CALL(insert_rule, insert_rule(_, _));
@@ -104,7 +97,7 @@ TEST_F(PudModuleOstreamInserterTest, RefutedFlagsFollowNodeOrder) {
     InSequence seq;
     EXPECT_CALL(insert_fixed_bytes, insert_fixed_bytes(_, _, 4));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 1u));
-    EXPECT_CALL(serialize_vector_uint64, serialize_vector_uint64(_, _));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 1u));
     EXPECT_CALL(insert_rule, insert_rule(_, _));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 1u));
@@ -112,6 +105,21 @@ TEST_F(PudModuleOstreamInserterTest, RefutedFlagsFollowNodeOrder) {
     EXPECT_CALL(insert_uint64, insert_uint64(_, 2u));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 0));
     EXPECT_CALL(insert_uint8, insert_uint8(_, 1));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
+    sut.insert_module(out, module);
+}
+
+TEST_F(PudModuleOstreamInserterTest, DependenciesAreInsertedAsACountThenEachIdInOrder) {
+    const pud_module module{9, {0x11u, 0x22u}, {}};
+    InSequence seq;
+    EXPECT_CALL(insert_fixed_bytes, insert_fixed_bytes(_, _, 4));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 9u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 2u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0x11u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0x22u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
+    EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     EXPECT_CALL(insert_uint64, insert_uint64(_, 0u));
     sut.insert_module(out, module);
 }

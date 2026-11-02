@@ -12,7 +12,7 @@
 #include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_runtime.hpp"
+#include "pud_runtime.hpp"
 
 using ::testing::IsEmpty;
 using ::testing::Not;

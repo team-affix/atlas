@@ -22,7 +22,6 @@ struct pud_lodestar_driver {
         size_t non_conjecture_unfolds_per_conjecture_unfold);
     bool refute_blocked();
     bool unfold_one();
-    size_t last_refuted() const;
     bool last_unfold_on_focus() const;
 private:
     struct query_ref {
@@ -49,7 +48,6 @@ private:
     IManifest& manifest_;
     pud_lodestar_frontier& frontier_;
     size_t ratio_;
-    size_t last_refuted_;
     bool last_unfold_on_focus_;
     pud_lodestar_schedule schedule_;
 };
@@ -62,7 +60,6 @@ pud_lodestar_driver<IManifest>::pud_lodestar_driver(
     : manifest_(manifest)
     , frontier_(frontier)
     , ratio_(non_conjecture_unfolds_per_conjecture_unfold)
-    , last_refuted_(0)
     , last_unfold_on_focus_(false)
     , schedule_() {}
 
@@ -223,14 +220,12 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::unfold(const pud_lodestar_choice& choice) {
     if (!manifest_.unfold_allower_.allow(choice.leaf)) {
-        last_refuted_ = 0;
         last_unfold_on_focus_ = false;
         return false;
     }
     const pud_frontier_change change = manifest_.unfolder_.unfold(choice.leaf, choice.body_goal);
     frontier_.apply_unfold(choice.leaf, change);
     manifest_.focus_extender_.extend(choice.leaf, change.offspring);
-    last_refuted_ = change.refuted.size();
     last_unfold_on_focus_ = on_focus(choice.leaf);
     if (last_unfold_on_focus_)
         schedule_.reset_ratio();
@@ -283,7 +278,6 @@ bool pud_lodestar_driver<IManifest>::propagate_unit() {
 
 template<typename IManifest>
 bool pud_lodestar_driver<IManifest>::refute_blocked() {
-    last_refuted_ = 0;
     for (const query_ref& query : conjecture_queries()) {
         if (query.has_candidates)
             continue;
@@ -292,7 +286,6 @@ bool pud_lodestar_driver<IManifest>::refute_blocked() {
             frontier_.erase_refuted({query.node});
         else
             frontier_.erase_refuted(refuted);
-        last_refuted_ = refuted.empty() ? 1 : refuted.size();
         return true;
     }
     return false;
@@ -315,11 +308,6 @@ bool pud_lodestar_driver<IManifest>::unfold_one() {
     if (!more.has_value())
         return false;
     return unfold(more.value());
-}
-
-template<typename IManifest>
-size_t pud_lodestar_driver<IManifest>::last_refuted() const {
-    return last_refuted_;
 }
 
 template<typename IManifest>

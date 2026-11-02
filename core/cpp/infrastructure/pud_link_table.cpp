@@ -13,10 +13,6 @@ void pud_link_table::insert_link(pud_module_id module, uint32_t local_functor_id
     DEBUG_ASSERT(global_link.second);
 }
 
-bool pud_link_table::contains_module(pud_module_id module) const {
-    return rows_.contains(module);
-}
-
 bool pud_link_table::contains_global_functor_id(pud_module_id module, uint32_t global_functor_id) const {
     const auto found = rows_.find(module);
     if (found == rows_.end())

@@ -17,8 +17,6 @@
 #include "infrastructure/pud_inference_ostream_inserter.hpp"
 #include "infrastructure/rule_istream_extractor.hpp"
 #include "infrastructure/rule_ostream_inserter.hpp"
-#include "infrastructure/vector_uint64_istream_deserializer.hpp"
-#include "infrastructure/vector_uint64_ostream_serializer.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_inference.hpp"
@@ -84,9 +82,6 @@ struct PudStreamCodecLayersIntegrationTest : public ::testing::Test {
         expr_istream_extractor<expr_pool, expr_pool, istream_uint8_extractor, istream_uint32_extractor>,
         istream_uint64_extractor,
         istream_uint32_extractor> extract_inference{extract_expr, extract_uint64, extract_uint32};
-
-    vector_uint64_ostream_serializer<ostream_uint64_inserter> serialize_vector_uint64{insert_uint64};
-    vector_uint64_istream_deserializer<istream_uint64_extractor> deserialize_vector_uint64{extract_uint64};
 };
 
 }
@@ -105,14 +100,6 @@ TEST_F(PudStreamCodecLayersIntegrationTest, UintPrimitivesRoundTrip) {
     extract_fixed_bytes.extract_fixed_bytes(in, magic, 3);
     EXPECT_EQ(magic[0], 'P');
     EXPECT_EQ(magic[2], 'D');
-}
-
-TEST_F(PudStreamCodecLayersIntegrationTest, VectorUint64RoundTrip) {
-    std::ostringstream out;
-    const std::vector<uint64_t> items{1, 99, 0x123456789abcdef0ull};
-    serialize_vector_uint64.serialize_vector_uint64(out, items);
-    std::istringstream in(out.str());
-    EXPECT_EQ(deserialize_vector_uint64.deserialize_vector_uint64(in), items);
 }
 
 TEST_F(PudStreamCodecLayersIntegrationTest, ExprRoundTripUsesDistinctPools) {

@@ -11,7 +11,6 @@
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_ostream_inserter.hpp"
 #include "infrastructure/rule_ostream_inserter.hpp"
-#include "infrastructure/vector_uint64_ostream_serializer.hpp"
 
 struct pud_module_serializer_stack {
     pud_module_serializer_stack();
@@ -30,11 +29,9 @@ private:
         expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
         ostream_uint64_inserter,
         ostream_uint32_inserter> insert_inference_;
-    vector_uint64_ostream_serializer<ostream_uint64_inserter> serialize_vector_uint64_;
     pud_module_ostream_inserter<
         ostream_fixed_bytes_inserter,
         ostream_uint64_inserter,
-        vector_uint64_ostream_serializer<ostream_uint64_inserter>,
         rule_ostream_inserter<
             expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
             ostream_uint64_inserter,

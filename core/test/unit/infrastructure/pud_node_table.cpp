@@ -47,3 +47,8 @@ TEST_F(PudNodeTableTest, TheSameLocalIdInTwoModulesIsTwoDistinctEntries) {
     EXPECT_EQ(table.get(in_test_module), (std::vector<pud_node_id>{1}));
     EXPECT_EQ(table.get(in_other_module), (std::vector<pud_node_id>{2}));
 }
+
+TEST_F(PudNodeTableTest, StoringTheSameNodeTwiceFails) {
+    table.store(pud_test_node(3), {1});
+    EXPECT_THROW(table.store(pud_test_node(3), {2}), std::logic_error);
+}

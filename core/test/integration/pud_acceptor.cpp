@@ -7,7 +7,7 @@
 #include "pud_test_node.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_manifest.hpp"
+#include "pud_manifest.hpp"
 #include "value_objects/rule.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 

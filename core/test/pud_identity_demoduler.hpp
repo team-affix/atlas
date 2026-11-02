@@ -8,13 +8,8 @@
 #include "value_objects/pud_module_id.hpp"
 
 struct pud_identity_global_functor_ids {
-    bool contains_module(pud_module_id module) const;
     uint32_t get_global_functor_id_from_local_functor_id(pud_module_id module, uint32_t local_functor_id) const;
 };
-
-inline bool pud_identity_global_functor_ids::contains_module(pud_module_id) const {
-    return true;
-}
 
 inline uint32_t pud_identity_global_functor_ids::get_global_functor_id_from_local_functor_id(
     pud_module_id, uint32_t local_functor_id) const {

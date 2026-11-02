@@ -12,7 +12,7 @@
 #include "reference_pud_frontier.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_runtime.hpp"
+#include "pud_runtime.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_inference.hpp"

@@ -20,10 +20,6 @@ struct MockExtractUint64 {
     MOCK_METHOD(uint64_t, extract_uint64, (std::istream&), (const));
 };
 
-struct MockDeserializeVectorUint64 {
-    MOCK_METHOD((std::vector<uint64_t>), deserialize_vector_uint64, (std::istream&), (const));
-};
-
 struct MockExtractRule {
     MOCK_METHOD(rule, extract_rule, (std::istream&), (const));
 };
@@ -39,7 +35,6 @@ struct MockExtractUint8 {
 using sut_t = pud_module_istream_extractor<
     MockExtractFixedBytes,
     MockExtractUint64,
-    MockDeserializeVectorUint64,
     MockExtractRule,
     MockExtractInference,
     MockExtractUint8>;
@@ -47,14 +42,12 @@ using sut_t = pud_module_istream_extractor<
 struct PudModuleIstreamExtractorTest : public ::testing::Test {
     StrictMock<MockExtractFixedBytes> extract_fixed_bytes;
     StrictMock<MockExtractUint64> extract_uint64;
-    StrictMock<MockDeserializeVectorUint64> deserialize_vector_uint64;
     StrictMock<MockExtractRule> extract_rule;
     StrictMock<MockExtractInference> extract_inference;
     StrictMock<MockExtractUint8> extract_uint8;
     sut_t sut{
         extract_fixed_bytes,
         extract_uint64,
-        deserialize_vector_uint64,
         extract_rule,
         extract_inference,
         extract_uint8};
@@ -75,7 +68,7 @@ TEST_F(PudModuleIstreamExtractorTest, ValidMagicBuildsEmptyModule) {
     EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
         .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(7u));
-    EXPECT_CALL(deserialize_vector_uint64, deserialize_vector_uint64).WillOnce(Return(std::vector<uint64_t>{}));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
@@ -109,7 +102,7 @@ TEST_F(PudModuleIstreamExtractorTest, AxiomsAreReadBeforeInferences) {
     EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
         .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
-    EXPECT_CALL(deserialize_vector_uint64, deserialize_vector_uint64).WillOnce(Return(std::vector<uint64_t>{}));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
     EXPECT_CALL(extract_rule, extract_rule).WillOnce(Return(axiom));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
@@ -127,9 +120,24 @@ TEST_F(PudModuleIstreamExtractorTest, RefutedNodeCountMismatchThrows) {
     EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
         .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
-    EXPECT_CALL(deserialize_vector_uint64, deserialize_vector_uint64).WillOnce(Return(std::vector<uint64_t>{}));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(3u));
     EXPECT_THROW(sut.extract_module(in), std::runtime_error);
+}
+
+TEST_F(PudModuleIstreamExtractorTest, DependenciesAreReadAsACountThenEachIdInOrder) {
+    InSequence seq;
+    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
+        .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(7u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(2u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0x11u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0x22u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
+    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
+    const pud_module module = sut.extract_module(in);
+    EXPECT_EQ(module.get_dependencies(), (std::vector<pud_module_id>{0x11u, 0x22u}));
 }

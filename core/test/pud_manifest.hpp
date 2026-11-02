@@ -23,11 +23,10 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_module_activator.hpp"
 #include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_node_axioms.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
-#include "infrastructure/pud_node_goals.hpp"
+#include "infrastructure/pud_node_table.hpp"
+#include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
@@ -40,6 +39,8 @@
 
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
+    using node_goals_t = pud_node_table<pud_goal_list>;
+    using node_axioms_t = pud_node_table<pud_global_node_id>;
     using bind_map_factory_t = pud_bind_map_factory;
     using modules_t = pud_modules<IModule>;
     struct demoduler_t;
@@ -68,11 +69,11 @@ struct pud_manifest {
     using binder_t = pud_binder<bind_map_factory_t, modules_t>;
     using structure_watcher_t = pud_structure_watcher<bind_map_factory_t, modules_t, IExprPool>;
     using root_activator_t = pud_root_activator<
-        modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, structure_watcher_t,
+        modules_t, pud_initial_goal_opener, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
         mhq_t, pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_axioms, pud_goal_resolver,
-        pud_node_goals, pud_node_goals, pud_node_axioms, pud_node_live_child_counts, binder_t, structure_watcher_t,
+        pud_active_states, pud_active_states, modules_t, node_goals_t, node_axioms_t, pud_goal_resolver,
+        node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
         mhq_t, mhq_t, pud_query_holders, mhq_t>;
     using node_deactivator_t = pud_node_deactivator<
         pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
@@ -80,9 +81,9 @@ struct pud_manifest {
         pud_leaf_refuter<modules_t, refutation_propagator_t, node_deactivator_t, modules_t, modules_t>;
 
     using acceptor_t = pud_acceptor<
-        pud_node_goals, modules_t, modules_t, IExprPool, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
+        node_goals_t, modules_t, modules_t, IExprPool, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
         unifier_factory_t, exporter_factory_t>;
-    using resolver_t = pud_resolver<pud_active_states, pud_node_goals, mhq_t, mhcs_t, acceptor_t>;
+    using resolver_t = pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t>;
     using unfolder_t =
         pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>;
     using module_activator_t = pud_module_activator<
@@ -101,8 +102,8 @@ struct pud_manifest {
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
     exporter_factory_t         exporter_factory_;
-    pud_node_goals             node_goals_;
-    pud_node_axioms            node_axioms_;
+    node_goals_t               node_goals_;
+    node_axioms_t              node_axioms_;
     pud_goal_resolver          goal_resolver_;
     pud_initial_goal_opener    initial_goal_opener_;
     pud_node_live_child_counts live_child_counts_;
@@ -162,7 +163,7 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
           query_holders_)
     , child_activator_(
           active_states_, active_states_, modules_, node_goals_, node_axioms_, goal_resolver_, node_goals_,
-          node_goals_, node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)

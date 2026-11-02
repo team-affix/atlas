@@ -38,9 +38,9 @@
 #include "infrastructure/pud_mhws.hpp"
 #include "infrastructure/pud_module_activator.hpp"
 #include "infrastructure/pud_modules.hpp"
-#include "infrastructure/pud_node_axioms.hpp"
 #include "infrastructure/pud_node_deactivator.hpp"
-#include "infrastructure/pud_node_goals.hpp"
+#include "infrastructure/pud_node_table.hpp"
+#include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_pending_conflict_store.hpp"
@@ -60,6 +60,8 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 
 struct pud_lodestar_manifest {
+    using node_goals_t = pud_node_table<pud_goal_list>;
+    using node_axioms_t = pud_node_table<pud_global_node_id>;
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
     };
@@ -126,19 +128,19 @@ struct pud_lodestar_manifest {
         using pud_structure_watcher<bind_map_factory_t, modules_t, expr_pool>::pud_structure_watcher;
     };
     struct root_activator_t : pud_root_activator<
-        modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, structure_watcher_t,
+        modules_t, pud_initial_goal_opener, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
         mhq_t, pud_query_holders> {
         using pud_root_activator<
-            modules_t, pud_initial_goal_opener, pud_node_goals, pud_node_axioms, pud_active_states, structure_watcher_t,
+            modules_t, pud_initial_goal_opener, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
             mhq_t, pud_query_holders>::pud_root_activator;
     };
     struct child_activator_t : pud_child_activator<
-        pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_axioms, pud_goal_resolver,
-        pud_node_goals, pud_node_goals, pud_node_axioms, pud_node_live_child_counts, binder_t, structure_watcher_t,
+        pud_active_states, pud_active_states, modules_t, node_goals_t, node_axioms_t, pud_goal_resolver,
+        node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
         mhq_t, mhq_t, pud_query_holders, mhq_t> {
         using pud_child_activator<
-            pud_active_states, pud_active_states, modules_t, pud_node_goals, pud_node_axioms, pud_goal_resolver,
-            pud_node_goals, pud_node_goals, pud_node_axioms, pud_node_live_child_counts, binder_t, structure_watcher_t,
+            pud_active_states, pud_active_states, modules_t, node_goals_t, node_axioms_t, pud_goal_resolver,
+            node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
             mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
     };
     struct node_deactivator_t : pud_node_deactivator<
@@ -150,14 +152,14 @@ struct pud_lodestar_manifest {
         using pud_leaf_refuter<modules_t, refutation_propagator_t, node_deactivator_t, modules_t, modules_t>::pud_leaf_refuter;
     };
     struct acceptor_t : pud_acceptor<
-        pud_node_goals, modules_t, modules_t, expr_pool, expr_pool, bind_map_factory_t, cycle_detector_factory_t,
+        node_goals_t, modules_t, modules_t, expr_pool, expr_pool, bind_map_factory_t, cycle_detector_factory_t,
         unifier_factory_t, exporter_factory_t> {
         using pud_acceptor<
-            pud_node_goals, modules_t, modules_t, expr_pool, expr_pool, bind_map_factory_t, cycle_detector_factory_t,
+            node_goals_t, modules_t, modules_t, expr_pool, expr_pool, bind_map_factory_t, cycle_detector_factory_t,
             unifier_factory_t, exporter_factory_t>::pud_acceptor;
     };
-    struct resolver_t : pud_resolver<pud_active_states, pud_node_goals, mhq_t, mhcs_t, acceptor_t> {
-        using pud_resolver<pud_active_states, pud_node_goals, mhq_t, mhcs_t, acceptor_t>::pud_resolver;
+    struct resolver_t : pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t> {
+        using pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, acceptor_t>::pud_resolver;
     };
     struct unfolder_t : pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t> {
         using pud_unfolder<resolver_t, modules_t, child_activator_t, leaf_refuter_t, node_deactivator_t, modules_t>::pud_unfolder;
@@ -178,16 +180,16 @@ struct pud_lodestar_manifest {
     struct node_depth_counter_t : pud_node_depth_counter<modules_t> {
         using pud_node_depth_counter<modules_t>::pud_node_depth_counter;
     };
-    struct unfold_allower_t : pud_unfold_allower<node_depth_counter_t, pud_node_goals> {
-        using pud_unfold_allower<node_depth_counter_t, pud_node_goals>::pud_unfold_allower;
+    struct unfold_allower_t : pud_unfold_allower<node_depth_counter_t, node_goals_t> {
+        using pud_unfold_allower<node_depth_counter_t, node_goals_t>::pud_unfold_allower;
     };
     struct solved_leaf_finder_t : pud_lodestar_solved_leaf_finder<
-        pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, pud_node_goals> {
+        pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, node_goals_t> {
         using pud_lodestar_solved_leaf_finder<
-            pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, pud_node_goals>::pud_lodestar_solved_leaf_finder;
+            pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, node_goals_t>::pud_lodestar_solved_leaf_finder;
     };
-    struct solution_term_reader_t : pud_solution_term_reader<pud_node_axioms, modules_t, pud_active_states> {
-        using pud_solution_term_reader<pud_node_axioms, modules_t, pud_active_states>::pud_solution_term_reader;
+    struct solution_term_reader_t : pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
+        using pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_solution_term_reader;
     };
     struct solution_normalizer_t : pud_solution_normalizer<pud_link_table, expr_pool, expr_pool> {
         using pud_solution_normalizer<pud_link_table, expr_pool, expr_pool>::pud_solution_normalizer;
@@ -235,8 +237,8 @@ struct pud_lodestar_manifest {
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
     exporter_factory_t         exporter_factory_;
-    pud_node_goals             node_goals_;
-    pud_node_axioms            node_axioms_;
+    node_goals_t               node_goals_;
+    node_axioms_t              node_axioms_;
     pud_goal_resolver          goal_resolver_;
     pud_initial_goal_opener    initial_goal_opener_;
     pud_node_live_child_counts live_child_counts_;

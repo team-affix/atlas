@@ -39,9 +39,6 @@ struct MockResolveGoal {
         (const pud_goal_list&, pud_body_goal_id, (const std::vector<const expr*>&)),
         (const));
 };
-struct MockFindNodeGoal {
-    MOCK_METHOD(const expr*, find, (pud_global_node_id, pud_body_goal_id));
-};
 struct MockStoreNodeGoals {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_goal_list));
 };
@@ -73,7 +70,7 @@ struct MockCheckQueryExhausted {
 
 using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetActiveState>, NiceMock<MockStoreActiveState>, NiceMock<MockGetInference>,
-    NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockResolveGoal>, NiceMock<MockFindNodeGoal>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockResolveGoal>,
     NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>, NiceMock<MockIncrementLiveChildCount>,
     NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
     NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
@@ -87,7 +84,6 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockGetNodeGoals> get_goals;
     NiceMock<MockGetNodeAxiom> get_node_axiom;
     NiceMock<MockResolveGoal> resolve_goal;
-    NiceMock<MockFindNodeGoal> find_goal;
     NiceMock<MockStoreNodeGoals> store_goals;
     NiceMock<MockStoreNodeAxiom> store_node_axiom;
     NiceMock<MockIncrementLiveChildCount> live_child_counts;
@@ -98,7 +94,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockHoldQuery> holders;
     NiceMock<MockCheckQueryExhausted> exhausted;
     test_child_activator_t activator{
-        get_states, store_states, inferences, get_goals, get_node_axiom, resolve_goal, find_goal, store_goals,
+        get_states, store_states, inferences, get_goals, get_node_axiom, resolve_goal, store_goals,
         store_node_axiom, live_child_counts, binder, watcher, forker, opener, holders, exhausted};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
@@ -124,7 +120,6 @@ struct PudChildActivatorTest : public ::testing::Test {
         ON_CALL(get_goals, get(pud_test_node(3))).WillByDefault(ReturnRef(parent_goals));
         ON_CALL(resolve_goal, resolve_goal(parent_goals, 0u, child_inference.body_goals))
             .WillByDefault(Return(child_goals));
-        ON_CALL(find_goal, find(pud_test_node(4), 1)).WillByDefault(Return(&goal_b));
         ON_CALL(binder, bind(_, pud_test_node(4))).WillByDefault(Return(child_bindings));
         ON_CALL(watcher, descend(_, _, _, _, _))
             .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {}}));

@@ -4,9 +4,8 @@
 
 TEST(PudLinkTableTest, TheFirstLinkCreatesTheModuleRow) {
     pud_link_table links;
-    EXPECT_FALSE(links.contains_module(4));
+    EXPECT_FALSE(links.contains_global_functor_id(4, 7));
     links.insert_link(4, 2, 7);
-    EXPECT_TRUE(links.contains_module(4));
     EXPECT_EQ(links.get_global_functor_id_from_local_functor_id(4, 2), 7u);
     EXPECT_EQ(links.get_local_functor_id_from_global_functor_id(4, 7), 2u);
     EXPECT_TRUE(links.contains_global_functor_id(4, 7));

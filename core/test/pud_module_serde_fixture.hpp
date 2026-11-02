@@ -29,8 +29,6 @@
 #include "infrastructure/pud_module_ostream_inserter.hpp"
 #include "infrastructure/rule_istream_extractor.hpp"
 #include "infrastructure/rule_ostream_inserter.hpp"
-#include "infrastructure/vector_uint64_istream_deserializer.hpp"
-#include "infrastructure/vector_uint64_ostream_serializer.hpp"
 
 struct pud_module_serde_bytes {
     static void append_u8(std::string& blob, uint8_t value) {
@@ -239,11 +237,9 @@ struct pud_module_serde_wiring {
         expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
         ostream_uint64_inserter,
         ostream_uint32_inserter> insert_inference_;
-    vector_uint64_ostream_serializer<ostream_uint64_inserter> serialize_vector_uint64_;
     pud_module_ostream_inserter<
         ostream_fixed_bytes_inserter,
         ostream_uint64_inserter,
-        vector_uint64_ostream_serializer<ostream_uint64_inserter>,
         rule_ostream_inserter<
             expr_ostream_inserter<ostream_uint8_inserter, ostream_uint32_inserter>,
             ostream_uint64_inserter,
@@ -258,11 +254,9 @@ struct pud_module_serde_wiring {
         : insert_expr_(insert_uint8_, insert_uint32_)
         , insert_rule_(insert_expr_, insert_uint64_, insert_uint32_)
         , insert_inference_(insert_expr_, insert_uint64_, insert_uint32_)
-        , serialize_vector_uint64_(insert_uint64_)
         , insert_module_(
             insert_fixed_bytes_,
             insert_uint64_,
-            serialize_vector_uint64_,
             insert_rule_,
             insert_inference_,
             insert_uint8_) {}
@@ -284,11 +278,9 @@ struct pud_module_serde_decode_wiring {
     expr_extractor_t extract_expr_;
     rule_extractor_t extract_rule_;
     inference_extractor_t extract_inference_;
-    vector_uint64_istream_deserializer<istream_uint64_extractor> deserialize_vector_uint64_;
     pud_module_istream_extractor<
         istream_fixed_bytes_extractor,
         istream_uint64_extractor,
-        vector_uint64_istream_deserializer<istream_uint64_extractor>,
         rule_extractor_t,
         inference_extractor_t,
         istream_uint8_extractor> extract_module_;
@@ -297,11 +289,9 @@ struct pud_module_serde_decode_wiring {
         : extract_expr_(make_var, make_functor, extract_uint8_, extract_uint32_)
         , extract_rule_(extract_expr_, extract_uint64_, extract_uint32_)
         , extract_inference_(extract_expr_, extract_uint64_, extract_uint32_)
-        , deserialize_vector_uint64_(extract_uint64_)
         , extract_module_(
             extract_fixed_bytes_,
             extract_uint64_,
-            deserialize_vector_uint64_,
             extract_rule_,
             extract_inference_,
             extract_uint8_) {}

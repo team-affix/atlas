@@ -39,7 +39,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           query_holders_)
     , child_activator_(
           active_states_, active_states_, modules_, node_goals_, node_axioms_, goal_resolver_, node_goals_,
-          node_goals_, node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)

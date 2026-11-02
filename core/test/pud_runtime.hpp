@@ -1,12 +1,12 @@
 #ifndef PUD_RUNTIME_HPP
 #define PUD_RUNTIME_HPP
 
-#include "infrastructure/pud_manifest.hpp"
+#include "pud_manifest.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_module_id.hpp"
-#include "value_objects/pud_unnormalized_rule_information.hpp"
+#include "pud_unnormalized_rule_information.hpp"
 
 template<typename IModule, typename IExprPool>
 struct pud_runtime {
