@@ -9,6 +9,7 @@
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_replay.hpp"
+#include "debug_assert.hpp"
 
 template<typename IMhcs, typename IWitnessLog>
 struct pud_lodestar_candidate_watch {
@@ -39,8 +40,8 @@ void pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::record(
     pud_lodestar_watched_candidate stored{.self_witness = added.empty(), .self_leaf = {}, .witnesses = added};
     if (stored.self_witness) {
         const std::vector<pud_global_node_id>& walked = inner_.path(head_id);
-        if (!walked.empty())
-            stored.self_leaf = walked.back();
+        DEBUG_ASSERT(!walked.empty());
+        stored.self_leaf = walked.back();
     }
     by_candidate_[head_id] = std::move(stored);
 }
