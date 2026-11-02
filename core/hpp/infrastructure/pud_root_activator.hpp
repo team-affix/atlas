@@ -82,9 +82,10 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     bool refuted = false;
     for (const auto& [id, goal] : goals.goals) {
         const std::optional<pud_mhq_head_id> opened = open_query_.try_open(root.module, bindings, goal, axiom.var_count);
-        refuted = refuted || !opened.has_value();
-        if (!opened.has_value())
+        if (!opened.has_value()) {
+            refuted = true;
             continue;
+        }
         queries = queries.set(id, opened.value());
     }
     for (const auto& [goal, head_id] : queries)

@@ -19,6 +19,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
+    , goal_resolver_()
+    , initial_goal_opener_()
     , live_child_counts_()
     , refutation_propagator_(modules_, live_child_counts_, modules_)
     , unit_queries_()
