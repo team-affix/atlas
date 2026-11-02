@@ -11,7 +11,7 @@
 #include "value_objects/pud_leaf_goal_query.hpp"
 #include "value_objects/pud_lodestar_side.hpp"
 #include "value_objects/pud_lodestar_slot_id.hpp"
-#include "value_objects/pud_watched_candidate.hpp"
+#include "value_objects/pud_candidate_witnesses.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 
@@ -22,7 +22,7 @@
 // candidates (its smallest such goal is the one chosen).
 template<
     typename IGetQueryCandidates,
-    typename IFindWatchedCandidate,
+    typename IFindCandidateWitnesses,
     typename IFindWitnessNode,
     typename IContainsFocusNode,
     typename IGetLiveNodes,
@@ -33,7 +33,7 @@ template<
 struct pud_lodestar_ring_builder {
     pud_lodestar_ring_builder(
         IGetQueryCandidates& get_query_candidates,
-        IFindWatchedCandidate& find_watched_candidate,
+        IFindCandidateWitnesses& find_candidate_witnesses,
         IFindWitnessNode& find_witness_node,
         IContainsFocusNode& contains_focus_node,
         IGetLiveNodes& get_live_nodes,
@@ -51,7 +51,7 @@ private:
         pud_global_node_id leaf) const;
 
     IGetQueryCandidates& get_query_candidates_;
-    IFindWatchedCandidate& find_watched_candidate_;
+    IFindCandidateWitnesses& find_candidate_witnesses_;
     IFindWitnessNode& find_witness_node_;
     IContainsFocusNode& contains_focus_node_;
     IGetLiveNodes& get_live_nodes_;
@@ -62,17 +62,17 @@ private:
 };
 
 #define PUD_LODESTAR_RING_BUILDER_TEMPLATE                                                          \
-    template<typename IGetQueryCandidates, typename IFindWatchedCandidate, typename IFindWitnessNode, \
+    template<typename IGetQueryCandidates, typename IFindCandidateWitnesses, typename IFindWitnessNode, \
              typename IContainsFocusNode, typename IGetLiveNodes, typename IIsNodeRefuted,          \
              typename IGetActiveState, typename IIsQueryExhausted, typename IAllowUnfold>
 #define PUD_LODESTAR_RING_BUILDER                                                                   \
-    pud_lodestar_ring_builder<IGetQueryCandidates, IFindWatchedCandidate, IFindWitnessNode,        \
+    pud_lodestar_ring_builder<IGetQueryCandidates, IFindCandidateWitnesses, IFindWitnessNode,        \
         IContainsFocusNode, IGetLiveNodes, IIsNodeRefuted, IGetActiveState, IIsQueryExhausted, IAllowUnfold>
 
 PUD_LODESTAR_RING_BUILDER_TEMPLATE
 PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
     IGetQueryCandidates& get_query_candidates,
-    IFindWatchedCandidate& find_watched_candidate,
+    IFindCandidateWitnesses& find_candidate_witnesses,
     IFindWitnessNode& find_witness_node,
     IContainsFocusNode& contains_focus_node,
     IGetLiveNodes& get_live_nodes,
@@ -81,7 +81,7 @@ PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
     IIsQueryExhausted& is_query_exhausted,
     IAllowUnfold& allow_unfold)
     : get_query_candidates_(get_query_candidates)
-    , find_watched_candidate_(find_watched_candidate)
+    , find_candidate_witnesses_(find_candidate_witnesses)
     , find_witness_node_(find_witness_node)
     , contains_focus_node_(contains_focus_node)
     , get_live_nodes_(get_live_nodes)
@@ -98,16 +98,16 @@ std::vector<pud_lodestar_choice> PUD_LODESTAR_RING_BUILDER::build(
         if (!query.has_candidates)
             continue;
         for (const pud_mhcs_head_id candidate : get_query_candidates_.candidates(query.head)) {
-            const pud_watched_candidate* watched = find_watched_candidate_.find(candidate);
-            if (watched == nullptr)
+            const pud_candidate_witnesses* witnesses_of = find_candidate_witnesses_.find(candidate);
+            if (witnesses_of == nullptr)
                 continue;
-            if (watched->self_witness) {
-                if (contains_focus_node_.contains(watched->self_leaf) == focus_ring)
-                    push_witness_slot(ring, query, candidate, pud_lodestar_side::self, watched->self_leaf);
+            if (witnesses_of->self_witness) {
+                if (contains_focus_node_.contains(witnesses_of->self_leaf) == focus_ring)
+                    push_witness_slot(ring, query, candidate, pud_lodestar_side::self, witnesses_of->self_leaf);
                 continue;
             }
             pud_lodestar_side side = pud_lodestar_side::a;
-            for (const pud_mhws_head_id witness : watched->witnesses) {
+            for (const pud_mhws_head_id witness : witnesses_of->witnesses) {
                 const std::optional<pud_global_node_id> leaf = find_witness_node_.node_of(witness);
                 if (leaf.has_value() && contains_focus_node_.contains(leaf.value()) == focus_ring)
                     push_witness_slot(ring, query, candidate, side, leaf.value());

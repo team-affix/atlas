@@ -19,8 +19,8 @@ namespace {
 struct MockGetQueryCandidates {
     MOCK_METHOD(std::vector<pud_mhcs_head_id>, candidates, (pud_mhq_head_id), (const));
 };
-struct MockFindWatchedCandidate {
-    MOCK_METHOD(const pud_watched_candidate*, find, (pud_mhcs_head_id), (const));
+struct MockFindCandidateWitnesses {
+    MOCK_METHOD(const pud_candidate_witnesses*, find, (pud_mhcs_head_id), (const));
 };
 struct MockFindWitnessNode {
     MOCK_METHOD(std::optional<pud_global_node_id>, node_of, (pud_mhws_head_id), (const));
@@ -45,7 +45,7 @@ struct MockAllowUnfold {
 };
 
 using test_ring_builder_t = pud_lodestar_ring_builder<
-    NiceMock<MockGetQueryCandidates>, NiceMock<MockFindWatchedCandidate>, NiceMock<MockFindWitnessNode>,
+    NiceMock<MockGetQueryCandidates>, NiceMock<MockFindCandidateWitnesses>, NiceMock<MockFindWitnessNode>,
     NiceMock<MockContainsFocusNode>, NiceMock<MockGetLiveNodes>, NiceMock<MockIsNodeRefuted>,
     NiceMock<MockGetActiveState>, NiceMock<MockIsQueryExhausted>, NiceMock<MockAllowUnfold>>;
 
@@ -68,7 +68,7 @@ pud_lodestar_choice choice(
 // 12, inside it. Every leaf is live, unrefuted, may be unfolded, and holds goal 5 with candidates.
 struct PudLodestarRingBuilderTest : public ::testing::Test {
     NiceMock<MockGetQueryCandidates> candidates;
-    NiceMock<MockFindWatchedCandidate> watch;
+    NiceMock<MockFindCandidateWitnesses> witness_index;
     NiceMock<MockFindWitnessNode> witnesses;
     NiceMock<MockContainsFocusNode> focus;
     NiceMock<MockGetLiveNodes> frontier;
@@ -76,11 +76,11 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
     NiceMock<MockGetActiveState> states;
     NiceMock<MockIsQueryExhausted> exhausted;
     NiceMock<MockAllowUnfold> allower;
-    test_ring_builder_t builder{candidates, watch, witnesses, focus, frontier, refuted, states, exhausted, allower};
+    test_ring_builder_t builder{candidates, witness_index, witnesses, focus, frontier, refuted, states, exhausted, allower};
     pud_leaf_goal_query query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true};
-    pud_watched_candidate witnessed{
+    pud_candidate_witnesses witnessed{
         .self_witness = false, .self_leaf = {}, .witnesses = {50, 51}};
-    pud_watched_candidate self_witnessed{
+    pud_candidate_witnesses self_witnessed{
         .self_witness = true, .self_leaf = pud_test_node(12), .witnesses = {}};
     std::set<pud_global_node_id> live{pud_test_node(3), pud_test_node(10), pud_test_node(11), pud_test_node(12)};
     pud_active_state ready_on_goal_five{
@@ -90,8 +90,8 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30, 31}));
-        ON_CALL(watch, find(30)).WillByDefault(Return(&witnessed));
-        ON_CALL(watch, find(31)).WillByDefault(Return(&self_witnessed));
+        ON_CALL(witness_index, find(30)).WillByDefault(Return(&witnessed));
+        ON_CALL(witness_index, find(31)).WillByDefault(Return(&self_witnessed));
         ON_CALL(witnesses, node_of(50)).WillByDefault(Return(pud_test_node(10)));
         ON_CALL(witnesses, node_of(51)).WillByDefault(Return(pud_test_node(11)));
         ON_CALL(focus, contains(_)).WillByDefault(Return(false));
@@ -128,7 +128,7 @@ TEST_F(PudLodestarRingBuilderTest, AQueryWithoutCandidatesAddsNothingNotEvenACal
 }
 
 TEST_F(PudLodestarRingBuilderTest, AnUnwatchedCandidateOrAWitnessWithoutALeafAddsNothing) {
-    ON_CALL(watch, find(31)).WillByDefault(Return(nullptr));
+    ON_CALL(witness_index, find(31)).WillByDefault(Return(nullptr));
     ON_CALL(witnesses, node_of(50)).WillByDefault(Return(std::nullopt));
     EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5)}));

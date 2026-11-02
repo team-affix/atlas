@@ -23,7 +23,7 @@
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_blocked_leaf_refuter.hpp"
-#include "infrastructure/pud_candidate_watch.hpp"
+#include "infrastructure/pud_candidate_witness_index.hpp"
 #include "infrastructure/pud_lodestar_driver.hpp"
 #include "infrastructure/pud_focus_extender.hpp"
 #include "infrastructure/pud_focus_seeder.hpp"
@@ -119,12 +119,12 @@ struct pud_lodestar_manifest {
             replayer_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, modules_t,
             modules_t, modules_t>::pud_mhcs;
     };
-    struct candidate_watch_t : pud_candidate_watch<mhcs_t, witness_log_t> {
-        using pud_candidate_watch<mhcs_t, witness_log_t>::pud_candidate_watch;
+    struct candidate_witness_index_t : pud_candidate_witness_index<mhcs_t, witness_log_t> {
+        using pud_candidate_witness_index<mhcs_t, witness_log_t>::pud_candidate_witness_index;
     };
-    struct mhq_t : pud_mhq<replayer_t, modules_t, candidate_watch_t, candidate_watch_t, candidate_watch_t, candidate_watch_t, unit_queries_t> {
+    struct mhq_t : pud_mhq<replayer_t, modules_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, unit_queries_t> {
         using pud_mhq<
-            replayer_t, modules_t, candidate_watch_t, candidate_watch_t, candidate_watch_t, candidate_watch_t,
+            replayer_t, modules_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t,
             unit_queries_t>::pud_mhq;
     };
     struct binder_t : pud_binder<bind_map_factory_t, modules_t> {
@@ -197,10 +197,10 @@ struct pud_lodestar_manifest {
             mhq_t>::pud_focus_query_lister;
     };
     struct ring_builder_t : pud_lodestar_ring_builder<
-        mhq_t, candidate_watch_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
+        mhq_t, candidate_witness_index_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
         pud_active_states, mhq_t, unfold_allower_t> {
         using pud_lodestar_ring_builder<
-            mhq_t, candidate_watch_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
+            mhq_t, candidate_witness_index_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
             pud_active_states, mhq_t, unfold_allower_t>::pud_lodestar_ring_builder;
     };
     struct unfold_applier_t : pud_unfold_applier<
@@ -293,7 +293,7 @@ struct pud_lodestar_manifest {
     mhws_t                     mhws_;
     witness_log_t              witness_log_;
     mhcs_t                     mhcs_;
-    candidate_watch_t          candidate_watch_;
+    candidate_witness_index_t          candidate_witness_index_;
     mhq_t                      mhq_;
 
     pud_active_states          active_states_;
