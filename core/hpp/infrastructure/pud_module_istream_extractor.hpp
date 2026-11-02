@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 #include "infrastructure/pud_module.hpp"
-#include "infrastructure/pud_module_ostream_inserter.hpp"
 #include "value_objects/pud_module_id.hpp"
 #include "value_objects/rule.hpp"
 

@@ -6,7 +6,7 @@
 
 namespace {
 
-pud_lodestar_choice choice_at(uint32_t node, pud_body_goal_id goal, pud_mhcs_head_id candidate, uint8_t side) {
+pud_lodestar_choice choice_at(uint32_t node, pud_body_goal_id goal, pud_mhcs_head_id candidate, pud_lodestar_side side) {
     return pud_lodestar_choice{
         .slot = pud_lodestar_slot_id{
             .query_node = pud_global_node_id{.module = 2, .node = node},
@@ -25,21 +25,21 @@ pud_lodestar_choice choice_at(uint32_t node, pud_body_goal_id goal, pud_mhcs_hea
 TEST(PudLodestarScheduleTest, FirstPickIsTheEarliestSlot) {
     pud_lodestar_schedule schedule;
     const std::vector<pud_lodestar_choice> ring{
-        choice_at(0, 0, 1, k_lodestar_side_a),
-        choice_at(0, 0, 1, k_lodestar_side_b),
-        choice_at(0, 1, 2, k_lodestar_side_a),
+        choice_at(0, 0, 1, pud_lodestar_side::a),
+        choice_at(0, 0, 1, pud_lodestar_side::b),
+        choice_at(0, 1, 2, pud_lodestar_side::a),
     };
     const std::optional<pud_lodestar_choice> first = schedule.next_non_conjecture(ring);
     ASSERT_TRUE(first.has_value());
-    EXPECT_EQ(first->slot.side, k_lodestar_side_a);
+    EXPECT_EQ(first->slot.side, pud_lodestar_side::a);
     EXPECT_EQ(first->slot.candidate, 1u);
 }
 
 TEST(PudLodestarScheduleTest, RoundRobinDoesNotRepeatTheChildOfTheSameSlot) {
     pud_lodestar_schedule schedule;
     const std::vector<pud_lodestar_choice> ring{
-        choice_at(0, 0, 1, k_lodestar_side_a),
-        choice_at(0, 1, 2, k_lodestar_side_a),
+        choice_at(0, 0, 1, pud_lodestar_side::a),
+        choice_at(0, 1, 2, pud_lodestar_side::a),
     };
     const std::optional<pud_lodestar_choice> first = schedule.next_non_conjecture(ring);
     const std::optional<pud_lodestar_choice> second = schedule.next_non_conjecture(ring);
@@ -51,7 +51,7 @@ TEST(PudLodestarScheduleTest, RoundRobinDoesNotRepeatTheChildOfTheSameSlot) {
 
 TEST(PudLodestarScheduleTest, SingleSlotIsChosenAgainAfterTheRevolution) {
     pud_lodestar_schedule schedule;
-    const std::vector<pud_lodestar_choice> ring{choice_at(0, 0, 4, k_lodestar_side_b)};
+    const std::vector<pud_lodestar_choice> ring{choice_at(0, 0, 4, pud_lodestar_side::b)};
     ASSERT_TRUE(schedule.next_non_conjecture(ring).has_value());
     const std::optional<pud_lodestar_choice> again = schedule.next_non_conjecture(ring);
     ASSERT_TRUE(again.has_value());
@@ -61,8 +61,8 @@ TEST(PudLodestarScheduleTest, SingleSlotIsChosenAgainAfterTheRevolution) {
 TEST(PudLodestarScheduleTest, IneligibleSlotIsSkipped) {
     pud_lodestar_schedule schedule;
     std::vector<pud_lodestar_choice> ring{
-        choice_at(0, 0, 1, k_lodestar_side_a),
-        choice_at(0, 1, 2, k_lodestar_side_a),
+        choice_at(0, 0, 1, pud_lodestar_side::a),
+        choice_at(0, 1, 2, pud_lodestar_side::a),
     };
     ring[0].eligible = false;
     const std::optional<pud_lodestar_choice> chosen = schedule.next_non_conjecture(ring);

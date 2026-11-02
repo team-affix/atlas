@@ -11,6 +11,7 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/moduled_expr.hpp"
+#include "value_objects/moduled_expr_hash.hpp"
 #include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
@@ -71,7 +72,6 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
     std::unordered_set<pair_t, pair_hash> unified_functors;
     std::vector<ubs_class> edited;
     std::vector<uint32_t> touched_class_roots;
-    typename IDetectCycle::visitation binding_cycle_visitation;
     while (!pending.empty()) {
         const auto [left, right] = pending.back();
         pending.pop_back();
@@ -130,25 +130,15 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
                 moduled_expr{left_functor.args[arg], left.frame_offset, left.module},
                 moduled_expr{right_functor.args[arg], right.frame_offset, right.module});
     }
-    for (uint32_t class_root : touched_class_roots) {
-        if (detect_cycle_.find_cycle_from_class(class_root, binding_cycle_visitation))
-            return std::nullopt;
-    }
+    if (detect_cycle_.find_cycle_from_classes(touched_class_roots))
+        return std::nullopt;
     return edited;
 }
 
 PUD_UNIFIER_TEMPLATE
 size_t PUD_UNIFIER::pair_hash::operator()(const pair_t& pair) const noexcept {
-    const size_t left_skeleton = std::hash<const expr*>{}(pair.first.skeleton);
-    const size_t left_frame = left_skeleton ^ (std::hash<uint32_t>{}(pair.first.frame_offset) + 0x9e3779b97f4a7c15ull
-        + (left_skeleton << 6) + (left_skeleton >> 2));
-    const size_t left_hash = left_frame ^ (std::hash<pud_module_id>{}(pair.first.module) + 0x9e3779b97f4a7c15ull
-        + (left_frame << 6) + (left_frame >> 2));
-    const size_t right_skeleton = std::hash<const expr*>{}(pair.second.skeleton);
-    const size_t right_frame = right_skeleton ^ (std::hash<uint32_t>{}(pair.second.frame_offset) + 0x9e3779b97f4a7c15ull
-        + (right_skeleton << 6) + (right_skeleton >> 2));
-    const size_t right_hash = right_frame ^ (std::hash<pud_module_id>{}(pair.second.module) + 0x9e3779b97f4a7c15ull
-        + (right_frame << 6) + (right_frame >> 2));
+    const size_t left_hash = moduled_expr_hash{}(pair.first);
+    const size_t right_hash = moduled_expr_hash{}(pair.second);
     return left_hash ^ (right_hash + 0x9e3779b97f4a7c15ull + (left_hash << 6) + (left_hash >> 2));
 }
 

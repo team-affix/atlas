@@ -11,6 +11,8 @@
 #include "value_objects/pud_node_id.hpp"
 #include "value_objects/rule.hpp"
 
+inline constexpr char k_pud_module_blob_magic[4] = {'P', 'U', 'D', 'M'};
+
 struct pud_module {
     pud_module(pud_module_id module_id, std::vector<pud_module_id> dependencies, std::vector<rule> axioms);
     pud_module_id get_module_id() const;

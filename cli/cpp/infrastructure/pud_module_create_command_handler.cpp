@@ -1,13 +1,18 @@
 #include "infrastructure/pud_module_create_command_handler.hpp"
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <random>
+#include <stdexcept>
 #include "infrastructure/coroutine.hpp"
+#include "infrastructure/db.hpp"
+#include "infrastructure/expr_pool.hpp"
+#include "infrastructure/functor_names.hpp"
 #include "infrastructure/hex_uint64.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_serializer_stack.hpp"
 #include "parser/hpp/import_database_from_file.hpp"
-#include <fstream>
-#include <iostream>
-#include <random>
-#include <stdexcept>
 
 pud_module_create_command_handler::pud_module_create_command_handler(
     const std::string& database_path,
@@ -15,31 +20,26 @@ pud_module_create_command_handler::pud_module_create_command_handler(
     const std::string& output_path)
     : database_path_(database_path)
     , output_path_(output_path)
-    , dependencies_(std::move(dependencies))
-    , next_functor_id_(k_first_user_functor_id)
-    , expr_pool_()
-    , database_() {}
+    , dependencies_(std::move(dependencies)) {}
 
 void pud_module_create_command_handler::operator()() {
-    import_database_from_file(
-        database_path_,
-        expr_pool_,
-        expr_pool_,
-        database_,
-        functor_map_,
-        next_functor_id_);
+    expr_pool exprs;
+    db database;
+    std::map<std::string, uint32_t> functor_map;
+    uint32_t next_functor_id = k_first_user_functor_id;
+    import_database_from_file(database_path_, exprs, exprs, database, functor_map, next_functor_id);
     std::random_device random_device;
     std::mt19937_64 generator(random_device());
     const pud_module_id module_id = generator();
     std::vector<rule> axioms;
-    coroutine<rule_id, void> listed = database_.lookup_all_rules().iterate();
+    coroutine<rule_id, void> listed = database.lookup_all_rules().iterate();
     while (auto rule_id = listed.next())
-        axioms.push_back(*database_.get_rule(*rule_id));
+        axioms.push_back(*database.get_rule(*rule_id));
     pud_module module{module_id, dependencies_, std::move(axioms)};
-    std::vector<std::string> names(next_functor_id_);
+    std::vector<std::string> names(next_functor_id);
     names[k_nil_functor_id] = "[]";
     names[k_cons_functor_id] = "cons";
-    for (const auto& [name, functor_id] : functor_map_)
+    for (const auto& [name, functor_id] : functor_map)
         names.at(functor_id) = name;
     for (const std::string& name : names)
         module.append_functor_name(name);

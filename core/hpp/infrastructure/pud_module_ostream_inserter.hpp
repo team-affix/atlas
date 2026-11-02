@@ -4,7 +4,6 @@
 #include <ostream>
 #include "infrastructure/pud_module.hpp"
 
-inline constexpr char k_pud_module_blob_magic[4] = {'P', 'U', 'D', 'M'};
 
 template<
     typename IInsertFixedBytes,

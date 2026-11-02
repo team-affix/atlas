@@ -4,7 +4,7 @@
 #include <cstdint>
 
 struct globalizer {
-    uint32_t globalize(uint32_t frame_offset, uint32_t local_index);
+    uint32_t globalize(uint32_t frame_offset, uint32_t local_index) const;
 };
 
 #endif

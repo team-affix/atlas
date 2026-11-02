@@ -38,7 +38,7 @@ private:
         std::vector<pud_lodestar_choice>& ring,
         const query_ref& query,
         pud_mhcs_head_id candidate,
-        uint8_t side,
+        pud_lodestar_side side,
         pud_global_node_id leaf) const;
     std::vector<pud_lodestar_choice> non_conjecture_ring() const;
     std::vector<pud_lodestar_choice> conjecture_ring() const;
@@ -123,7 +123,7 @@ void pud_lodestar_driver<IManifest>::push_witness_slot(
     std::vector<pud_lodestar_choice>& ring,
     const query_ref& query,
     pud_mhcs_head_id candidate,
-    uint8_t side,
+    pud_lodestar_side side,
     pud_global_node_id leaf) const {
     pud_lodestar_choice choice{
         .slot = pud_lodestar_slot_id{
@@ -157,15 +157,15 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::non_conjecture_
             if (watched->self_witness) {
                 if (on_focus(watched->self_leaf))
                     continue;
-                push_witness_slot(ring, query, candidate, k_lodestar_side_self, watched->self_leaf);
+                push_witness_slot(ring, query, candidate, pud_lodestar_side::self, watched->self_leaf);
                 continue;
             }
-            uint8_t side = k_lodestar_side_a;
+            pud_lodestar_side side = pud_lodestar_side::a;
             for (const pud_mhws_head_id witness : watched->witnesses) {
                 const std::optional<pud_global_node_id> leaf = manifest_.witness_log_.node_of(witness);
                 if (leaf.has_value() && !on_focus(leaf.value()))
                     push_witness_slot(ring, query, candidate, side, leaf.value());
-                side = k_lodestar_side_b;
+                side = pud_lodestar_side::b;
             }
         }
     }
@@ -186,15 +186,15 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             if (watched->self_witness) {
                 if (!on_focus(watched->self_leaf))
                     continue;
-                push_witness_slot(ring, query, candidate, k_lodestar_side_self, watched->self_leaf);
+                push_witness_slot(ring, query, candidate, pud_lodestar_side::self, watched->self_leaf);
                 continue;
             }
-            uint8_t side = k_lodestar_side_a;
+            pud_lodestar_side side = pud_lodestar_side::a;
             for (const pud_mhws_head_id witness : watched->witnesses) {
                 const std::optional<pud_global_node_id> leaf = manifest_.witness_log_.node_of(witness);
                 if (leaf.has_value() && on_focus(leaf.value()))
                     push_witness_slot(ring, query, candidate, side, leaf.value());
-                side = k_lodestar_side_b;
+                side = pud_lodestar_side::b;
             }
         }
         ring.push_back(pud_lodestar_choice{
@@ -202,7 +202,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
                 .query_node = query.node,
                 .query_goal = query.goal,
                 .candidate = std::numeric_limits<pud_mhcs_head_id>::max(),
-                .side = k_lodestar_side_caller,
+                .side = pud_lodestar_side::caller,
             },
             .leaf = query.node,
             .body_goal = query.goal,
@@ -257,7 +257,7 @@ bool pud_lodestar_driver<IManifest>::propagate_unit() {
                 .query_node = ready.front(),
                 .query_goal = held->goal,
                 .candidate = 0,
-                .side = k_lodestar_side_self,
+                .side = pud_lodestar_side::self,
             },
             .leaf = ready.front(),
             .body_goal = held->goal,

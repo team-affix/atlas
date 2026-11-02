@@ -10,6 +10,7 @@
 #include <vector>
 #include "value_objects/expr.hpp"
 #include "value_objects/moduled_expr.hpp"
+#include "value_objects/moduled_expr_hash.hpp"
 #include "value_objects/moduled_functor.hpp"
 #include "value_objects/pud_module_id.hpp"
 #include "value_objects/ubs_class.hpp"
@@ -45,10 +46,6 @@ private:
         moduled_expr functor;
         std::vector<const expr*> args;
     };
-    struct exported_hash {
-        size_t operator()(const moduled_expr& term) const noexcept;
-    };
-
     std::optional<const expr*> enter(moduled_expr framed, std::vector<frame>& pending);
 
     IGlobalize& globalize_;
@@ -63,7 +60,7 @@ private:
     IInsertLink& insert_link_;
     uint32_t caller_lvc_;
     std::unordered_map<uint32_t, uint32_t>& translations_;
-    std::unordered_map<moduled_expr, const expr*, exported_hash> exported_;
+    std::unordered_map<moduled_expr, const expr*, moduled_expr_hash> exported_;
 };
 
 #define PUD_EXPORTER_TEMPLATE \
@@ -158,14 +155,6 @@ std::optional<const expr*> PUD_EXPORTER::enter(moduled_expr framed, std::vector<
         return known->second;
     pending.push_back(frame{framed, {}});
     return std::nullopt;
-}
-
-PUD_EXPORTER_TEMPLATE
-size_t PUD_EXPORTER::exported_hash::operator()(const moduled_expr& term) const noexcept {
-    const size_t skeleton_hash = std::hash<const expr*>{}(term.skeleton);
-    const size_t mixed = skeleton_hash ^ (std::hash<uint32_t>{}(term.frame_offset) + 0x9e3779b97f4a7c15ull
-        + (skeleton_hash << 6) + (skeleton_hash >> 2));
-    return mixed ^ (std::hash<pud_module_id>{}(term.module) + 0x9e3779b97f4a7c15ull + (mixed << 6) + (mixed >> 2));
 }
 
 #undef PUD_EXPORTER

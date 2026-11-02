@@ -25,3 +25,11 @@ TEST_F(HexUint64Test, ParseRejectsEmpty) {
 TEST_F(HexUint64Test, ParseRejectsInvalidDigit) {
     EXPECT_THROW(codec.parse_hex("12g"), std::runtime_error);
 }
+
+TEST_F(HexUint64Test, ParseAcceptsSixteenDigits) {
+    EXPECT_EQ(codec.parse_hex("ffffffffffffffff"), 0xffffffffffffffffull);
+}
+
+TEST_F(HexUint64Test, ParseRejectsMoreThanSixteenDigits) {
+    EXPECT_THROW(codec.parse_hex("10000000000000000"), std::runtime_error);
+}

@@ -2,6 +2,7 @@
 #define PUD_LODESTAR_FRONTIER_HPP
 
 #include <set>
+#include <vector>
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 
