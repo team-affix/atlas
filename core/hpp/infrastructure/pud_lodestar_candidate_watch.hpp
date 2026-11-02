@@ -47,9 +47,9 @@ void pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::record(
 
 template<typename IMhcs, typename IWitnessLog>
 std::optional<pud_mhcs_head_id> pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::try_add(pud_replay axiom_root) {
-    witnesses_.arm();
+    witnesses_.begin_recording_adds();
     const std::optional<pud_mhcs_head_id> head_id = inner_.try_add(std::move(axiom_root));
-    const std::vector<pud_mhws_head_id> added = witnesses_.drain();
+    const std::vector<pud_mhws_head_id> added = witnesses_.take_recorded_adds();
     if (!head_id.has_value())
         return std::nullopt;
     record(head_id.value(), added);
@@ -59,9 +59,9 @@ std::optional<pud_mhcs_head_id> pud_lodestar_candidate_watch<IMhcs, IWitnessLog>
 template<typename IMhcs, typename IWitnessLog>
 std::optional<pud_mhcs_head_id> pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::try_fork(
     pud_mhcs_head_id head_id, pud_replay axiom_root) {
-    witnesses_.arm();
+    witnesses_.begin_recording_adds();
     const std::optional<pud_mhcs_head_id> forked = inner_.try_fork(head_id, std::move(axiom_root));
-    const std::vector<pud_mhws_head_id> added = witnesses_.drain();
+    const std::vector<pud_mhws_head_id> added = witnesses_.take_recorded_adds();
     if (!forked.has_value())
         return std::nullopt;
     record(forked.value(), added);

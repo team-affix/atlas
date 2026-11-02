@@ -17,8 +17,8 @@ struct pud_lodestar_witness_log {
     std::optional<pud_witness_advance> advance(pud_mhws_head_id head_id);
     void remove(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
-    void arm();
-    std::vector<pud_mhws_head_id> drain();
+    void begin_recording_adds();
+    std::vector<pud_mhws_head_id> take_recorded_adds();
     std::optional<pud_global_node_id> node_of(pud_mhws_head_id head_id) const;
 private:
     void remember(pud_mhws_head_id head_id, pud_global_node_id node);
@@ -27,8 +27,8 @@ private:
     IMhws& inner_;
     IModules& modules_;
     std::unordered_map<pud_mhws_head_id, pud_global_node_id> nodes_;
-    std::vector<pud_mhws_head_id> armed_adds_;
-    bool armed_;
+    std::vector<pud_mhws_head_id> recorded_adds_;
+    bool recording_;
 };
 
 template<typename IMhws, typename IModules>
@@ -36,15 +36,15 @@ pud_lodestar_witness_log<IMhws, IModules>::pud_lodestar_witness_log(IMhws& inner
     : inner_(inner)
     , modules_(modules)
     , nodes_()
-    , armed_adds_()
-    , armed_(false) {}
+    , recorded_adds_()
+    , recording_(false) {}
 
 template<typename IMhws, typename IModules>
 void pud_lodestar_witness_log<IMhws, IModules>::remember(pud_mhws_head_id head_id, pud_global_node_id node) {
     nodes_[head_id] = settle(node);
-    if (!armed_)
+    if (!recording_)
         return;
-    armed_adds_.push_back(head_id);
+    recorded_adds_.push_back(head_id);
 }
 
 template<typename IMhws, typename IModules>
@@ -114,17 +114,15 @@ std::vector<pud_mhws_head_id> pud_lodestar_witness_log<IMhws, IModules>::invalid
 }
 
 template<typename IMhws, typename IModules>
-void pud_lodestar_witness_log<IMhws, IModules>::arm() {
-    armed_ = true;
-    armed_adds_.clear();
+void pud_lodestar_witness_log<IMhws, IModules>::begin_recording_adds() {
+    recording_ = true;
+    recorded_adds_.clear();
 }
 
 template<typename IMhws, typename IModules>
-std::vector<pud_mhws_head_id> pud_lodestar_witness_log<IMhws, IModules>::drain() {
-    armed_ = false;
-    std::vector<pud_mhws_head_id> added = std::move(armed_adds_);
-    armed_adds_.clear();
-    return added;
+std::vector<pud_mhws_head_id> pud_lodestar_witness_log<IMhws, IModules>::take_recorded_adds() {
+    recording_ = false;
+    return std::move(recorded_adds_);
 }
 
 template<typename IMhws, typename IModules>
