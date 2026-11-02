@@ -28,7 +28,7 @@ struct MockMakeFunctor {
 };
 
 struct MockDemoduleFunctor {
-    MOCK_METHOD(const expr*, demodule, (moduled_functor));
+    MOCK_METHOD(const expr*, demodule_functor, (moduled_functor));
 };
 
 uint32_t offset_index(uint32_t frame_offset, uint32_t index) {
@@ -51,7 +51,7 @@ struct PudCycleDetectorTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(demodule_functor, demodule(_)).WillByDefault([this](moduled_functor bound) {
+        ON_CALL(demodule_functor, demodule_functor(_)).WillByDefault([this](moduled_functor bound) {
             return functor(bound.functor->id, bound.functor->args);
         });
     }

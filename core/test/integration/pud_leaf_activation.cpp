@@ -27,7 +27,6 @@
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
-#include "infrastructure/pud_demoduler.hpp"
 #include "pud_identity_demoduler.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "value_objects/rule.hpp"
@@ -42,9 +41,8 @@ using ::testing::UnorderedElementsAre;
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
     using copy_demoduler_t = pud_copy_functor_demoduler<expr_pool>;
-    using demoduler_t = pud_demoduler<copy_demoduler_t, expr_pool>;
     using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, copy_demoduler_t>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, demoduler_t, copy_demoduler_t>;
+    using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, pud_identity_global_functor_ids, cycle_detector_factory_t::cycle_detector_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
     using modules_t = pud_modules<pud_module>;
     using replayer_t =
@@ -72,10 +70,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     expr_pool exprs;
     globalizer globalize;
     copy_demoduler_t copy_demoduler{exprs};
-    demoduler_t demoduler{copy_demoduler, exprs};
     pud_bind_map_factory bind_maps;
     cycle_detector_factory_t cycle_detectors{globalize, copy_demoduler};
-    unifier_factory_t unifiers{globalize, exprs, demoduler};
+    pud_identity_global_functor_ids global_functor_ids;
+    unifier_factory_t unifiers{globalize, exprs, global_functor_ids};
     std::deque<pud_module> module_data;
     modules_t modules;
     pud_node_table<pud_goal_list> node_goals;

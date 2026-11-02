@@ -15,7 +15,14 @@
 #include "value_objects/moduled_functor.hpp"
 #include "value_objects/ubs_class.hpp"
 
-template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate, typename IDetectCycle, typename IMakeFunctor, typename IDemodule>
+template<
+    typename IGlobalize,
+    typename IFind,
+    typename IEquate,
+    typename IInstantiate,
+    typename IDetectCycle,
+    typename IMakeFunctor,
+    typename IGetGlobalFunctorIdFromLocalFunctorId>
 struct pud_unifier {
     pud_unifier(
         IGlobalize& globalize,
@@ -24,7 +31,7 @@ struct pud_unifier {
         IInstantiate& instantiate,
         IDetectCycle& detect_cycle,
         IMakeFunctor& make_functor,
-        IDemodule& demodule);
+        IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id);
     std::optional<std::vector<ubs_class>> unify(moduled_expr lhs, moduled_expr rhs);
 private:
     using pair_t = std::pair<moduled_expr, moduled_expr>;
@@ -40,14 +47,14 @@ private:
     IInstantiate& instantiate_;
     IDetectCycle& detect_cycle_;
     IMakeFunctor& make_functor_;
-    IDemodule& demodule_;
+    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
 };
 
 #define PUD_UNIFIER_TEMPLATE                                                                     \
     template<typename IGlobalize, typename IFind, typename IEquate, typename IInstantiate,      \
-             typename IDetectCycle, typename IMakeFunctor, typename IDemodule>
+             typename IDetectCycle, typename IMakeFunctor, typename IGetGlobalFunctorIdFromLocalFunctorId>
 #define PUD_UNIFIER                                                                                  \
-    pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle, IMakeFunctor, IDemodule>
+    pud_unifier<IGlobalize, IFind, IEquate, IInstantiate, IDetectCycle, IMakeFunctor, IGetGlobalFunctorIdFromLocalFunctorId>
 
 PUD_UNIFIER_TEMPLATE
 PUD_UNIFIER::pud_unifier(
@@ -57,14 +64,14 @@ PUD_UNIFIER::pud_unifier(
     IInstantiate& instantiate,
     IDetectCycle& detect_cycle,
     IMakeFunctor& make_functor,
-    IDemodule& demodule)
+    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id)
     : globalize_(globalize)
     , find_(find)
     , equate_(equate)
     , instantiate_(instantiate)
     , detect_cycle_(detect_cycle)
     , make_functor_(make_functor)
-    , demodule_(demodule) {}
+    , get_global_functor_id_(get_global_functor_id) {}
 
 PUD_UNIFIER_TEMPLATE
 std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, moduled_expr rhs) {
@@ -115,13 +122,13 @@ std::optional<std::vector<ubs_class>> PUD_UNIFIER::unify(moduled_expr lhs, modul
             continue;
         }
 
-        const expr* left_global = demodule_.demodule(left);
-        const expr* right_global = demodule_.demodule(right);
-        const expr::functor& left_global_functor = std::get<expr::functor>(left_global->content);
-        const expr::functor& right_global_functor = std::get<expr::functor>(right_global->content);
         const expr::functor& left_functor = std::get<expr::functor>(left.skeleton->content);
         const expr::functor& right_functor = std::get<expr::functor>(right.skeleton->content);
-        if (left_global_functor.id != right_global_functor.id || left_functor.args.size() != right_functor.args.size())
+        const uint32_t left_global_id =
+            get_global_functor_id_.get_global_functor_id_from_local_functor_id(left.module, left_functor.id);
+        const uint32_t right_global_id =
+            get_global_functor_id_.get_global_functor_id_from_local_functor_id(right.module, right_functor.id);
+        if (left_global_id != right_global_id || left_functor.args.size() != right_functor.args.size())
             return std::nullopt;
         if (left_functor.args.empty() || !unified_functors.insert({left, right}).second)
             continue;

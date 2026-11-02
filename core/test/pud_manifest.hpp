@@ -11,7 +11,6 @@
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
-#include "infrastructure/pud_functor_demoduler.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_symbol_table.hpp"
@@ -43,16 +42,11 @@ struct pud_manifest {
     using node_axioms_t = pud_node_table<pud_global_node_id>;
     using bind_map_factory_t = pud_bind_map_factory;
     using modules_t = pud_modules<IModule>;
-    struct demoduler_t;
-    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, IExprPool> {
-        using pud_functor_demoduler<demoduler_t, pud_link_table, IExprPool>::pud_functor_demoduler;
-    };
-    struct demoduler_t : pud_demoduler<functor_demoduler_t, IExprPool> {
-        using pud_demoduler<functor_demoduler_t, IExprPool>::pud_demoduler;
-    };
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, functor_demoduler_t>;
+    using demoduler_t = pud_demoduler<pud_link_table, IExprPool, IExprPool>;
+    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, demoduler_t>;
     using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
-    using unifier_factory_t = pud_unifier_factory<globalizer, IExprPool, demoduler_t, functor_demoduler_t>;
+    using unifier_factory_t =
+        pud_unifier_factory<globalizer, IExprPool, pud_link_table, typename cycle_detector_factory_t::cycle_detector_t>;
     using exporter_factory_t = pud_exporter_factory<
         globalizer, IExprPool, IExprPool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table,
         modules_t, pud_link_table>;
@@ -93,7 +87,6 @@ struct pud_manifest {
 
     pud_symbol_table           symbol_table_;
     pud_link_table             link_table_;
-    functor_demoduler_t        functor_demoduler_;
     demoduler_t                demoduler_;
     functor_linker_t           functor_linker_;
     globalizer                 globalizer_;
@@ -134,12 +127,11 @@ template<typename IModule, typename IExprPool>
 pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     : symbol_table_()
     , link_table_()
-    , functor_demoduler_(demoduler_, link_table_, expr_pool)
-    , demoduler_(functor_demoduler_, expr_pool)
+    , demoduler_(link_table_, expr_pool, expr_pool)
     , functor_linker_(symbol_table_, link_table_)
     , globalizer_()
-    , cycle_detector_factory_(globalizer_, functor_demoduler_)
-    , unifier_factory_(globalizer_, expr_pool, demoduler_)
+    , cycle_detector_factory_(globalizer_, demoduler_)
+    , unifier_factory_(globalizer_, expr_pool, link_table_)
     , bind_map_factory_()
     , modules_()
     , exporter_factory_(

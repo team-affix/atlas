@@ -73,7 +73,7 @@ inline void pud_identity_local_functor_ids::insert_link(pud_module_id, uint32_t,
 template<typename IMakeFunctor>
 struct pud_copy_functor_demoduler {
     pud_copy_functor_demoduler(IMakeFunctor& make_functor);
-    const expr* demodule(moduled_functor functor);
+    const expr* demodule_functor(moduled_functor functor);
 private:
     IMakeFunctor& make_functor_;
 };
@@ -83,7 +83,7 @@ pud_copy_functor_demoduler<IMakeFunctor>::pud_copy_functor_demoduler(IMakeFuncto
     : make_functor_(make_functor) {}
 
 template<typename IMakeFunctor>
-const expr* pud_copy_functor_demoduler<IMakeFunctor>::demodule(moduled_functor functor) {
+const expr* pud_copy_functor_demoduler<IMakeFunctor>::demodule_functor(moduled_functor functor) {
     return make_functor_.make_functor(functor.functor->id, functor.functor->args);
 }
 

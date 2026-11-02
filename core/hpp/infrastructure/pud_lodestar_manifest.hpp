@@ -14,7 +14,6 @@
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
-#include "infrastructure/pud_functor_demoduler.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_symbol_table.hpp"
@@ -68,19 +67,17 @@ struct pud_lodestar_manifest {
     struct modules_t : pud_modules<pud_module> {
         using pud_modules<pud_module>::pud_modules;
     };
-    struct demoduler_t;
-    struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool> {
-        using pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool>::pud_functor_demoduler;
+    struct demoduler_t : pud_demoduler<pud_link_table, expr_pool, expr_pool> {
+        using pud_demoduler<pud_link_table, expr_pool, expr_pool>::pud_demoduler;
     };
-    struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
-        using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
-    };
-    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, functor_demoduler_t> {
-        using pud_cycle_detector_factory<globalizer, functor_demoduler_t>::pud_cycle_detector_factory;
+    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, demoduler_t> {
+        using pud_cycle_detector_factory<globalizer, demoduler_t>::pud_cycle_detector_factory;
     };
     using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
-    struct unifier_factory_t : pud_unifier_factory<globalizer, expr_pool, demoduler_t, functor_demoduler_t> {
-        using pud_unifier_factory<globalizer, expr_pool, demoduler_t, functor_demoduler_t>::pud_unifier_factory;
+    struct unifier_factory_t : pud_unifier_factory<
+        globalizer, expr_pool, pud_link_table, cycle_detector_factory_t::cycle_detector_t> {
+        using pud_unifier_factory<
+            globalizer, expr_pool, pud_link_table, cycle_detector_factory_t::cycle_detector_t>::pud_unifier_factory;
     };
     struct exporter_factory_t : pud_exporter_factory<
         globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table, modules_t,
@@ -228,7 +225,6 @@ struct pud_lodestar_manifest {
 
     pud_symbol_table           symbol_table_;
     pud_link_table             link_table_;
-    functor_demoduler_t        functor_demoduler_;
     demoduler_t                demoduler_;
     functor_linker_t           functor_linker_;
     globalizer                 globalizer_;

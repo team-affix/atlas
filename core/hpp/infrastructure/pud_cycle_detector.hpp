@@ -91,7 +91,7 @@ bool pud_cycle_detector<IG, IF, IDF>::enter_class(
     frame class_frame{&mark->second, {}};
     if (entered.value.has_value()) {
         const expr::functor& functor = *entered.value->functor;
-        const expr* reconstructed = demodule_functor_.demodule(
+        const expr* reconstructed = demodule_functor_.demodule_functor(
             moduled_functor{&functor, entered.value->frame_offset, entered.value->module});
         class_frame.pending.push_back(framed_expr{reconstructed, entered.value->frame_offset});
     }

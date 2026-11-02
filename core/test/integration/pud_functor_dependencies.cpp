@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_demoduler.hpp"
-#include "infrastructure/pud_functor_demoduler.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
@@ -250,21 +249,7 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
     pud_symbol_table symbols;
     pud_link_table links;
     pud_functor_linker<pud_symbol_table, pud_link_table> linker{symbols, links};
-    struct linked_demoduler {
-        struct demoduler_t;
-        struct functor_demoduler_t : pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool> {
-            using pud_functor_demoduler<demoduler_t, pud_link_table, expr_pool>::pud_functor_demoduler;
-        };
-        struct demoduler_t : pud_demoduler<functor_demoduler_t, expr_pool> {
-            using pud_demoduler<functor_demoduler_t, expr_pool>::pud_demoduler;
-        };
-        functor_demoduler_t functor_demoduler;
-        demoduler_t demoduler;
-        linked_demoduler(pud_link_table& links, expr_pool& exprs)
-            : functor_demoduler(demoduler, links, exprs)
-            , demoduler(functor_demoduler, exprs) {}
-    };
-    linked_demoduler linked{links, exprs};
+    pud_demoduler<pud_link_table, expr_pool, expr_pool> demoduler{links, exprs, exprs};
     const expr* shared = functor(2, {});
     std::deque<pud_module> modules;
     modules.emplace_back(1, std::vector<pud_module_id>{}, std::vector<rule>{rule(shared, {}, 0)});
@@ -274,10 +259,10 @@ TEST_F(PudFunctorDependencyTest, OneSkeletonDemoduledInTwoModulesKeepsEachGlobal
     linker.link(modules[0]);
     linker.link(modules[1]);
 
-    const expr* add = linked.demoduler.demodule(moduled_expr{shared, 0, 1});
-    const expr* mul = linked.demoduler.demodule(moduled_expr{shared, 0, 2});
+    const expr* add = demoduler.demodule(moduled_expr{shared, 0, 1});
+    const expr* mul = demoduler.demodule(moduled_expr{shared, 0, 2});
     EXPECT_EQ(std::get<expr::functor>(add->content).id, 2u);
     EXPECT_EQ(std::get<expr::functor>(mul->content).id, 3u);
     EXPECT_NE(add, mul);
-    EXPECT_EQ(linked.demoduler.demodule(moduled_expr{shared, 0, 1}), add);
+    EXPECT_EQ(demoduler.demodule(moduled_expr{shared, 0, 1}), add);
 }
