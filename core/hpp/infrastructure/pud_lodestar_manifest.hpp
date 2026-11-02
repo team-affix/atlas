@@ -37,7 +37,6 @@
 #include "infrastructure/pud_lodestar_solution_taker.hpp"
 #include "infrastructure/pud_lodestar_solved_leaf_finder.hpp"
 #include "infrastructure/pud_lodestar_unfold_applier.hpp"
-#include "infrastructure/pud_lodestar_unfold_budget_store.hpp"
 #include "infrastructure/pud_lodestar_unit_propagator.hpp"
 #include "infrastructure/pud_lodestar_witness_log.hpp"
 #include "infrastructure/pud_mhcs.hpp"
@@ -249,21 +248,18 @@ struct pud_lodestar_manifest {
             pud_lodestar_solution_store, pud_lodestar_frontier>::pud_lodestar_solution_taker;
     };
     struct search_stepper_t : pud_lodestar_search_stepper<
-        pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
-        pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
-        pud_lodestar_unfold_budget_store, solution_taker_t, blocked_refuter_t, driver_t> {
+        pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, solution_taker_t, blocked_refuter_t, driver_t,
+        query_lister_t> {
         using pud_lodestar_search_stepper<
-            pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
-            pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
-            pud_lodestar_unfold_budget_store, solution_taker_t, blocked_refuter_t,
-            driver_t>::pud_lodestar_search_stepper;
+            pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, solution_taker_t, blocked_refuter_t,
+            driver_t, query_lister_t>::pud_lodestar_search_stepper;
     };
     struct module_registrar_t : pud_lodestar_module_registrar<
         pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-        pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store> {
+        pud_lodestar_pending_conflict_store> {
         using pud_lodestar_module_registrar<
             pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-            pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store>::pud_lodestar_module_registrar;
+            pud_lodestar_pending_conflict_store>::pud_lodestar_module_registrar;
     };
 
     pud_lodestar_manifest(
@@ -315,11 +311,10 @@ struct pud_lodestar_manifest {
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 
-    pud_lodestar_focus_set           focus_set_;
-    pud_lodestar_unfold_budget_store unfold_budget_store_;
-    pud_lodestar_solution_store               solution_store_;
-    pud_lodestar_pending_conflict_store       pending_conflict_store_;
-    pud_lodestar_frontier            frontier_;
+    pud_lodestar_focus_set              focus_set_;
+    pud_lodestar_solution_store         solution_store_;
+    pud_lodestar_pending_conflict_store pending_conflict_store_;
+    pud_lodestar_frontier               frontier_;
 
     focus_seeder_t                   focus_seeder_;
     focus_extender_t                 focus_extender_;

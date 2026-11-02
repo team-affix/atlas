@@ -1,8 +1,13 @@
+#include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_lodestar_search_stepper.hpp"
+#include "value_objects/pud_lodestar_query.hpp"
+#include "pud_test_node.hpp"
 
+using ::testing::_;
 using ::testing::InSequence;
+using ::testing::NiceMock;
 using ::testing::Return;
 
 namespace {
@@ -10,170 +15,141 @@ namespace {
 struct MockClearSolution {
     MOCK_METHOD(void, clear, ());
 };
-
-struct MockCountSolutions {
-    MOCK_METHOD(size_t, solution_count, (), (const));
+struct MockTakePendingConflict {
+    MOCK_METHOD(bool, try_take, ());
 };
-
-struct MockGetPendingConflicts {
-    MOCK_METHOD(size_t, get, (), (const));
-};
-
-struct MockSetPendingConflicts {
-    MOCK_METHOD(void, set, (size_t));
-};
-
-struct MockGetStopped {
-    MOCK_METHOD(bool, get_stopped, (), (const));
-};
-
-struct MockSetStopped {
-    MOCK_METHOD(void, set_stopped, (bool));
-};
-
-struct MockGetFocusUnfolds {
-    MOCK_METHOD(size_t, get_focus_unfolds, (), (const));
-};
-
-struct MockSetFocusUnfolds {
-    MOCK_METHOD(void, set_focus_unfolds, (size_t));
-};
-
 struct MockTakeSolution {
     MOCK_METHOD(bool, take, ());
 };
-
 struct MockRefuteBlocked {
     MOCK_METHOD(bool, refute_blocked, ());
 };
-
 struct MockUnfoldOne {
     MOCK_METHOD(pud_lodestar_unfold_outcome, unfold_one, ());
 };
+struct MockListQueries {
+    MOCK_METHOD(std::vector<pud_lodestar_query>, list, (), (const));
+};
 
+using test_stepper_t = pud_lodestar_search_stepper<
+    NiceMock<MockClearSolution>, NiceMock<MockTakePendingConflict>, NiceMock<MockTakeSolution>,
+    NiceMock<MockRefuteBlocked>, NiceMock<MockUnfoldOne>, NiceMock<MockListQueries>>;
+
+// By default nothing is pending, solved or blocked, and every unfold succeeds off the focus.
 struct PudLodestarSearchStepperTest : public ::testing::Test {
-    MockClearSolution clear;
-    MockCountSolutions counted;
-    MockGetPendingConflicts pending;
-    MockSetPendingConflicts set_pending;
-    MockGetStopped stopped;
-    MockSetStopped set_stopped;
-    MockGetFocusUnfolds focus_unfolds;
-    MockSetFocusUnfolds set_focus_unfolds;
-    MockTakeSolution take;
-    MockRefuteBlocked refute;
-    MockUnfoldOne unfold;
-    pud_lodestar_search_stepper<
-        MockClearSolution, MockCountSolutions, MockGetPendingConflicts, MockSetPendingConflicts, MockGetStopped,
-        MockSetStopped, MockGetFocusUnfolds, MockSetFocusUnfolds, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne>
-        stepper{
-            clear, counted, pending, set_pending, stopped, set_stopped, focus_unfolds, set_focus_unfolds, take,
-            refute, unfold, 2};
+    NiceMock<MockClearSolution> solutions;
+    NiceMock<MockTakePendingConflict> conflicts;
+    NiceMock<MockTakeSolution> taker;
+    NiceMock<MockRefuteBlocked> refuter;
+    NiceMock<MockUnfoldOne> driver;
+    NiceMock<MockListQueries> queries;
+    std::vector<pud_lodestar_query> open_query{
+        pud_lodestar_query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true}};
+
+    void SetUp() override {
+        ON_CALL(conflicts, try_take()).WillByDefault(Return(false));
+        ON_CALL(taker, take()).WillByDefault(Return(false));
+        ON_CALL(refuter, refute_blocked()).WillByDefault(Return(false));
+        ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_lodestar_unfold_outcome::off_focus));
+        ON_CALL(queries, list()).WillByDefault(Return(std::vector<pud_lodestar_query>{}));
+    }
+
+    test_stepper_t make_stepper(size_t max_unfolds) {
+        return test_stepper_t{solutions, conflicts, taker, refuter, driver, queries, max_unfolds};
+    }
 };
 
 }
 
-TEST_F(PudLodestarSearchStepperTest, AStoppedSearchDoesNotTick) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(true));
-    EXPECT_CALL(take, take).Times(0);
-    EXPECT_FALSE(stepper.step());
+TEST_F(PudLodestarSearchStepperTest, ANewSessionIsRunning) {
+    const test_stepper_t stepper = make_stepper(4);
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::running);
 }
 
-TEST_F(PudLodestarSearchStepperTest, APendingConflictIsEmittedWithoutSearching) {
+TEST_F(PudLodestarSearchStepperTest, EveryTickFirstClearsTheLastSolution) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(taker, take()).WillByDefault(Return(true));
     InSequence order;
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(2u));
-    EXPECT_CALL(set_pending, set(1u));
-    EXPECT_CALL(take, take).Times(0);
+    EXPECT_CALL(solutions, clear());
+    EXPECT_CALL(taker, take());
+    stepper.step();
+}
+
+TEST_F(PudLodestarSearchStepperTest, APendingConflictIsATickWithoutSearching) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(conflicts, try_take()).WillByDefault(Return(true));
+    EXPECT_CALL(taker, take()).Times(0);
     EXPECT_TRUE(stepper.step());
 }
 
-TEST_F(PudLodestarSearchStepperTest, ATakenSolutionEndsTheTick) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(true));
-    EXPECT_CALL(refute, refute_blocked).Times(0);
+TEST_F(PudLodestarSearchStepperTest, ATakenSolutionEndsTheTickBeforeAnyUnfold) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(taker, take()).WillByDefault(Return(true));
+    EXPECT_CALL(refuter, refute_blocked()).Times(0);
+    EXPECT_CALL(driver, unfold_one()).Times(0);
     EXPECT_TRUE(stepper.step());
 }
 
-TEST_F(PudLodestarSearchStepperTest, ABlockedRefutationEndsTheTick) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(true));
-    EXPECT_CALL(unfold, unfold_one).Times(0);
+TEST_F(PudLodestarSearchStepperTest, ABlockedRefutationEndsTheTickBeforeAnyUnfold) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(refuter, refute_blocked()).WillByDefault(Return(true));
+    EXPECT_CALL(driver, unfold_one()).Times(0);
     EXPECT_TRUE(stepper.step());
 }
 
-TEST_F(PudLodestarSearchStepperTest, SpendingTheBudgetWithNoSolutionsReturnsOneMoreTick) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(2u));
-    EXPECT_CALL(set_stopped, set_stopped(true));
-    EXPECT_CALL(counted, solution_count()).WillOnce(Return(0u));
+TEST_F(PudLodestarSearchStepperTest, UnfoldsContinueUntilASolutionIsTaken) {
+    test_stepper_t stepper = make_stepper(4);
+    EXPECT_CALL(taker, take()).WillOnce(Return(false)).WillOnce(Return(false)).WillOnce(Return(true));
+    EXPECT_CALL(driver, unfold_one()).Times(2);
     EXPECT_TRUE(stepper.step());
 }
 
-TEST_F(PudLodestarSearchStepperTest, SpendingTheBudgetAfterASolutionStops) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(2u));
-    EXPECT_CALL(set_stopped, set_stopped(true));
-    EXPECT_CALL(counted, solution_count()).WillOnce(Return(1u));
+TEST_F(PudLodestarSearchStepperTest, EveryUnfoldOnOrOffTheFocusSpendsTheBudget) {
+    test_stepper_t stepper = make_stepper(2);
+    EXPECT_CALL(driver, unfold_one())
+        .WillOnce(Return(pud_lodestar_unfold_outcome::off_focus))
+        .WillOnce(Return(pud_lodestar_unfold_outcome::on_focus));
     EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::budget_spent);
 }
 
-TEST_F(PudLodestarSearchStepperTest, AnUnfoldOutsideTheFocusDoesNotSpendBudget) {
-    InSequence order;
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(0u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::off_focus));
-    EXPECT_CALL(take, take()).WillOnce(Return(true));
-    EXPECT_CALL(set_focus_unfolds, set_focus_unfolds).Times(0);
+TEST_F(PudLodestarSearchStepperTest, TheBudgetCarriesAcrossTicks) {
+    test_stepper_t stepper = make_stepper(2);
+    EXPECT_CALL(taker, take()).WillOnce(Return(false)).WillOnce(Return(true)).WillRepeatedly(Return(false));
+    EXPECT_CALL(driver, unfold_one()).Times(2);
     EXPECT_TRUE(stepper.step());
-}
-
-TEST_F(PudLodestarSearchStepperTest, AFocusUnfoldSpendsOneFromTheBudget) {
-    InSequence order;
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(1u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::on_focus));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(1u));
-    EXPECT_CALL(set_focus_unfolds, set_focus_unfolds(2u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(2u));
-    EXPECT_CALL(set_stopped, set_stopped(true));
-    EXPECT_CALL(counted, solution_count()).WillOnce(Return(0u));
-    EXPECT_TRUE(stepper.step());
-}
-
-TEST_F(PudLodestarSearchStepperTest, NothingLeftToUnfoldStops) {
-    EXPECT_CALL(clear, clear());
-    EXPECT_CALL(stopped, get_stopped()).WillOnce(Return(false));
-    EXPECT_CALL(pending, get()).WillOnce(Return(0u));
-    EXPECT_CALL(take, take()).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
-    EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(0u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::none));
-    EXPECT_CALL(set_stopped, set_stopped(true));
     EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::budget_spent);
+}
+
+TEST_F(PudLodestarSearchStepperTest, ABudgetOfZeroUnfoldsNothing) {
+    test_stepper_t stepper = make_stepper(0);
+    EXPECT_CALL(driver, unfold_one()).Times(0);
+    EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::budget_spent);
+}
+
+TEST_F(PudLodestarSearchStepperTest, NoUnfoldWithNoOpenConjectureLeafIsARefutation) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_lodestar_unfold_outcome::none));
+    EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::refuted);
+}
+
+TEST_F(PudLodestarSearchStepperTest, NoUnfoldWhileAConjectureLeafIsStillOpenIsExhaustion) {
+    test_stepper_t stepper = make_stepper(4);
+    ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_lodestar_unfold_outcome::none));
+    ON_CALL(queries, list()).WillByDefault(Return(open_query));
+    EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::exhausted);
+}
+
+TEST_F(PudLodestarSearchStepperTest, AStoppedSessionStaysStoppedWithoutSearching) {
+    test_stepper_t stepper = make_stepper(0);
+    stepper.step();
+    EXPECT_CALL(solutions, clear());
+    EXPECT_CALL(conflicts, try_take()).Times(0);
+    EXPECT_CALL(taker, take()).Times(0);
+    EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::budget_spent);
 }

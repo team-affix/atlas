@@ -7,11 +7,11 @@
 #include "infrastructure/pud_lodestar_frontier.hpp"
 #include "infrastructure/pud_lodestar_search_stepper.hpp"
 #include "infrastructure/pud_lodestar_solved_leaf_finder.hpp"
-#include "infrastructure/pud_lodestar_unfold_budget_store.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_lodestar_pending_conflict_store.hpp"
 #include "infrastructure/pud_lodestar_solution_store.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/pud_lodestar_query.hpp"
 
 using ::testing::Return;
 
@@ -49,6 +49,10 @@ struct MockUnfoldOne {
     MOCK_METHOD(pud_lodestar_unfold_outcome, unfold_one, ());
 };
 
+struct MockListQueries {
+    MOCK_METHOD(std::vector<pud_lodestar_query>, list, (), (const));
+};
+
 struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
     pud_lodestar_focus_set focus;
     MockGetChildren children;
@@ -65,16 +69,14 @@ struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
     pud_node_depth_counter<MockGetParent> depths{parents};
     pud_lodestar_solution_store solutions;
     pud_lodestar_pending_conflict_store conflicts;
-    pud_lodestar_unfold_budget_store budget;
     MockTakeSolution take;
     MockRefuteBlocked refute;
     MockUnfoldOne unfold;
+    MockListQueries queries;
     pud_lodestar_search_stepper<
-        pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
-        pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
-        pud_lodestar_unfold_budget_store, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne>
-        stepper{
-            solutions, solutions, conflicts, conflicts, budget, budget, budget, budget, take, refute, unfold, 1};
+        pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, MockTakeSolution, MockRefuteBlocked,
+        MockUnfoldOne, MockListQueries>
+        stepper{solutions, conflicts, take, refute, unfold, queries, 1};
     pud_goal_list empty;
     std::vector<pud_node_id> axiom_children{1};
     std::vector<pud_node_id> none;
@@ -120,21 +122,24 @@ TEST_F(PudLodestarSearchTickIntegrationTest, ErasingAReturnedLeafMakesTheNextSol
 TEST_F(PudLodestarSearchTickIntegrationTest, AConflictTickClearsThePreviousSolution) {
     const expr stored{expr::functor{4, {}}};
     solutions.set(&stored, 2);
-    conflicts.set(1);
+    conflicts.add(1);
     EXPECT_TRUE(stepper.step());
     EXPECT_EQ(solutions.solution(), nullptr);
     EXPECT_EQ(solutions.solution_depth(), 0u);
     EXPECT_EQ(solutions.solution_count(), 1u);
-    EXPECT_EQ(conflicts.get(), 0u);
+    EXPECT_FALSE(conflicts.try_take());
 }
 
-TEST_F(PudLodestarSearchTickIntegrationTest, OneFocusUnfoldSpendsTheBudgetOnTheRealStore) {
+TEST_F(PudLodestarSearchTickIntegrationTest, SpendingTheBudgetStopsTheSessionAndLeavesNoSolution) {
+    const expr stored{expr::functor{4, {}}};
+    solutions.set(&stored, 2);
     EXPECT_CALL(take, take()).WillOnce(Return(false)).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false)).WillOnce(Return(false));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::on_focus));
-    EXPECT_TRUE(stepper.step());
-    EXPECT_EQ(budget.get_focus_unfolds(), 1u);
-    EXPECT_TRUE(budget.get_stopped());
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::off_focus));
+    EXPECT_FALSE(stepper.step());
+    EXPECT_EQ(stepper.stop_reason(), pud_lodestar_stop_reason::budget_spent);
+    EXPECT_EQ(solutions.solution(), nullptr);
+    EXPECT_FALSE(stepper.step());
 }
 
 TEST_F(PudLodestarSearchTickIntegrationTest, DepthFollowsTheRealParentChain) {

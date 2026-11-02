@@ -11,8 +11,7 @@ template<
     typename ISeedFocus,
     typename IActivateModule,
     typename IApplyRegister,
-    typename IGetPendingConflicts,
-    typename ISetPendingConflicts>
+    typename IAddPendingConflicts>
 struct pud_lodestar_module_registrar {
     pud_lodestar_module_registrar(
         ILinkFunctorNames& link_functor_names,
@@ -20,8 +19,7 @@ struct pud_lodestar_module_registrar {
         ISeedFocus& seed_focus,
         IActivateModule& activate_module,
         IApplyRegister& apply_register,
-        IGetPendingConflicts& get_pending_conflicts,
-        ISetPendingConflicts& set_pending_conflicts);
+        IAddPendingConflicts& add_pending_conflicts);
     void register_module(IModule& module);
 private:
     ILinkFunctorNames& link_functor_names_;
@@ -29,17 +27,16 @@ private:
     ISeedFocus& seed_focus_;
     IActivateModule& activate_module_;
     IApplyRegister& apply_register_;
-    IGetPendingConflicts& get_pending_conflicts_;
-    ISetPendingConflicts& set_pending_conflicts_;
+    IAddPendingConflicts& add_pending_conflicts_;
 };
 
 #define PUD_LODESTAR_MODULE_REGISTRAR_TEMPLATE                                                     \
     template<typename IModule, typename ILinkFunctorNames, typename IRegisterModule,              \
              typename ISeedFocus, typename IActivateModule, typename IApplyRegister,              \
-             typename IGetPendingConflicts, typename ISetPendingConflicts>
+             typename IAddPendingConflicts>
 #define PUD_LODESTAR_MODULE_REGISTRAR                                                              \
     pud_lodestar_module_registrar<IModule, ILinkFunctorNames, IRegisterModule, ISeedFocus,        \
-        IActivateModule, IApplyRegister, IGetPendingConflicts, ISetPendingConflicts>
+        IActivateModule, IApplyRegister, IAddPendingConflicts>
 
 PUD_LODESTAR_MODULE_REGISTRAR_TEMPLATE
 PUD_LODESTAR_MODULE_REGISTRAR::pud_lodestar_module_registrar(
@@ -48,15 +45,13 @@ PUD_LODESTAR_MODULE_REGISTRAR::pud_lodestar_module_registrar(
     ISeedFocus& seed_focus,
     IActivateModule& activate_module,
     IApplyRegister& apply_register,
-    IGetPendingConflicts& get_pending_conflicts,
-    ISetPendingConflicts& set_pending_conflicts)
+    IAddPendingConflicts& add_pending_conflicts)
     : link_functor_names_(link_functor_names)
     , register_module_(register_module)
     , seed_focus_(seed_focus)
     , activate_module_(activate_module)
     , apply_register_(apply_register)
-    , get_pending_conflicts_(get_pending_conflicts)
-    , set_pending_conflicts_(set_pending_conflicts) {}
+    , add_pending_conflicts_(add_pending_conflicts) {}
 
 PUD_LODESTAR_MODULE_REGISTRAR_TEMPLATE
 void PUD_LODESTAR_MODULE_REGISTRAR::register_module(IModule& module) {
@@ -65,7 +60,7 @@ void PUD_LODESTAR_MODULE_REGISTRAR::register_module(IModule& module) {
     seed_focus_.seed(module.get_module_id());
     const pud_frontier_change change = activate_module_.activate_module(module.get_module_id());
     apply_register_.apply_register(change);
-    set_pending_conflicts_.set(get_pending_conflicts_.get() + change.refuted.size());
+    add_pending_conflicts_.add(change.refuted.size());
 }
 
 #undef PUD_LODESTAR_MODULE_REGISTRAR

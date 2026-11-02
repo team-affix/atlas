@@ -74,4 +74,53 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
     ASSERT_TRUE(runtime.next());
     EXPECT_EQ(runtime.solution(), nullptr);
     EXPECT_FALSE(runtime.next());
+    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::refuted);
+}
+
+// q(X) :- nat(X) has a solution at every depth, so only a session limit can end the search.
+struct PudLodestarSessionLimitTest : public PudLodestarManifestTest {
+    std::deque<pud_module> modules;
+
+    void SetUp() override {
+        const expr* zero = atom("zero");
+        modules.emplace_back(1, std::vector<pud_module_id>{}, std::vector<rule>{
+            rule(functor("nat", {zero}), {}, 0),
+            rule(functor("nat", {functor("s", {exprs.make_var(0)})}), {functor("nat", {exprs.make_var(0)})}, 1),
+        });
+        modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
+            rule(functor("q", {exprs.make_var(0)}), {functor("nat", {exprs.make_var(0)})}, 1),
+        });
+    }
+
+    void register_into(pud_lodestar_runtime& runtime) {
+        for (pud_module& module : modules) {
+            install_shared_functor_names(module, this->functors);
+            runtime.register_module(module);
+        }
+    }
+};
+
+TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesTheConjectureUnrefuted) {
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64);
+    register_into(runtime);
+    size_t ticks = 0;
+    while (runtime.next())
+        ++ticks;
+    EXPECT_GT(ticks, 0u);
+    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::exhausted);
+    EXPECT_FALSE(modules[1].is_refuted(0));
+}
+
+TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt) {
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1, 10, 64, 64);
+    register_into(runtime);
+    while (runtime.next()) {
+    }
+    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::budget_spent);
+    EXPECT_FALSE(modules[1].is_refuted(0));
+}
+
+TEST_F(PudLodestarSessionLimitTest, ASessionRunsUntilItStops) {
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 64, 64);
+    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::running);
 }

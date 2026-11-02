@@ -52,7 +52,6 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_)
     , focus_set_()
-    , unfold_budget_store_()
     , solution_store_()
     , pending_conflict_store_()
     , frontier_()
@@ -80,11 +79,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depth_counter_, solution_store_,
           frontier_)
     , search_stepper_(
-          solution_store_, solution_store_, pending_conflict_store_, pending_conflict_store_, unfold_budget_store_,
-          unfold_budget_store_, unfold_budget_store_, unfold_budget_store_, solution_taker_, blocked_refuter_,
-          driver_, max_unfolds)
-    , module_registrar_(
-          functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
-          pending_conflict_store_) {
+          solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,
+          max_unfolds)
+    , module_registrar_(functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_) {
     focus_set_.insert(focus_axiom);
 }

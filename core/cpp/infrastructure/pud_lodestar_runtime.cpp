@@ -27,6 +27,10 @@ size_t pud_lodestar_runtime::solution_depth() const {
     return manifest_.solution_store_.solution_depth();
 }
 
+pud_lodestar_stop_reason pud_lodestar_runtime::stop_reason() const {
+    return manifest_.search_stepper_.stop_reason();
+}
+
 const std::string& pud_lodestar_runtime::functor_name(uint32_t global_functor_id) const {
     return manifest_.symbol_table_.get_name_by_global_functor_id(global_functor_id);
 }

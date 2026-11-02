@@ -144,7 +144,8 @@ int main(int argc, char** argv) {
     auto* lodestar_sub = app.add_subcommand("lodestar", "Run the Lodestar PUD solver");
     lodestar_sub->add_option("modules", lodestar_opts.modules, "PUD module files")->required()->expected(1, -1);
     lodestar_sub->add_option("--focus", lodestar_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
-    lodestar_sub->add_option("--max-unfolds", lodestar_opts.max_unfolds, "Max focus unfolds");
+    lodestar_sub->add_option(
+        "--max-unfolds", lodestar_opts.max_unfolds, "Max unfolds this run; when spent the run ends without a final line");
     lodestar_sub->add_option("--ratio", lodestar_opts.ratio, "Non-conjecture unfolds per conjecture unfold");
     lodestar_sub->add_option("--max-node-depth", lodestar_opts.max_node_depth, "Max inference depth of a node");
     lodestar_sub->add_option(

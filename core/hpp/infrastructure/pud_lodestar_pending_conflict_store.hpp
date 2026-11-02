@@ -3,10 +3,11 @@
 
 #include <cstddef>
 
+// Counts refutations that module registration produced and that have not yet been reported as ticks.
 struct pud_lodestar_pending_conflict_store {
     pud_lodestar_pending_conflict_store();
-    size_t get() const;
-    void set(size_t pending_conflicts);
+    void add(size_t conflicts);
+    bool try_take();
 private:
     size_t pending_conflicts_;
 };

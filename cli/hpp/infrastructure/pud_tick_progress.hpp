@@ -11,7 +11,6 @@ struct pud_tick_progress {
     pud_tick_progress(IGetTimeSinceStart& get_time_since_start);
     void on_tick();
     void print();
-    void finish_line();
 private:
     IGetTimeSinceStart& get_time_since_start_;
     size_t total_ticks_;
@@ -41,7 +40,5 @@ void pud_tick_progress<IGetTimeSinceStart>::print() {
     std::cout << line.str() << '\n' << std::flush;
 }
 
-template<typename IGetTimeSinceStart>
-void pud_tick_progress<IGetTimeSinceStart>::finish_line() {}
 
 #endif

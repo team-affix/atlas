@@ -31,12 +31,8 @@ struct MockApplyRegister {
     MOCK_METHOD(void, apply_register, (const pud_frontier_change&));
 };
 
-struct MockGetPendingConflicts {
-    MOCK_METHOD(size_t, get, (), (const));
-};
-
-struct MockSetPendingConflicts {
-    MOCK_METHOD(void, set, (size_t));
+struct MockAddPendingConflicts {
+    MOCK_METHOD(void, add, (size_t));
 };
 
 struct PudLodestarModuleRegistrarTest : public ::testing::Test {
@@ -45,12 +41,11 @@ struct PudLodestarModuleRegistrarTest : public ::testing::Test {
     MockSeedFocus seeder;
     MockActivateModule activator;
     MockApplyRegister frontier;
-    MockGetPendingConflicts pending;
-    MockSetPendingConflicts set_pending;
+    MockAddPendingConflicts pending;
     pud_lodestar_module_registrar<
         registered_module, MockLinkFunctorNames, MockRegisterModule, MockSeedFocus, MockActivateModule,
-        MockApplyRegister, MockGetPendingConflicts, MockSetPendingConflicts>
-        registrar{linker, modules, seeder, activator, frontier, pending, set_pending};
+        MockApplyRegister, MockAddPendingConflicts>
+        registrar{linker, modules, seeder, activator, frontier, pending};
     registered_module module;
 };
 
@@ -67,19 +62,17 @@ TEST_F(PudLodestarModuleRegistrarTest, RegistrationLinksSeedsActivatesAndCountsR
     EXPECT_CALL(seeder, seed(9u));
     EXPECT_CALL(activator, activate_module(9u)).WillOnce(Return(change));
     EXPECT_CALL(frontier, apply_register(change));
-    EXPECT_CALL(pending, get()).WillOnce(Return(1u));
-    EXPECT_CALL(set_pending, set(3u));
+    EXPECT_CALL(pending, add(2u));
     registrar.register_module(module);
 }
 
-TEST_F(PudLodestarModuleRegistrarTest, ARegistrationWithNoRefutationsKeepsTheConflictCount) {
+TEST_F(PudLodestarModuleRegistrarTest, ARegistrationWithNoRefutationsAddsNoConflicts) {
     const pud_frontier_change change{};
     EXPECT_CALL(linker, link);
     EXPECT_CALL(modules, register_module);
     EXPECT_CALL(seeder, seed(9u));
     EXPECT_CALL(activator, activate_module(9u)).WillOnce(Return(change));
     EXPECT_CALL(frontier, apply_register(change));
-    EXPECT_CALL(pending, get()).WillOnce(Return(4u));
-    EXPECT_CALL(set_pending, set(4u));
+    EXPECT_CALL(pending, add(0u));
     registrar.register_module(module);
 }
