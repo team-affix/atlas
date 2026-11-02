@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_solution_term_reader.hpp"
+#include "infrastructure/pud_lodestar_solution_term_reader.hpp"
 #include "value_objects/pud_active_state.hpp"
 #include "value_objects/rule.hpp"
 
@@ -21,11 +21,11 @@ struct MockGetActiveState {
     MOCK_METHOD(const pud_active_state&, get, (pud_global_node_id));
 };
 
-struct PudSolutionTermReaderTest : public ::testing::Test {
+struct PudLodestarSolutionTermReaderTest : public ::testing::Test {
     MockGetNodeAxiom axioms;
     MockGetAxiom rules;
     MockGetActiveState states;
-    pud_solution_term_reader<MockGetNodeAxiom, MockGetAxiom, MockGetActiveState> reader{axioms, rules, states};
+    pud_lodestar_solution_term_reader<MockGetNodeAxiom, MockGetAxiom, MockGetActiveState> reader{axioms, rules, states};
     expr head{expr::functor{6, {}}};
     rule axiom{&head, {}, 0};
     pud_active_state state{
@@ -40,7 +40,7 @@ struct PudSolutionTermReaderTest : public ::testing::Test {
 
 }
 
-TEST_F(PudSolutionTermReaderTest, TheTermIsTheAxiomHeadInTheAxiomsModule) {
+TEST_F(PudLodestarSolutionTermReaderTest, TheTermIsTheAxiomHeadInTheAxiomsModule) {
     EXPECT_CALL(axioms, get(leaf)).WillOnce(Return(axiom_node));
     EXPECT_CALL(rules, get_axiom(axiom_node)).WillOnce(ReturnRef(axiom));
     EXPECT_CALL(states, get(leaf)).WillOnce(ReturnRef(state));

@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_unfold_allower.hpp"
+#include "infrastructure/pud_lodestar_unfold_allower.hpp"
 #include "value_objects/pud_goal_list.hpp"
 
 using ::testing::Return;
@@ -28,35 +28,35 @@ struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id));
 };
 
-struct PudUnfoldAllowerTest : public ::testing::Test {
+struct PudLodestarUnfoldAllowerTest : public ::testing::Test {
     MockCountNodeDepth depths;
     MockGetNodeGoals goals;
-    pud_unfold_allower<MockCountNodeDepth, MockGetNodeGoals> allower{depths, goals, 4};
+    pud_lodestar_unfold_allower<MockCountNodeDepth, MockGetNodeGoals> allower{depths, goals, 4};
     pud_goal_list at_cap = goals_of(64);
     pud_goal_list over_cap = goals_of(65);
 };
 
 }
 
-TEST_F(PudUnfoldAllowerTest, ANodeUnderBothCapsIsAllowed) {
+TEST_F(PudLodestarUnfoldAllowerTest, ANodeUnderBothCapsIsAllowed) {
     EXPECT_CALL(depths, count(node())).WillOnce(Return(3u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(at_cap));
     EXPECT_TRUE(allower.allow(node()));
 }
 
-TEST_F(PudUnfoldAllowerTest, ANodeAtTheDepthCapIsRefused) {
+TEST_F(PudLodestarUnfoldAllowerTest, ANodeAtTheDepthCapIsRefused) {
     EXPECT_CALL(depths, count(node())).WillOnce(Return(4u));
     EXPECT_CALL(goals, get).Times(0);
     EXPECT_FALSE(allower.allow(node()));
 }
 
-TEST_F(PudUnfoldAllowerTest, ANodeWithTooManyOpenGoalsIsRefused) {
+TEST_F(PudLodestarUnfoldAllowerTest, ANodeWithTooManyOpenGoalsIsRefused) {
     EXPECT_CALL(depths, count(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(over_cap));
     EXPECT_FALSE(allower.allow(node()));
 }
 
-TEST_F(PudUnfoldAllowerTest, SixtyFourOpenGoalsAreStillAllowed) {
+TEST_F(PudLodestarUnfoldAllowerTest, SixtyFourOpenGoalsAreStillAllowed) {
     EXPECT_CALL(depths, count(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(at_cap));
     EXPECT_TRUE(allower.allow(node()));

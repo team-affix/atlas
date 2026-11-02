@@ -50,7 +50,7 @@
 #include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_pending_conflict_store.hpp"
+#include "infrastructure/pud_lodestar_pending_conflict_store.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
@@ -58,10 +58,10 @@
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_solution_normalizer.hpp"
-#include "infrastructure/pud_solution_store.hpp"
-#include "infrastructure/pud_solution_term_reader.hpp"
+#include "infrastructure/pud_lodestar_solution_store.hpp"
+#include "infrastructure/pud_lodestar_solution_term_reader.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_unfold_allower.hpp"
+#include "infrastructure/pud_lodestar_unfold_allower.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_global_node_id.hpp"
@@ -188,8 +188,8 @@ struct pud_lodestar_manifest {
     struct node_depth_counter_t : pud_node_depth_counter<modules_t> {
         using pud_node_depth_counter<modules_t>::pud_node_depth_counter;
     };
-    struct unfold_allower_t : pud_unfold_allower<node_depth_counter_t, node_goals_t> {
-        using pud_unfold_allower<node_depth_counter_t, node_goals_t>::pud_unfold_allower;
+    struct unfold_allower_t : pud_lodestar_unfold_allower<node_depth_counter_t, node_goals_t> {
+        using pud_lodestar_unfold_allower<node_depth_counter_t, node_goals_t>::pud_lodestar_unfold_allower;
     };
     struct query_lister_t : pud_lodestar_query_lister<
         pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, pud_active_states, node_goals_t, mhq_t> {
@@ -232,8 +232,8 @@ struct pud_lodestar_manifest {
         using pud_lodestar_solved_leaf_finder<
             pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, node_goals_t>::pud_lodestar_solved_leaf_finder;
     };
-    struct solution_term_reader_t : pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
-        using pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_solution_term_reader;
+    struct solution_term_reader_t : pud_lodestar_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
+        using pud_lodestar_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_lodestar_solution_term_reader;
     };
     struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t> {
         using pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t>::pud_normalizer_factory;
@@ -242,28 +242,28 @@ struct pud_lodestar_manifest {
         using pud_solution_normalizer<demoduler_t, normalizer_factory_t>::pud_solution_normalizer;
     };
     struct solution_taker_t : pud_lodestar_solution_taker<
-        solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t, pud_solution_store,
+        solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t, pud_lodestar_solution_store,
         pud_lodestar_frontier> {
         using pud_lodestar_solution_taker<
             solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t,
-            pud_solution_store, pud_lodestar_frontier>::pud_lodestar_solution_taker;
+            pud_lodestar_solution_store, pud_lodestar_frontier>::pud_lodestar_solution_taker;
     };
     struct search_stepper_t : pud_lodestar_search_stepper<
-        pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
+        pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
         pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
         pud_lodestar_unfold_budget_store, solution_taker_t, blocked_refuter_t, driver_t> {
         using pud_lodestar_search_stepper<
-            pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
+            pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
             pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
             pud_lodestar_unfold_budget_store, solution_taker_t, blocked_refuter_t,
             driver_t>::pud_lodestar_search_stepper;
     };
     struct module_registrar_t : pud_lodestar_module_registrar<
         pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-        pud_pending_conflict_store, pud_pending_conflict_store> {
+        pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store> {
         using pud_lodestar_module_registrar<
             pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-            pud_pending_conflict_store, pud_pending_conflict_store>::pud_lodestar_module_registrar;
+            pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store>::pud_lodestar_module_registrar;
     };
 
     pud_lodestar_manifest(
@@ -316,8 +316,8 @@ struct pud_lodestar_manifest {
 
     pud_lodestar_focus_set           focus_set_;
     pud_lodestar_unfold_budget_store unfold_budget_store_;
-    pud_solution_store               solution_store_;
-    pud_pending_conflict_store       pending_conflict_store_;
+    pud_lodestar_solution_store               solution_store_;
+    pud_lodestar_pending_conflict_store       pending_conflict_store_;
     pud_lodestar_frontier            frontier_;
 
     focus_seeder_t                   focus_seeder_;

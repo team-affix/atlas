@@ -9,8 +9,8 @@
 #include "infrastructure/pud_lodestar_solved_leaf_finder.hpp"
 #include "infrastructure/pud_lodestar_unfold_budget_store.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
-#include "infrastructure/pud_pending_conflict_store.hpp"
-#include "infrastructure/pud_solution_store.hpp"
+#include "infrastructure/pud_lodestar_pending_conflict_store.hpp"
+#include "infrastructure/pud_lodestar_solution_store.hpp"
 #include "value_objects/pud_goal_list.hpp"
 
 using ::testing::Return;
@@ -63,14 +63,14 @@ struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
         finder{frontier, focus, refuted, goals};
     MockGetParent parents;
     pud_node_depth_counter<MockGetParent> depths{parents};
-    pud_solution_store solutions;
-    pud_pending_conflict_store conflicts;
+    pud_lodestar_solution_store solutions;
+    pud_lodestar_pending_conflict_store conflicts;
     pud_lodestar_unfold_budget_store budget;
     MockTakeSolution take;
     MockRefuteBlocked refute;
     MockUnfoldOne unfold;
     pud_lodestar_search_stepper<
-        pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
+        pud_lodestar_solution_store, pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, pud_lodestar_pending_conflict_store,
         pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
         pud_lodestar_unfold_budget_store, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne>
         stepper{

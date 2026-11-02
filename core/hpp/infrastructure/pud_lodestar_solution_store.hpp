@@ -1,11 +1,11 @@
-#ifndef PUD_SOLUTION_STORE_HPP
-#define PUD_SOLUTION_STORE_HPP
+#ifndef PUD_LODESTAR_SOLUTION_STORE_HPP
+#define PUD_LODESTAR_SOLUTION_STORE_HPP
 
 #include <cstddef>
 #include "value_objects/expr.hpp"
 
-struct pud_solution_store {
-    pud_solution_store();
+struct pud_lodestar_solution_store {
+    pud_lodestar_solution_store();
     void set(const expr* solution, size_t solution_depth);
     void clear();
     const expr* solution() const;
