@@ -7,16 +7,18 @@ using ::testing::Return;
 
 namespace {
 
-struct registered_module {
-    pud_module_id get_module_id() const { return 9; }
+struct MockModule {
+    MOCK_METHOD(pud_module_id, get_module_id, (), (const));
 };
 
+using module_t = ::testing::NiceMock<MockModule>;
+
 struct MockLinkFunctorNames {
-    MOCK_METHOD(void, link, (registered_module&));
+    MOCK_METHOD(void, link, (module_t&));
 };
 
 struct MockRegisterModule {
-    MOCK_METHOD(void, register_module, (registered_module&));
+    MOCK_METHOD(void, register_module, (module_t&));
 };
 
 struct MockSeedFocus {
@@ -43,10 +45,14 @@ struct PudLodestarModuleRegistrarTest : public ::testing::Test {
     MockApplyRegister frontier;
     MockAddPendingConflicts pending;
     pud_lodestar_module_registrar<
-        registered_module, MockLinkFunctorNames, MockRegisterModule, MockSeedFocus, MockActivateModule,
+        module_t, MockLinkFunctorNames, MockRegisterModule, MockSeedFocus, MockActivateModule,
         MockApplyRegister, MockAddPendingConflicts>
         registrar{linker, modules, seeder, activator, frontier, pending};
-    registered_module module;
+    module_t module;
+
+    void SetUp() override {
+        ON_CALL(module, get_module_id()).WillByDefault(Return(9));
+    }
 };
 
 }
