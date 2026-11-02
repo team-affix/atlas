@@ -5,7 +5,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     pud_global_node_id focus_axiom,
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold,
-    size_t max_node_depth)
+    size_t max_node_depth,
+    size_t max_open_goals)
     : symbol_table_()
     , link_table_()
     , demoduler_(link_table_, expr_pool, expr_pool)
@@ -58,7 +59,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , focus_seeder_(focus_axiom, modules_, focus_set_, focus_set_)
     , focus_extender_(focus_set_, focus_set_)
     , node_depth_counter_(modules_)
-    , unfold_allower_(node_depth_counter_, node_goals_, max_node_depth)
+    , unfold_allower_(node_depth_counter_, node_goals_, max_node_depth, max_open_goals)
     , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
     , ring_builder_(
           mhq_, candidate_watch_, witness_log_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)

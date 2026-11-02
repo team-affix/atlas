@@ -1,4 +1,5 @@
 #include <CLI/CLI.hpp>
+#include <limits>
 #include <vector>
 #include "value_objects/pud_module_id.hpp"
 #include "infrastructure/basic_command_handler.hpp"
@@ -136,6 +137,7 @@ int main(int argc, char** argv) {
         size_t max_unfolds = 1000;
         size_t ratio = 10;
         size_t max_node_depth = 64;
+        size_t max_open_goals = std::numeric_limits<size_t>::max();
         size_t sim_progress_interval = 1000;
     } lodestar_opts;
 
@@ -145,6 +147,8 @@ int main(int argc, char** argv) {
     lodestar_sub->add_option("--max-unfolds", lodestar_opts.max_unfolds, "Max focus unfolds");
     lodestar_sub->add_option("--ratio", lodestar_opts.ratio, "Non-conjecture unfolds per conjecture unfold");
     lodestar_sub->add_option("--max-node-depth", lodestar_opts.max_node_depth, "Max inference depth of a node");
+    lodestar_sub->add_option(
+        "--max-open-goals", lodestar_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
     lodestar_sub->add_option("--sim-progress-interval", lodestar_opts.sim_progress_interval,
                              "Print progress every N ticks (0 disables)");
     lodestar_sub->callback([&]() {
@@ -154,6 +158,7 @@ int main(int argc, char** argv) {
             lodestar_opts.max_unfolds,
             lodestar_opts.ratio,
             lodestar_opts.max_node_depth,
+            lodestar_opts.max_open_goals,
             lodestar_opts.sim_progress_interval};
         handler();
     });

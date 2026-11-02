@@ -16,7 +16,8 @@ struct pud_lodestar_runtime {
         pud_global_node_id focus_axiom,
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
-        size_t max_node_depth);
+        size_t max_node_depth,
+        size_t max_open_goals);
     void register_module(pud_module& module);
     bool next();
     const expr* solution() const;

@@ -23,6 +23,7 @@ struct lodestar_command_handler {
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
         size_t max_node_depth,
+        size_t max_open_goals,
         size_t sim_progress_interval);
     void operator()();
 private:

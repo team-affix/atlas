@@ -25,7 +25,7 @@ TEST_F(PudLodestarManifestTest, EmptyConjectureFactIsDepthZero) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(atom("lodestar_query"), {}, 0),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
@@ -46,7 +46,7 @@ TEST_F(PudLodestarManifestTest, FactInDependencyNormalizesTheConjectureHead) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(functor("lodestar_query", {exprs.make_var(0)}), {functor("f", {exprs.make_var(0)})}, 1),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
@@ -66,7 +66,7 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(atom("lodestar_query"), {atom("missing")}, 0),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);

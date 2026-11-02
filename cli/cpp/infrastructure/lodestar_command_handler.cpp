@@ -9,6 +9,7 @@ lodestar_command_handler::lodestar_command_handler(
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold,
     size_t max_node_depth,
+    size_t max_open_goals,
     size_t sim_progress_interval)
     : loaded_(module_paths)
     , focus_(pud_focus_parser{}.parse(focus_text))
@@ -17,7 +18,8 @@ lodestar_command_handler::lodestar_command_handler(
           focus_,
           max_unfolds,
           non_conjecture_unfolds_per_conjecture_unfold,
-          max_node_depth)
+          max_node_depth,
+          max_open_goals)
     , print_var_()
     , print_functor_(runtime_)
     , printer_(std::cout, print_var_, print_functor_)

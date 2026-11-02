@@ -271,7 +271,8 @@ struct pud_lodestar_manifest {
         pud_global_node_id focus_axiom,
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
-        size_t max_node_depth);
+        size_t max_node_depth,
+        size_t max_open_goals);
 
     pud_symbol_table           symbol_table_;
     pud_link_table             link_table_;
