@@ -28,6 +28,7 @@ struct pud_mhws {
     std::optional<pud_witness_advance> advance(pud_mhws_head_id head_id);
     void remove(pud_mhws_head_id head_id);
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
+    std::optional<pud_global_node_id> find_witness(pud_mhws_head_id head_id) const;
 private:
 
     struct frame {
@@ -190,6 +191,14 @@ std::optional<pud_replay> PUD_MHWS::try_descend_sibling(const pud_replay& parent
             return sibling;
     }
     return std::nullopt;
+}
+
+PUD_MHWS_TEMPLATE
+std::optional<pud_global_node_id> PUD_MHWS::find_witness(pud_mhws_head_id head_id) const {
+    const auto found = head_to_witness_.find(head_id);
+    if (found == head_to_witness_.end())
+        return std::nullopt;
+    return found->second;
 }
 
 PUD_MHWS_TEMPLATE

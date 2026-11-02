@@ -109,8 +109,8 @@ struct pud_lodestar_manifest {
     struct mhws_t : pud_mhws<replayer_t, modules_t, modules_t, modules_t> {
         using pud_mhws<replayer_t, modules_t, modules_t, modules_t>::pud_mhws;
     };
-    struct witness_log_t : pud_lodestar_witness_log<mhws_t, modules_t> {
-        using pud_lodestar_witness_log<mhws_t, modules_t>::pud_lodestar_witness_log;
+    struct witness_log_t : pud_lodestar_witness_log<mhws_t> {
+        using pud_lodestar_witness_log<mhws_t>::pud_lodestar_witness_log;
     };
     struct mhcs_t : pud_mhcs<
         replayer_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, modules_t, modules_t,

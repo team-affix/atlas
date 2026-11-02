@@ -6,7 +6,7 @@
 
 Lodestar is a PUD solver runtime. It exposes `next()`, `solution()`, `solution_depth()`, and `stop_reason()`. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
 
-The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types. No existing `pud_*` type is edited.
+The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types over the kernel's `pud_mhws` and `pud_mhcs`. A witness slot's leaf is the leaf that `pud_mhws::find_witness` reports for the search.
 
 Unfolds of witnesses that conjecture queries rest on are dealt out by a round-robin over candidate slots. `non_conjecture_unfolds_per_conjecture_unfold` of those happen for each unfold inside the conjecture module. A new runtime starts that schedule from the first slot, including when the modules already contain inferences. The previous runtime's cursor is not restored.
 

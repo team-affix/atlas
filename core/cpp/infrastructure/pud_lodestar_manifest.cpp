@@ -27,7 +27,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unit_queries_()
     , replayer_(modules_, modules_, expr_pool, bind_map_factory_, cycle_detector_factory_, unifier_factory_)
     , mhws_(replayer_, modules_, modules_, modules_)
-    , witness_log_(mhws_, modules_)
+    , witness_log_(mhws_)
     , mhcs_(replayer_, witness_log_, witness_log_, witness_log_, witness_log_, witness_log_, modules_, modules_, modules_)
     , candidate_watch_(mhcs_, witness_log_)
     , mhq_(replayer_, modules_, candidate_watch_, candidate_watch_, candidate_watch_, candidate_watch_, unit_queries_)

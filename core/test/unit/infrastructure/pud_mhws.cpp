@@ -386,3 +386,33 @@ TEST_F(PudMhwsTest, AForkThatReachesNoLeafIsNotAdmitted) {
     ON_CALL(descend, descend(Field(&pud_replay::frame_offset, 9u), _)).WillByDefault(::testing::Return(std::nullopt));
     EXPECT_FALSE(mhws.try_fork(head, pud_replay{.node = pud_test_node(0), .frame_offset = 9u, .ubs_state = {}}).has_value());
 }
+
+TEST_F(PudMhwsTest, AWitnessIsTheLeafTheSearchRestsOnNotTheFirstUnrefutedChild) {
+    child_lists[0] = {1, 2, 3};
+    ON_CALL(children, get_children(pud_test_node(0))).WillByDefault(ReturnRef(child_lists[0]));
+    for (pud_node_id leaf : {1u, 2u, 3u}) {
+        child_lists[leaf] = {};
+        ON_CALL(children, get_children(pud_test_node(leaf))).WillByDefault(ReturnRef(child_lists[leaf]));
+        ON_CALL(leaves, is_leaf(pud_test_node(leaf))).WillByDefault(Return(true));
+    }
+    ON_CALL(descend, descend(_, pud_test_node(1))).WillByDefault(Return(std::nullopt));
+    ON_CALL(refuted, is_refuted(pud_test_node(2))).WillByDefault(Return(true));
+    const pud_mhws_head_id head =
+        mhws.try_add(pud_replay{.node = pud_test_node(0), .frame_offset = 0u, .ubs_state = {}}).value();
+    EXPECT_EQ(mhws.find_witness(head), pud_test_node(3));
+}
+
+TEST_F(PudMhwsTest, AnExhaustedOrRemovedSearchHasNoWitness) {
+    child_lists[1] = {};
+    ON_CALL(children, get_children(pud_test_node(1))).WillByDefault(ReturnRef(child_lists[1]));
+    ON_CALL(leaves, is_leaf(pud_test_node(1))).WillByDefault(Return(true));
+    const pud_mhws_head_id exhausted =
+        mhws.try_add(pud_replay{.node = pud_test_node(1), .frame_offset = 0u, .ubs_state = {}}).value();
+    const pud_mhws_head_id removed =
+        mhws.try_add(pud_replay{.node = pud_test_node(1), .frame_offset = 0u, .ubs_state = {}}).value();
+    mhws.remove(removed);
+    ON_CALL(refuted, is_refuted(pud_test_node(1))).WillByDefault(Return(true));
+    mhws.invalidate_leaf(pud_test_node(1));
+    EXPECT_EQ(mhws.find_witness(exhausted), std::nullopt);
+    EXPECT_EQ(mhws.find_witness(removed), std::nullopt);
+}
