@@ -50,6 +50,7 @@
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
 #include "infrastructure/pud_root_activator.hpp"
+#include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_solution_normalizer.hpp"
 #include "infrastructure/pud_solution_store.hpp"
 #include "infrastructure/pud_solution_term_reader.hpp"
@@ -193,8 +194,11 @@ struct pud_lodestar_manifest {
     struct solution_term_reader_t : pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
         using pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_solution_term_reader;
     };
-    struct solution_normalizer_t : pud_solution_normalizer<pud_link_table, expr_pool, expr_pool> {
-        using pud_solution_normalizer<pud_link_table, expr_pool, expr_pool>::pud_solution_normalizer;
+    struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t> {
+        using pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t>::pud_normalizer_factory;
+    };
+    struct solution_normalizer_t : pud_solution_normalizer<demoduler_t, normalizer_factory_t> {
+        using pud_solution_normalizer<demoduler_t, normalizer_factory_t>::pud_solution_normalizer;
     };
     struct solution_taker_t : pud_lodestar_solution_taker<
         solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t, pud_solution_store,
@@ -282,6 +286,7 @@ struct pud_lodestar_manifest {
     driver_t                         driver_;
     solved_leaf_finder_t             solved_leaf_finder_;
     solution_term_reader_t           solution_term_reader_;
+    normalizer_factory_t             normalizer_factory_;
     solution_normalizer_t            solution_normalizer_;
     solution_taker_t                 solution_taker_;
     search_stepper_t                 search_stepper_;

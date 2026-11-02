@@ -62,7 +62,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , driver_(*this, frontier_, non_conjecture_unfolds_per_conjecture_unfold)
     , solved_leaf_finder_(frontier_, focus_set_, modules_, node_goals_)
     , solution_term_reader_(node_axioms_, modules_, active_states_)
-    , solution_normalizer_(link_table_, expr_pool, expr_pool)
+    , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
+    , solution_normalizer_(demoduler_, normalizer_factory_)
     , solution_taker_(
           solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depth_counter_, solution_store_,
           frontier_)
