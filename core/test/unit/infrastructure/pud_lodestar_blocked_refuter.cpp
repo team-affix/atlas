@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -52,9 +53,9 @@ TEST_F(PudLodestarBlockedRefuterTest, OnlyTheFirstBlockedLeafIsRefutedAndWhatItR
     EXPECT_TRUE(refuter.refute_blocked());
 }
 
-TEST_F(PudLodestarBlockedRefuterTest, ABlockedLeafTheRefuterLeavesAloneStillLeavesTheFrontier) {
+// Listed leaves are live and unrefuted, so refuting one always refutes at least that leaf.
+TEST_F(PudLodestarBlockedRefuterTest, ARefutationThatRefutesNothingBreaksTheInvariant) {
     ON_CALL(queries, list()).WillByDefault(Return(std::vector<pud_lodestar_query>{query_on(4, false)}));
     ON_CALL(leaf_refuter, refute(pud_test_node(4))).WillByDefault(Return(std::vector<pud_global_node_id>{}));
-    EXPECT_CALL(frontier, erase_refuted(std::vector<pud_global_node_id>{pud_test_node(4)}));
-    EXPECT_TRUE(refuter.refute_blocked());
+    EXPECT_THROW(refuter.refute_blocked(), std::logic_error);
 }

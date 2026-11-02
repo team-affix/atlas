@@ -8,9 +8,11 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_lodestar_query.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
+#include "debug_assert.hpp"
 
 // Lists every body goal of every live, unrefuted leaf in the conjecture module, in leaf order and then
-// goal order, with whether its query still has candidates.
+// goal order, with whether its query still has candidates. A live leaf holds a query for every goal.
+// A failed open or fork refutes the leaf, so it is no longer listed.
 template<
     typename IGetLiveNodes,
     typename IContainsFocusNode,
@@ -73,10 +75,7 @@ std::vector<pud_lodestar_query> PUD_LODESTAR_QUERY_LISTER::list() const {
         std::sort(goals.begin(), goals.end());
         for (const pud_body_goal_id goal : goals) {
             const pud_mhq_head_id* head = state.queries.find(goal);
-            if (head == nullptr) {
-                queries.push_back(pud_lodestar_query{.node = node, .goal = goal, .head = 0, .has_candidates = false});
-                continue;
-            }
+            DEBUG_ASSERT(head != nullptr);
             const bool has_candidates = !is_query_exhausted_.is_exhausted(*head);
             queries.push_back(
                 pud_lodestar_query{.node = node, .goal = goal, .head = *head, .has_candidates = has_candidates});

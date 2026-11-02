@@ -1,4 +1,5 @@
 #include <set>
+#include <stdexcept>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -37,8 +38,8 @@ using test_lister_t = pud_lodestar_query_lister<
     NiceMock<MockGetLiveNodes>, NiceMock<MockContainsFocusNode>, NiceMock<MockIsNodeRefuted>,
     NiceMock<MockGetActiveState>, NiceMock<MockGetNodeGoals>, NiceMock<MockIsQueryExhausted>>;
 
-// Leaf 3 is in the conjecture module with goals 0, 1 and 2. Goal 0 holds query 40, which has
-// candidates; goal 1 holds no query; goal 2 holds query 42, which is exhausted.
+// Leaf 3 is in the conjecture module with goals 0, 1 and 2. Goals 0 and 1 hold queries 40 and 41,
+// which have candidates; goal 2 holds query 42, which is exhausted.
 struct PudLodestarQueryListerTest : public ::testing::Test {
     NiceMock<MockGetLiveNodes> frontier;
     NiceMock<MockContainsFocusNode> focus;
@@ -53,7 +54,7 @@ struct PudLodestarQueryListerTest : public ::testing::Test {
         .goals = immer::map<pud_body_goal_id, const expr*>{}.set(2, &goal_expr).set(0, &goal_expr).set(1, &goal_expr),
         .next_id = 3};
     pud_active_state leaf_state{
-        .lvc = 0, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(0, 40).set(2, 42)};
+        .lvc = 0, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(0, 40).set(1, 41).set(2, 42)};
 
     void SetUp() override {
         ON_CALL(frontier, live()).WillByDefault(ReturnRef(live));
@@ -62,6 +63,7 @@ struct PudLodestarQueryListerTest : public ::testing::Test {
         ON_CALL(states, get(pud_test_node(3))).WillByDefault(ReturnRef(leaf_state));
         ON_CALL(goals, get(pud_test_node(3))).WillByDefault(ReturnRef(leaf_goals));
         ON_CALL(exhausted, is_exhausted(40)).WillByDefault(Return(false));
+        ON_CALL(exhausted, is_exhausted(41)).WillByDefault(Return(false));
         ON_CALL(exhausted, is_exhausted(42)).WillByDefault(Return(true));
     }
 };
@@ -71,7 +73,7 @@ struct PudLodestarQueryListerTest : public ::testing::Test {
 TEST_F(PudLodestarQueryListerTest, EveryGoalOfAFocusLeafIsListedInGoalOrderWithWhetherItHasCandidates) {
     EXPECT_EQ(lister.list(), (std::vector<pud_lodestar_query>{
         pud_lodestar_query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true},
-        pud_lodestar_query{.node = pud_test_node(3), .goal = 1, .head = 0, .has_candidates = false},
+        pud_lodestar_query{.node = pud_test_node(3), .goal = 1, .head = 41, .has_candidates = true},
         pud_lodestar_query{.node = pud_test_node(3), .goal = 2, .head = 42, .has_candidates = false},
     }));
 }
@@ -89,12 +91,18 @@ TEST_F(PudLodestarQueryListerTest, ARefutedLeafIsNotListed) {
 
 TEST_F(PudLodestarQueryListerTest, LeavesAreListedInFrontierOrder) {
     pud_goal_list one_goal{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(0, &goal_expr), .next_id = 1};
-    pud_active_state no_queries{.lvc = 0, .bindings = {}, .watch = {}, .queries = {}};
+    pud_active_state one_query{
+        .lvc = 0, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(0, 40)};
     live.insert(pud_test_node(1));
-    ON_CALL(states, get(pud_test_node(1))).WillByDefault(ReturnRef(no_queries));
+    ON_CALL(states, get(pud_test_node(1))).WillByDefault(ReturnRef(one_query));
     ON_CALL(goals, get(pud_test_node(1))).WillByDefault(ReturnRef(one_goal));
     const std::vector<pud_lodestar_query> listed = lister.list();
     ASSERT_EQ(listed.size(), 4u);
     EXPECT_EQ(listed[0].node, pud_test_node(1));
     EXPECT_EQ(listed[1].node, pud_test_node(3));
+}
+
+TEST_F(PudLodestarQueryListerTest, AGoalWithoutAQueryBreaksTheInvariant) {
+    leaf_state.queries = leaf_state.queries.erase(1);
+    EXPECT_THROW(lister.list(), std::logic_error);
 }

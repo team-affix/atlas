@@ -14,6 +14,7 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
+#include "debug_assert.hpp"
 
 template<
     typename IGetActiveState,
@@ -117,8 +118,8 @@ PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
     const pud_active_state& parent_state = get_active_state_.get(parent);
     const pud_inference& inference = get_inference_.get_inference(child);
-    const pud_goal_list goals = resolve_goal_.resolve_goal(
-        get_node_goals_.get(parent), inference.call_site, inference.body_goals);
+    const pud_goal_list& parent_goals = get_node_goals_.get(parent);
+    const pud_goal_list goals = resolve_goal_.resolve_goal(parent_goals, inference.call_site, inference.body_goals);
     store_node_goals_.store(child, goals);
     store_node_axiom_.store(child, get_node_axiom_.get(parent));
     increment_live_child_count_.increment(parent);
@@ -142,6 +143,7 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
     for (const auto& [id, goal] : goals.goals) {
         if (parent_state.queries.find(id) != nullptr)
             continue;
+        DEBUG_ASSERT(id >= parent_goals.next_id);
         const std::optional<pud_mhq_head_id> opened = open_query_.try_open(child.module, bindings, goal, lvc);
         if (!opened.has_value()) {
             refuted = true;

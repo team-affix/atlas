@@ -216,10 +216,10 @@ TEST_F(PudAcceptorIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal
     module_data.emplace_back(
         module,
         std::vector<pud_module_id>{},
-        std::vector<rule>{rule(
-            functor("p", {var(0)}),
-            {functor("q", {var(0)}), functor("r", {var(0)})},
-            0)});
+        std::vector<rule>{
+            rule(functor("p", {var(0)}), {functor("q", {var(0)}), functor("r", {var(0)})}, 0),
+            rule(functor("q", {a}), {}, 0),
+            rule(functor("r", {a}), {}, 0)});
     register_linked(module_data.back());
     const pud_global_node_id rule_root = manifest.modules_.list_axioms(module).front();
     manifest.root_activator_.activate_root(rule_root);

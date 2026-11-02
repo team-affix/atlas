@@ -4,6 +4,7 @@
 #include <vector>
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_lodestar_query.hpp"
+#include "debug_assert.hpp"
 
 // Refutes the first conjecture leaf that has a goal without candidates, and takes what that refutes
 // off the frontier.
@@ -30,10 +31,8 @@ bool pud_lodestar_blocked_refuter<IListQueries, IRefuteLeaf, IEraseRefuted>::ref
         if (query.has_candidates)
             continue;
         const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(query.node);
-        if (refuted.empty())
-            erase_refuted_.erase_refuted({query.node});
-        else
-            erase_refuted_.erase_refuted(refuted);
+        DEBUG_ASSERT(!refuted.empty());
+        erase_refuted_.erase_refuted(refuted);
         return true;
     }
     return false;

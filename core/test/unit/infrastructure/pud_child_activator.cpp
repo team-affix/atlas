@@ -1,4 +1,5 @@
 #include <optional>
+#include <stdexcept>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_child_activator.hpp"
@@ -212,14 +213,11 @@ TEST_F(PudChildActivatorTest, AnInheritedQueryAlreadyExhaustedRefutesTheChildBut
     EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }
 
-TEST_F(PudChildActivatorTest, AChangedGoalItsParentHoldsNoQueryForIsOpenedInTheChildsEnvironment) {
+// A live parent holds a query for each of its goals (a failed open or fork refutes the node), so a
+// goal it holds no query for can only be one the child added.
+TEST_F(PudChildActivatorTest, AnInheritedGoalItsParentHoldsNoQueryForBreaksTheActivationInvariant) {
     parent_state.queries = queries_t{}.set(0, 40);
-    ON_CALL(watcher, descend(_, _, _, _, _))
-        .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
-    EXPECT_CALL(forker, try_fork(_, _, _, _)).Times(0);
-    EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_b, 7u)).WillOnce(Return(std::nullopt));
-    EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_c, 7u)).WillOnce(Return(70));
-    EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
+    EXPECT_THROW(activator.activate_child(pud_test_node(3), pud_test_node(4)), std::logic_error);
 }
 
 TEST_F(PudChildActivatorTest, ARefutedChildStillCountsAsALiveChildUntilItIsRefuted) {
