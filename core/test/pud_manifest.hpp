@@ -12,6 +12,7 @@
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
+#include "infrastructure/pud_functor_relinker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_symbol_table.hpp"
 #include "infrastructure/pud_goal_resolver.hpp"
@@ -47,9 +48,9 @@ struct pud_manifest {
     using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
     using unifier_factory_t =
         pud_unifier_factory<globalizer, IExprPool, pud_link_table, typename cycle_detector_factory_t::cycle_detector_t>;
-    using exporter_factory_t = pud_exporter_factory<
-        globalizer, IExprPool, IExprPool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table,
-        modules_t, pud_link_table>;
+    using functor_relinker_t =
+        pud_functor_relinker<pud_link_table, pud_link_table, pud_symbol_table, modules_t, pud_link_table>;
+    using exporter_factory_t = pud_exporter_factory<globalizer, IExprPool, IExprPool, functor_relinker_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
 
     using refutation_propagator_t = pud_refutation_propagator<modules_t, pud_node_live_child_counts, modules_t>;
@@ -94,6 +95,7 @@ struct pud_manifest {
     unifier_factory_t          unifier_factory_;
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
+    functor_relinker_t         functor_relinker_;
     exporter_factory_t         exporter_factory_;
     node_goals_t               node_goals_;
     node_axioms_t              node_axioms_;
@@ -134,9 +136,8 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , unifier_factory_(globalizer_, expr_pool, link_table_)
     , bind_map_factory_()
     , modules_()
-    , exporter_factory_(
-          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, symbol_table_, modules_,
-          link_table_)
+    , functor_relinker_(link_table_, link_table_, symbol_table_, modules_, link_table_)
+    , exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()

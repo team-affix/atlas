@@ -6,32 +6,15 @@
 #include "infrastructure/pud_exporter.hpp"
 #include "infrastructure/ubs_bind_map.hpp"
 
-template<
-    typename IGlobalize,
-    typename IMakeFunctor,
-    typename IMakeVar,
-    typename IGetGlobalFunctorIdFromLocalFunctorId,
-    typename IContainsGlobalFunctorId,
-    typename IGetLocalFunctorIdFromGlobalFunctorId,
-    typename IGetNameByGlobalFunctorId,
-    typename IGetModule,
-    typename IInsertLink>
+template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IRelinkFunctor>
 struct pud_exporter_factory {
-    using exporter_t = pud_exporter<
-        IGlobalize, IMakeFunctor, IMakeVar, ubs_bind_map, IGetGlobalFunctorIdFromLocalFunctorId,
-        IContainsGlobalFunctorId, IGetLocalFunctorIdFromGlobalFunctorId, IGetNameByGlobalFunctorId,
-        IGetModule, IInsertLink>;
+    using exporter_t = pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, ubs_bind_map, IRelinkFunctor>;
 
     pud_exporter_factory(
         IGlobalize& globalize,
         IMakeFunctor& make_functor,
         IMakeVar& make_var,
-        IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-        IContainsGlobalFunctorId& contains_global_functor_id,
-        IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-        IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
-        IGetModule& get_module,
-        IInsertLink& insert_link);
+        IRelinkFunctor& relink_functor);
     exporter_t make_exporter(
         ubs_bind_map& bind_map,
         uint32_t caller_lvc,
@@ -40,53 +23,30 @@ private:
     IGlobalize& globalize_;
     IMakeFunctor& make_functor_;
     IMakeVar& make_var_;
-    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
-    IContainsGlobalFunctorId& contains_global_functor_id_;
-    IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id_;
-    IGetNameByGlobalFunctorId& get_name_by_global_functor_id_;
-    IGetModule& get_module_;
-    IInsertLink& insert_link_;
+    IRelinkFunctor& relink_functor_;
 };
 
 #define PUD_EXPORTER_FACTORY_TEMPLATE \
-    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, \
-             typename IGetGlobalFunctorIdFromLocalFunctorId, typename IContainsGlobalFunctorId, \
-             typename IGetLocalFunctorIdFromGlobalFunctorId, typename IGetNameByGlobalFunctorId, \
-             typename IGetModule, typename IInsertLink>
-#define PUD_EXPORTER_FACTORY \
-    pud_exporter_factory<IGlobalize, IMakeFunctor, IMakeVar, IGetGlobalFunctorIdFromLocalFunctorId, \
-        IContainsGlobalFunctorId, IGetLocalFunctorIdFromGlobalFunctorId, IGetNameByGlobalFunctorId, \
-        IGetModule, IInsertLink>
+    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IRelinkFunctor>
+#define PUD_EXPORTER_FACTORY pud_exporter_factory<IGlobalize, IMakeFunctor, IMakeVar, IRelinkFunctor>
 
 PUD_EXPORTER_FACTORY_TEMPLATE
 PUD_EXPORTER_FACTORY::pud_exporter_factory(
     IGlobalize& globalize,
     IMakeFunctor& make_functor,
     IMakeVar& make_var,
-    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-    IContainsGlobalFunctorId& contains_global_functor_id,
-    IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-    IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
-    IGetModule& get_module,
-    IInsertLink& insert_link)
+    IRelinkFunctor& relink_functor)
     : globalize_(globalize)
     , make_functor_(make_functor)
     , make_var_(make_var)
-    , get_global_functor_id_(get_global_functor_id)
-    , contains_global_functor_id_(contains_global_functor_id)
-    , get_local_functor_id_(get_local_functor_id)
-    , get_name_by_global_functor_id_(get_name_by_global_functor_id)
-    , get_module_(get_module)
-    , insert_link_(insert_link) {}
+    , relink_functor_(relink_functor) {}
 
 PUD_EXPORTER_FACTORY_TEMPLATE
 typename PUD_EXPORTER_FACTORY::exporter_t PUD_EXPORTER_FACTORY::make_exporter(
     ubs_bind_map& bind_map,
     uint32_t caller_lvc,
     std::unordered_map<uint32_t, uint32_t>& translations) const {
-    return exporter_t{
-        globalize_, make_functor_, make_var_, bind_map, get_global_functor_id_, contains_global_functor_id_,
-        get_local_functor_id_, get_name_by_global_functor_id_, get_module_, insert_link_, caller_lvc, translations};
+    return exporter_t{globalize_, make_functor_, make_var_, bind_map, relink_functor_, caller_lvc, translations};
 }
 
 #undef PUD_EXPORTER_FACTORY

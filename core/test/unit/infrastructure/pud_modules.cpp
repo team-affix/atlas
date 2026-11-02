@@ -1,5 +1,6 @@
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -27,6 +28,7 @@ struct MockModuleData {
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_node_id), (const));
     MOCK_METHOD(bool, is_leaf, (pud_node_id), (const));
     MOCK_METHOD(bool, is_refuted, (pud_node_id), (const));
+    MOCK_METHOD(uint32_t, append_functor_name, (const std::string&));
 };
 
 struct PudModulesTest : public ::testing::Test {
@@ -314,4 +316,14 @@ TEST_F(PudModulesTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
     ON_CALL(other_data, is_refuted(0)).WillByDefault(Return(false));
     EXPECT_TRUE(modules.is_refuted(pud_global_node_id{.module = 10, .node = 0}));
     EXPECT_FALSE(modules.is_refuted(pud_global_node_id{.module = 20, .node = 0}));
+}
+
+TEST_F(PudModulesTest, AFunctorNameIsAppendedToTheNamedModule) {
+    NiceMock<MockModuleData> base_data;
+    std::vector<pud_module_id> base_dependencies{};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    modules.register_module(base_data);
+    EXPECT_CALL(base_data, append_functor_name(std::string("succ"))).WillOnce(Return(4u));
+    EXPECT_EQ(modules.append_functor_name(10, "succ"), 4u);
 }

@@ -13,19 +13,17 @@ void pud_link_table::insert_link(pud_module_id module, uint32_t local_functor_id
     DEBUG_ASSERT(global_link.second);
 }
 
-bool pud_link_table::contains_global_functor_id(pud_module_id module, uint32_t global_functor_id) const {
-    const auto found = rows_.find(module);
-    if (found == rows_.end())
-        return false;
-    return found->second.local_by_global.contains(global_functor_id);
-}
-
 uint32_t pud_link_table::get_global_functor_id_from_local_functor_id(
     pud_module_id module, uint32_t local_functor_id) const {
     return rows_.at(module).global_by_local.at(local_functor_id);
 }
 
-uint32_t pud_link_table::get_local_functor_id_from_global_functor_id(
-    pud_module_id module, uint32_t global_functor_id) const {
-    return rows_.at(module).local_by_global.at(global_functor_id);
+std::optional<uint32_t> pud_link_table::find_local_functor_id(pud_module_id module, uint32_t global_functor_id) const {
+    const auto row = rows_.find(module);
+    if (row == rows_.end())
+        return std::nullopt;
+    const auto local = row->second.local_by_global.find(global_functor_id);
+    if (local == row->second.local_by_global.end())
+        return std::nullopt;
+    return local->second;
 }

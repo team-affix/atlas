@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -15,29 +14,14 @@
 #include "value_objects/pud_module_id.hpp"
 #include "value_objects/ubs_class.hpp"
 
-template<
-    typename IGlobalize,
-    typename IMakeFunctor,
-    typename IMakeVar,
-    typename IFind,
-    typename IGetGlobalFunctorIdFromLocalFunctorId,
-    typename IContainsGlobalFunctorId,
-    typename IGetLocalFunctorIdFromGlobalFunctorId,
-    typename IGetNameByGlobalFunctorId,
-    typename IGetModule,
-    typename IInsertLink>
+template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, typename IRelinkFunctor>
 struct pud_exporter {
     pud_exporter(
         IGlobalize& globalize,
         IMakeFunctor& make_functor,
         IMakeVar& make_var,
         IFind& find,
-        IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-        IContainsGlobalFunctorId& contains_global_functor_id,
-        IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-        IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
-        IGetModule& get_module,
-        IInsertLink& insert_link,
+        IRelinkFunctor& relink_functor,
         uint32_t caller_lvc,
         std::unordered_map<uint32_t, uint32_t>& translations);
     const expr* export_expr(moduled_expr source, pud_module_id accepting_module);
@@ -52,26 +36,15 @@ private:
     IMakeFunctor& make_functor_;
     IMakeVar& make_var_;
     IFind& find_;
-    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
-    IContainsGlobalFunctorId& contains_global_functor_id_;
-    IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id_;
-    IGetNameByGlobalFunctorId& get_name_by_global_functor_id_;
-    IGetModule& get_module_;
-    IInsertLink& insert_link_;
+    IRelinkFunctor& relink_functor_;
     uint32_t caller_lvc_;
     std::unordered_map<uint32_t, uint32_t>& translations_;
     std::unordered_map<moduled_expr, const expr*, moduled_expr_hash> exported_;
 };
 
 #define PUD_EXPORTER_TEMPLATE \
-    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, \
-             typename IGetGlobalFunctorIdFromLocalFunctorId, typename IContainsGlobalFunctorId, \
-             typename IGetLocalFunctorIdFromGlobalFunctorId, typename IGetNameByGlobalFunctorId, \
-             typename IGetModule, typename IInsertLink>
-#define PUD_EXPORTER \
-    pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, IFind, IGetGlobalFunctorIdFromLocalFunctorId, \
-        IContainsGlobalFunctorId, IGetLocalFunctorIdFromGlobalFunctorId, IGetNameByGlobalFunctorId, \
-        IGetModule, IInsertLink>
+    template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, typename IRelinkFunctor>
+#define PUD_EXPORTER pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, IFind, IRelinkFunctor>
 
 PUD_EXPORTER_TEMPLATE
 PUD_EXPORTER::pud_exporter(
@@ -79,24 +52,14 @@ PUD_EXPORTER::pud_exporter(
     IMakeFunctor& make_functor,
     IMakeVar& make_var,
     IFind& find,
-    IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id,
-    IContainsGlobalFunctorId& contains_global_functor_id,
-    IGetLocalFunctorIdFromGlobalFunctorId& get_local_functor_id,
-    IGetNameByGlobalFunctorId& get_name_by_global_functor_id,
-    IGetModule& get_module,
-    IInsertLink& insert_link,
+    IRelinkFunctor& relink_functor,
     uint32_t caller_lvc,
     std::unordered_map<uint32_t, uint32_t>& translations)
     : globalize_(globalize)
     , make_functor_(make_functor)
     , make_var_(make_var)
     , find_(find)
-    , get_global_functor_id_(get_global_functor_id)
-    , contains_global_functor_id_(contains_global_functor_id)
-    , get_local_functor_id_(get_local_functor_id)
-    , get_name_by_global_functor_id_(get_name_by_global_functor_id)
-    , get_module_(get_module)
-    , insert_link_(insert_link)
+    , relink_functor_(relink_functor)
     , caller_lvc_(caller_lvc)
     , translations_(translations)
     , exported_() {}
@@ -113,19 +76,7 @@ const expr* PUD_EXPORTER::export_expr(moduled_expr source, pud_module_id accepti
         }
         const expr::functor& functor = std::get<expr::functor>(top.functor.skeleton->content);
         if (top.args.size() == functor.args.size()) {
-            const uint32_t global_functor_id = get_global_functor_id_.get_global_functor_id_from_local_functor_id(
-                top.functor.module, functor.id);
-            const bool accepting_module_has_functor = contains_global_functor_id_.contains_global_functor_id(
-                accepting_module, global_functor_id);
-            uint32_t local_functor_id = 0;
-            if (accepting_module_has_functor) {
-                local_functor_id = get_local_functor_id_.get_local_functor_id_from_global_functor_id(
-                    accepting_module, global_functor_id);
-            } else {
-                const std::string& name = get_name_by_global_functor_id_.get_name_by_global_functor_id(global_functor_id);
-                local_functor_id = get_module_.get_module(accepting_module).append_functor_name(name);
-                insert_link_.insert_link(accepting_module, local_functor_id, global_functor_id);
-            }
+            const uint32_t local_functor_id = relink_functor_.relink(top.functor.module, functor.id, accepting_module);
             finished = make_functor_.make_functor(local_functor_id, top.args);
             exported_.emplace(top.functor, finished.value());
             pending.pop_back();

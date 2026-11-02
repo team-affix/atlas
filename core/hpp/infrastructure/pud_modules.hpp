@@ -1,7 +1,9 @@
 #ifndef PUD_MODULES_HPP
 #define PUD_MODULES_HPP
 
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -22,7 +24,7 @@ struct pud_modules {
     void mark_refuted(pud_global_node_id node);
     const rule& get_axiom(pud_global_node_id axiom) const;
     const pud_inference& get_inference(pud_global_node_id inference) const;
-    IModule& get_module(pud_module_id module) const;
+    uint32_t append_functor_name(pud_module_id module, const std::string& name);
     std::optional<pud_global_node_id> get_parent(pud_global_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_global_node_id node) const;
     bool is_leaf(pud_global_node_id node) const;
@@ -98,8 +100,8 @@ const pud_inference& pud_modules<IModule>::get_inference(pud_global_node_id infe
 }
 
 template<typename IModule>
-IModule& pud_modules<IModule>::get_module(pud_module_id module) const {
-    return *modules_.at(module).data;
+uint32_t pud_modules<IModule>::append_functor_name(pud_module_id module, const std::string& name) {
+    return modules_.at(module).data->append_functor_name(name);
 }
 
 template<typename IModule>

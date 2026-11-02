@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <string>
 #include <deque>
 #include <optional>
 #include <unordered_map>
@@ -7,7 +6,6 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_exporter.hpp"
-#include "infrastructure/pud_module.hpp"
 #include "pud_identity_demoduler.hpp"
 #include "value_objects/expr.hpp"
 #include "pud_moduled_functor_helper.hpp"
@@ -47,8 +45,7 @@ ubs_class singleton(uint32_t var) {
 
 using test_exporter_t = pud_exporter<
     NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>,
-    pud_identity_global_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids,
-    pud_identity_local_functor_ids, pud_identity_local_functor_ids, pud_identity_local_functor_ids>;
+    pud_identity_functor_relinker>;
 
 struct PudExporterTest : public ::testing::Test {
     std::deque<expr> owned;
@@ -56,12 +53,9 @@ struct PudExporterTest : public ::testing::Test {
     NiceMock<MockMakeFunctor> make_functor;
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockFind> find;
-    pud_identity_global_functor_ids global_functor_ids;
-    pud_identity_local_functor_ids local_functor_ids;
+    pud_identity_functor_relinker functor_relinker;
     std::unordered_map<uint32_t, uint32_t> translations;
-    test_exporter_t exporter{
-        globalize, make_functor, make_var, find, global_functor_ids, local_functor_ids, local_functor_ids,
-        local_functor_ids, local_functor_ids, local_functor_ids, 10, translations};
+    test_exporter_t exporter{globalize, make_functor, make_var, find, functor_relinker, 10, translations};
 
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
@@ -142,29 +136,12 @@ TEST_F(PudExporterTest, ASharedSubtermIsRebuiltOnceAcrossExports) {
     EXPECT_EQ(exporter.export_expr({shared, 10, 0}, 0), rebuilt_shared);
 }
 
-struct MockGetGlobalFunctorId {
-    MOCK_METHOD(uint32_t, get_global_functor_id_from_local_functor_id, (pud_module_id, uint32_t));
-};
-struct MockContainsGlobalFunctorId {
-    MOCK_METHOD(bool, contains_global_functor_id, (pud_module_id, uint32_t));
-};
-struct MockGetLocalFunctorId {
-    MOCK_METHOD(uint32_t, get_local_functor_id_from_global_functor_id, (pud_module_id, uint32_t));
-};
-struct MockGetNameByGlobalFunctorId {
-    MOCK_METHOD(const std::string&, get_name_by_global_functor_id, (uint32_t));
-};
-struct MockGetModule {
-    MOCK_METHOD(pud_module&, get_module, (pud_module_id));
-};
-struct MockInsertLink {
-    MOCK_METHOD(void, insert_link, (pud_module_id, uint32_t, uint32_t));
+struct MockRelinkFunctor {
+    MOCK_METHOD(uint32_t, relink, (pud_module_id, uint32_t, pud_module_id));
 };
 
 using translating_exporter_t = pud_exporter<
-    NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>,
-    MockGetGlobalFunctorId, NiceMock<MockContainsGlobalFunctorId>, MockGetLocalFunctorId,
-    NiceMock<MockGetNameByGlobalFunctorId>, NiceMock<MockGetModule>, NiceMock<MockInsertLink>>;
+    NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>, MockRelinkFunctor>;
 
 struct PudExporterTranslationTest : public ::testing::Test {
     std::deque<expr> owned;
@@ -172,16 +149,9 @@ struct PudExporterTranslationTest : public ::testing::Test {
     NiceMock<MockMakeFunctor> make_functor;
     NiceMock<MockMakeVar> make_var;
     NiceMock<MockFind> find;
-    MockGetGlobalFunctorId get_global;
-    NiceMock<MockContainsGlobalFunctorId> contains_global;
-    MockGetLocalFunctorId get_local;
-    NiceMock<MockGetNameByGlobalFunctorId> get_name;
-    NiceMock<MockGetModule> get_module;
-    NiceMock<MockInsertLink> insert_link;
+    MockRelinkFunctor relinker;
     std::unordered_map<uint32_t, uint32_t> translations;
-    translating_exporter_t exporter{
-        globalize, make_functor, make_var, find, get_global, contains_global, get_local, get_name, get_module,
-        insert_link, 10, translations};
+    translating_exporter_t exporter{globalize, make_functor, make_var, find, relinker, 10, translations};
 
     const expr* var(uint32_t index) {
         owned.push_back(expr{expr::var{index}});
@@ -197,7 +167,6 @@ struct PudExporterTranslationTest : public ::testing::Test {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
         ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudExporterTranslationTest::var));
-        ON_CALL(contains_global, contains_global_functor_id(_, _)).WillByDefault(Return(true));
     }
 };
 
@@ -212,14 +181,11 @@ TEST_F(PudExporterTranslationTest, EachFunctorNodeIsTranslatedAndAVariableIsNot)
     const expr* translated = functor(15, {translated_inner, translated_right});
     InSequence order;
     EXPECT_CALL(make_var, make_var(0u)).WillOnce(Return(translated_variable));
-    EXPECT_CALL(get_global, get_global_functor_id_from_local_functor_id(3u, 6u)).WillOnce(Return(60u));
-    EXPECT_CALL(get_local, get_local_functor_id_from_global_functor_id(8u, 60u)).WillOnce(Return(16u));
+    EXPECT_CALL(relinker, relink(3u, 6u, 8u)).WillOnce(Return(16u));
     EXPECT_CALL(make_functor, make_functor(16u, std::vector<const expr*>{translated_variable})).WillOnce(Return(translated_inner));
-    EXPECT_CALL(get_global, get_global_functor_id_from_local_functor_id(3u, 7u)).WillOnce(Return(70u));
-    EXPECT_CALL(get_local, get_local_functor_id_from_global_functor_id(8u, 70u)).WillOnce(Return(17u));
+    EXPECT_CALL(relinker, relink(3u, 7u, 8u)).WillOnce(Return(17u));
     EXPECT_CALL(make_functor, make_functor(17u, std::vector<const expr*>{})).WillOnce(Return(translated_right));
-    EXPECT_CALL(get_global, get_global_functor_id_from_local_functor_id(3u, 5u)).WillOnce(Return(50u));
-    EXPECT_CALL(get_local, get_local_functor_id_from_global_functor_id(8u, 50u)).WillOnce(Return(15u));
+    EXPECT_CALL(relinker, relink(3u, 5u, 8u)).WillOnce(Return(15u));
     EXPECT_CALL(make_functor, make_functor(15u, std::vector<const expr*>{translated_inner, translated_right}))
         .WillOnce(Return(translated));
     EXPECT_EQ(exporter.export_expr(moduled_expr{term, 0, 3}, 8), translated);
@@ -229,16 +195,14 @@ TEST_F(PudExporterTranslationTest, ASecondExportIsASeparateWalk) {
     const expr* first = functor(5, {});
     const expr* second = functor(5, {});
     const expr* translated = functor(15, {});
-    EXPECT_CALL(get_global, get_global_functor_id_from_local_functor_id(3u, 5u)).Times(2).WillRepeatedly(Return(50u));
-    EXPECT_CALL(get_local, get_local_functor_id_from_global_functor_id(8u, 50u)).Times(2).WillRepeatedly(Return(15u));
+    EXPECT_CALL(relinker, relink(3u, 5u, 8u)).Times(2).WillRepeatedly(Return(15u));
     EXPECT_CALL(make_functor, make_functor(15u, std::vector<const expr*>{})).Times(2).WillRepeatedly(Return(translated));
     EXPECT_EQ(exporter.export_expr(moduled_expr{first, 0, 3}, 8), translated);
     EXPECT_EQ(exporter.export_expr(moduled_expr{second, 0, 3}, 8), translated);
 }
 
-TEST_F(PudExporterTranslationTest, AVariableDoesNotCallEitherFunctorIdGetter) {
-    EXPECT_CALL(get_global, get_global_functor_id_from_local_functor_id(_, _)).Times(0);
-    EXPECT_CALL(get_local, get_local_functor_id_from_global_functor_id(_, _)).Times(0);
+TEST_F(PudExporterTranslationTest, AVariableIsNotRelinked) {
+    EXPECT_CALL(relinker, relink(_, _, _)).Times(0);
     EXPECT_CALL(make_var, make_var(4u)).WillOnce(Return(var(4)));
     ON_CALL(find, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}));
     exporter.export_expr(moduled_expr{var(4), 0, 3}, 8);

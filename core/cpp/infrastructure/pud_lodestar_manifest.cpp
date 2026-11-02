@@ -15,9 +15,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unifier_factory_(globalizer_, expr_pool, link_table_)
     , bind_map_factory_()
     , modules_()
-    , exporter_factory_(
-          globalizer_, expr_pool, expr_pool, link_table_, link_table_, link_table_, symbol_table_, modules_,
-          link_table_)
+    , functor_relinker_(link_table_, link_table_, symbol_table_, modules_, link_table_)
+    , exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
     , live_child_counts_()

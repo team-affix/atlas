@@ -15,6 +15,7 @@
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_exporter_factory.hpp"
 #include "infrastructure/pud_functor_linker.hpp"
+#include "infrastructure/pud_functor_relinker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_symbol_table.hpp"
 #include "infrastructure/pud_goal_resolver.hpp"
@@ -79,12 +80,13 @@ struct pud_lodestar_manifest {
         using pud_unifier_factory<
             globalizer, expr_pool, pud_link_table, cycle_detector_factory_t::cycle_detector_t>::pud_unifier_factory;
     };
-    struct exporter_factory_t : pud_exporter_factory<
-        globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table, modules_t,
-        pud_link_table> {
-        using pud_exporter_factory<
-            globalizer, expr_pool, expr_pool, pud_link_table, pud_link_table, pud_link_table, pud_symbol_table,
-            modules_t, pud_link_table>::pud_exporter_factory;
+    struct functor_relinker_t : pud_functor_relinker<
+        pud_link_table, pud_link_table, pud_symbol_table, modules_t, pud_link_table> {
+        using pud_functor_relinker<
+            pud_link_table, pud_link_table, pud_symbol_table, modules_t, pud_link_table>::pud_functor_relinker;
+    };
+    struct exporter_factory_t : pud_exporter_factory<globalizer, expr_pool, expr_pool, functor_relinker_t> {
+        using pud_exporter_factory<globalizer, expr_pool, expr_pool, functor_relinker_t>::pud_exporter_factory;
     };
     struct unit_queries_t : std::deque<pud_mhq_head_id> {
         using std::deque<pud_mhq_head_id>::deque;
@@ -232,6 +234,7 @@ struct pud_lodestar_manifest {
     unifier_factory_t          unifier_factory_;
     bind_map_factory_t         bind_map_factory_;
     modules_t                  modules_;
+    functor_relinker_t         functor_relinker_;
     exporter_factory_t         exporter_factory_;
     node_goals_t               node_goals_;
     node_axioms_t              node_axioms_;
