@@ -40,50 +40,126 @@
 
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
-    using node_goals_t = pud_node_table<pud_goal_list>;
-    using node_axioms_t = pud_node_table<pud_global_node_id>;
-    using bind_map_factory_t = pud_bind_map_factory;
-    using module_registry_t = pud_module_registry<IModule>;
-    using demoduler_t = pud_demoduler<pud_link_table, IExprPool, IExprPool>;
-    using cycle_detector_factory_t = pud_cycle_detector_factory<globalizer, demoduler_t>;
-    using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
-    using unifier_factory_t =
-        pud_unifier_factory<globalizer, IExprPool, pud_link_table, typename cycle_detector_factory_t::cycle_detector_t>;
-    using functor_relinker_t =
-        pud_functor_relinker<pud_link_table, pud_link_table, pud_symbol_table, module_registry_t, pud_link_table>;
-    using term_exporter_factory_t = pud_term_exporter_factory<globalizer, IExprPool, IExprPool, functor_relinker_t>;
-    using unit_queries_t = std::deque<pud_mhq_head_id>;
-
-    using refutation_propagator_t = pud_refutation_propagator<module_registry_t, pud_node_live_child_counts, module_registry_t>;
-
-    using replayer_t = pud_replayer<
-        module_registry_t, module_registry_t, IExprPool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, module_registry_t, module_registry_t, module_registry_t>;
-    using mhcs_t = pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t, module_registry_t>;
-    using mhq_t = pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
-
-    using binder_t = pud_binder<bind_map_factory_t, module_registry_t>;
-    using structure_watcher_t = pud_structure_watcher<bind_map_factory_t, module_registry_t, IExprPool>;
-    using root_activator_t = pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
-        mhq_t, pud_query_holders>;
-    using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, pud_child_goal_list_builder,
-        node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
-        mhq_t, mhq_t, pud_query_holders, mhq_t>;
-    using node_deactivator_t = pud_node_deactivator<
-        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
-    using leaf_refuter_t =
-        pud_leaf_refuter<module_registry_t, refutation_propagator_t, node_deactivator_t, module_registry_t, module_registry_t>;
-
-    using inference_builder_t = pud_inference_builder<
-        node_goals_t, module_registry_t, module_registry_t, IExprPool, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
-        unifier_factory_t, term_exporter_factory_t>;
-    using resolver_t = pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t>;
-    using activity_mover_t = pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>;
-    using unfolder_t = pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t>;
-    using module_activator_t =
-        pud_module_activator<module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t, activity_mover_t>;
+    struct node_goals_t : pud_node_table<pud_goal_list> {
+        using pud_node_table<pud_goal_list>::pud_node_table;
+    };
+    struct node_axioms_t : pud_node_table<pud_global_node_id> {
+        using pud_node_table<pud_global_node_id>::pud_node_table;
+    };
+    struct bind_map_factory_t : pud_bind_map_factory {
+        using pud_bind_map_factory::pud_bind_map_factory;
+    };
+    struct module_registry_t : pud_module_registry<IModule> {
+        using pud_module_registry<IModule>::pud_module_registry;
+    };
+    struct demoduler_t : pud_demoduler<pud_link_table, IExprPool, IExprPool> {
+        using pud_demoduler<pud_link_table, IExprPool, IExprPool>::pud_demoduler;
+    };
+    struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, demoduler_t> {
+        using pud_cycle_detector_factory<globalizer, demoduler_t>::pud_cycle_detector_factory;
+    };
+    struct functor_linker_t : pud_functor_linker<pud_symbol_table, pud_link_table> {
+        using pud_functor_linker<pud_symbol_table, pud_link_table>::pud_functor_linker;
+    };
+    struct unifier_factory_t : pud_unifier_factory<
+        globalizer, IExprPool, pud_link_table, typename cycle_detector_factory_t::cycle_detector_t> {
+        using pud_unifier_factory<
+            globalizer, IExprPool, pud_link_table,
+            typename cycle_detector_factory_t::cycle_detector_t>::pud_unifier_factory;
+    };
+    struct functor_relinker_t : pud_functor_relinker<
+        pud_link_table, pud_link_table, pud_symbol_table, module_registry_t, pud_link_table> {
+        using pud_functor_relinker<
+            pud_link_table, pud_link_table, pud_symbol_table, module_registry_t, pud_link_table>::pud_functor_relinker;
+    };
+    struct term_exporter_factory_t : pud_term_exporter_factory<
+        globalizer, IExprPool, IExprPool, functor_relinker_t> {
+        using pud_term_exporter_factory<
+            globalizer, IExprPool, IExprPool, functor_relinker_t>::pud_term_exporter_factory;
+    };
+    struct unit_queries_t : std::deque<pud_mhq_head_id> {
+        using std::deque<pud_mhq_head_id>::deque;
+    };
+    struct refutation_propagator_t : pud_refutation_propagator<
+        module_registry_t, pud_node_live_child_counts, module_registry_t> {
+        using pud_refutation_propagator<
+            module_registry_t, pud_node_live_child_counts, module_registry_t>::pud_refutation_propagator;
+    };
+    struct replayer_t : pud_replayer<
+        module_registry_t, module_registry_t, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
+        unifier_factory_t> {
+        using pud_replayer<
+            module_registry_t, module_registry_t, IExprPool, bind_map_factory_t, cycle_detector_factory_t,
+            unifier_factory_t>::pud_replayer;
+    };
+    struct mhws_t : pud_mhws<replayer_t, module_registry_t, module_registry_t, module_registry_t> {
+        using pud_mhws<replayer_t, module_registry_t, module_registry_t, module_registry_t>::pud_mhws;
+    };
+    struct mhcs_t : pud_mhcs<
+        replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t, module_registry_t> {
+        using pud_mhcs<
+            replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t,
+            module_registry_t>::pud_mhcs;
+    };
+    struct mhq_t : pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t> {
+        using pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>::pud_mhq;
+    };
+    struct binder_t : pud_binder<bind_map_factory_t, module_registry_t> {
+        using pud_binder<bind_map_factory_t, module_registry_t>::pud_binder;
+    };
+    struct structure_watcher_t : pud_structure_watcher<bind_map_factory_t, module_registry_t, IExprPool> {
+        using pud_structure_watcher<bind_map_factory_t, module_registry_t, IExprPool>::pud_structure_watcher;
+    };
+    struct root_activator_t : pud_root_activator<
+        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
+        structure_watcher_t, mhq_t, pud_query_holders> {
+        using pud_root_activator<
+            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
+            structure_watcher_t, mhq_t, pud_query_holders>::pud_root_activator;
+    };
+    struct child_activator_t : pud_child_activator<
+        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+        pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
+        structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t> {
+        using pud_child_activator<
+            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+            pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
+            structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
+    };
+    struct node_deactivator_t : pud_node_deactivator<
+        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders> {
+        using pud_node_deactivator<
+            pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t,
+            pud_query_holders>::pud_node_deactivator;
+    };
+    struct leaf_refuter_t : pud_leaf_refuter<
+        module_registry_t, refutation_propagator_t, node_deactivator_t, module_registry_t, module_registry_t> {
+        using pud_leaf_refuter<
+            module_registry_t, refutation_propagator_t, node_deactivator_t, module_registry_t,
+            module_registry_t>::pud_leaf_refuter;
+    };
+    struct inference_builder_t : pud_inference_builder<
+        node_goals_t, module_registry_t, module_registry_t, IExprPool, IExprPool, bind_map_factory_t,
+        cycle_detector_factory_t, unifier_factory_t, term_exporter_factory_t> {
+        using pud_inference_builder<
+            node_goals_t, module_registry_t, module_registry_t, IExprPool, IExprPool, bind_map_factory_t,
+            cycle_detector_factory_t, unifier_factory_t, term_exporter_factory_t>::pud_inference_builder;
+    };
+    struct resolver_t : pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t> {
+        using pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t>::pud_resolver;
+    };
+    struct activity_mover_t : pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t> {
+        using pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
+    };
+    struct unfolder_t : pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t> {
+        using pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
+    };
+    struct module_activator_t : pud_module_activator<
+        module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t, activity_mover_t> {
+        using pud_module_activator<
+            module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t,
+            activity_mover_t>::pud_module_activator;
+    };
 
     pud_manifest(IExprPool& expr_pool);
 
