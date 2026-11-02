@@ -1,7 +1,5 @@
 ---
 description: Naming conventions for files, types, members, and template parameters
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Naming Conventions

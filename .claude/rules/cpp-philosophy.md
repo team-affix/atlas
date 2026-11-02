@@ -1,7 +1,5 @@
 ---
 description: Overarching code philosophy — simplicity, symmetry, organization
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Code Philosophy

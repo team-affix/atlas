@@ -1,7 +1,5 @@
 ---
 description: TEST_F fixture conventions for C++ tests
-globs: **/test/**/*.cpp
-alwaysApply: true
 ---
 
 # Test Fixtures (`TEST_F`)

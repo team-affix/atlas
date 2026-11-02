@@ -1,7 +1,5 @@
 ---
 description: Google Mock conventions for test doubles
-globs: **/test/**/*.cpp
-alwaysApply: true
 ---
 
 # Test Mocks (Google Mock)

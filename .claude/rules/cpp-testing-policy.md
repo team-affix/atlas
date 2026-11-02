@@ -1,7 +1,5 @@
 ---
 description: Non-negotiable policies when writing or running tests
-globs: **/test/**/*.cpp
-alwaysApply: true
 ---
 
 # Testing Policy

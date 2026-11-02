@@ -1,7 +1,5 @@
 ---
 description: Unit vs integration testing — definitions, rules, and how to choose
-globs: **/test/**/*.cpp
-alwaysApply: true
 ---
 
 # Testing: Unit vs Integration

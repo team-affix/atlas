@@ -1,7 +1,5 @@
 ---
 description: Rules for simplifying and cleaning up code — naming, helpers, indentation, symmetry, and type placement
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Code Simplification

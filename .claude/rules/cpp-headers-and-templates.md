@@ -1,7 +1,5 @@
 ---
 description: Header/implementation split for templated vs non-templated types
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Headers, Templates & Implementation Hiding

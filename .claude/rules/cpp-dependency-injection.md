@@ -1,7 +1,5 @@
 ---
 description: Dependency injection, template collaborators, and strategy interfaces
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Dependency Injection & Behavior Swapping

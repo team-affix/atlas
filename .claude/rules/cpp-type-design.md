@@ -1,7 +1,5 @@
 ---
 description: Struct and member design conventions for C++ types
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # Type & Member Design

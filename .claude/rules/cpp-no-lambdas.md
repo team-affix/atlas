@@ -1,7 +1,5 @@
 ---
 description: Ban std::function and lambdas except a genuinely generic std::visit
-globs: **/*.{hpp,cpp}
-alwaysApply: true
 ---
 
 # No std::function / Lambdas
