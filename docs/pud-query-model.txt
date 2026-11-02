@@ -49,7 +49,7 @@ Search stack (no separate query tree)
 - pud_mhq: one head per body goal; try_open(group, ...) stores candidates in
   dependency-then-registration order; admits only when at least one candidate
   exists; pushes unit heads onto an injected deque when a head drops to one
-  candidate; check_exhausted(head) once its last candidate is refuted.
+  candidate; is_exhausted(head) once its last candidate is refuted.
 
 Node lifecycle
 

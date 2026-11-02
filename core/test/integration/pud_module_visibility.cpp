@@ -75,7 +75,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, AModuleWithoutTheDependencyCannotReso
     install_shared_functor_names(isolated, this->functors);
     const pud_frontier_change change = runtime.register_module(isolated);
     EXPECT_THAT(change.refuted, ElementsAre(query));
-    EXPECT_TRUE(isolated.check_refuted(query.node));
+    EXPECT_TRUE(isolated.is_refuted(query.node));
 }
 
 TEST_F(PudModuleVisibilityIntegrationTest, ADependencyNeverSeesItsDependentsAxioms) {
@@ -92,7 +92,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, ADependencyNeverSeesItsDependentsAxio
         std::vector<rule>{rule(functor("l", {atom("a")}), {}, 0)});
     install_shared_functor_names(second, this->functors);
     runtime.register_module(second);
-    EXPECT_TRUE(first.check_refuted(query.node));
+    EXPECT_TRUE(first.is_refuted(query.node));
 }
 
 TEST_F(PudModuleVisibilityIntegrationTest, SiblingModulesDoNotSeeEachOthersAxioms) {
@@ -261,7 +261,7 @@ TEST_F(PudModuleVisibilityIntegrationTest, TwoModulesOnOneDependencyStayIsolated
         std::vector<rule>{rule(functor("q2", {var(0)}), {functor("p", {var(0)}), functor("f", {var(0)})}, 1)});
     install_shared_functor_names(second, this->functors);
     const pud_frontier_change second_change = runtime.register_module(second);
-    EXPECT_FALSE(first.check_refuted(first_query.node));
+    EXPECT_FALSE(first.is_refuted(first_query.node));
     EXPECT_THAT(second_change.refuted, Contains(second_query));
     EXPECT_THAT(second_change.offspring, IsEmpty());
 }

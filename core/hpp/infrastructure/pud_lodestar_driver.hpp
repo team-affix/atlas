@@ -76,7 +76,7 @@ pud_lodestar_driver<IManifest>::conjecture_queries() const {
     for (const pud_global_node_id node : nodes) {
         if (!on_focus(node))
             continue;
-        if (manifest_.modules_.check_refuted(node))
+        if (manifest_.modules_.is_refuted(node))
             continue;
         const pud_active_state& state = manifest_.active_states_.get(node);
         std::vector<pud_body_goal_id> goals;
@@ -104,7 +104,7 @@ template<typename IManifest>
 std::optional<pud_body_goal_id> pud_lodestar_driver<IManifest>::smallest_ready_goal(pud_global_node_id leaf) const {
     if (!frontier_.live().contains(leaf))
         return std::nullopt;
-    if (manifest_.modules_.check_refuted(leaf))
+    if (manifest_.modules_.is_refuted(leaf))
         return std::nullopt;
     const pud_active_state& state = manifest_.active_states_.get(leaf);
     std::optional<pud_body_goal_id> smallest;
@@ -169,9 +169,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::non_conjecture_
             }
         }
     }
-    std::sort(ring.begin(), ring.end(), [](const pud_lodestar_choice& left, const pud_lodestar_choice& right) {
-        return left.slot < right.slot;
-    });
+    std::sort(ring.begin(), ring.end());
     return ring;
 }
 
@@ -211,9 +209,7 @@ std::vector<pud_lodestar_choice> pud_lodestar_driver<IManifest>::conjecture_ring
             .eligible = manifest_.unfold_allower_.allow(query.node),
         });
     }
-    std::sort(ring.begin(), ring.end(), [](const pud_lodestar_choice& left, const pud_lodestar_choice& right) {
-        return left.slot < right.slot;
-    });
+    std::sort(ring.begin(), ring.end());
     return ring;
 }
 
@@ -248,7 +244,7 @@ bool pud_lodestar_driver<IManifest>::propagate_unit() {
         for (const pud_global_node_id leaf : manifest_.query_holders_.get_holders(head)) {
             if (!frontier_.live().contains(leaf))
                 continue;
-            if (manifest_.modules_.check_refuted(leaf))
+            if (manifest_.modules_.is_refuted(leaf))
                 continue;
             if (!manifest_.unfold_allower_.allow(leaf))
                 continue;

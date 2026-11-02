@@ -49,13 +49,13 @@ void pud_lodestar_witness_log<IMhws, IModules>::remember(pud_mhws_head_id head_i
 
 template<typename IMhws, typename IModules>
 pud_global_node_id pud_lodestar_witness_log<IMhws, IModules>::settle(pud_global_node_id node) const {
-    if (modules_.check_refuted(node))
+    if (modules_.is_refuted(node))
         return node;
-    if (modules_.check_leaf(node))
+    if (modules_.is_leaf(node))
         return node;
     for (const pud_node_id child_id : modules_.get_children(node)) {
         const pud_global_node_id child{.module = node.module, .node = child_id};
-        if (modules_.check_refuted(child))
+        if (modules_.is_refuted(child))
             continue;
         return settle(child);
     }

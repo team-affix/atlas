@@ -64,11 +64,11 @@ const std::vector<pud_node_id>& pud_module::get_children(pud_node_id node) const
     return children_.at(node);
 }
 
-bool pud_module::check_leaf(pud_node_id node) const {
+bool pud_module::is_leaf(pud_node_id node) const {
     return children_.at(node).empty();
 }
 
-bool pud_module::check_refuted(pud_node_id node) const {
+bool pud_module::is_refuted(pud_node_id node) const {
     return refuted_.at(node);
 }
 

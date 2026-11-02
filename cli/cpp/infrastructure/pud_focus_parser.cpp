@@ -1,10 +1,10 @@
-#include "infrastructure/pud_focus.hpp"
+#include "infrastructure/pud_focus_parser.hpp"
 
 #include <stdexcept>
 
 #include "infrastructure/hex_uint64.hpp"
 
-pud_global_node_id pud_focus::parse(const std::string& text) const {
+pud_global_node_id pud_focus_parser::parse(const std::string& text) const {
     const size_t colon = text.rfind(':');
     const bool missing_separator = colon == std::string::npos || colon == 0 || colon + 1 == text.size();
     if (missing_separator)

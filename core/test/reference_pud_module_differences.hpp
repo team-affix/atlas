@@ -40,7 +40,7 @@ inline std::vector<std::string> reference_pud_module_differences(
             const pud_node_id node = pending.back();
             pending.pop_back();
             const std::string at = where + " node " + std::to_string(node);
-            if (got.check_refuted(node) != want.check_refuted(node))
+            if (got.is_refuted(node) != want.is_refuted(node))
                 differences.push_back(at + ": refutation");
             if (got.get_children(node) != want.get_children(node)) {
                 differences.push_back(at + ": children");

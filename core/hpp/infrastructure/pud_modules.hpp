@@ -25,8 +25,8 @@ struct pud_modules {
     IModule& get_module(pud_module_id module) const;
     std::optional<pud_global_node_id> get_parent(pud_global_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_global_node_id node) const;
-    bool check_leaf(pud_global_node_id node) const;
-    bool check_refuted(pud_global_node_id node) const;
+    bool is_leaf(pud_global_node_id node) const;
+    bool is_refuted(pud_global_node_id node) const;
 private:
     struct registration {
         IModule* data;
@@ -116,13 +116,13 @@ const std::vector<pud_node_id>& pud_modules<IModule>::get_children(pud_global_no
 }
 
 template<typename IModule>
-bool pud_modules<IModule>::check_leaf(pud_global_node_id node) const {
-    return modules_.at(node.module).data->check_leaf(node.node);
+bool pud_modules<IModule>::is_leaf(pud_global_node_id node) const {
+    return modules_.at(node.module).data->is_leaf(node.node);
 }
 
 template<typename IModule>
-bool pud_modules<IModule>::check_refuted(pud_global_node_id node) const {
-    return modules_.at(node.module).data->check_refuted(node.node);
+bool pud_modules<IModule>::is_refuted(pud_global_node_id node) const {
+    return modules_.at(node.module).data->is_refuted(node.node);
 }
 
 template<typename IModule>

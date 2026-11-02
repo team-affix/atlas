@@ -28,13 +28,13 @@ struct MockRefuteLeaf {
 struct MockDeactivateNode {
     MOCK_METHOD(std::vector<pud_global_node_id>, deactivate, (pud_global_node_id));
 };
-struct MockCheckNodeRefuted {
-    MOCK_METHOD(bool, check_refuted, (pud_global_node_id));
+struct MockIsNodeRefuted {
+    MOCK_METHOD(bool, is_refuted, (pud_global_node_id));
 };
 
 using test_unfolder_t = pud_unfolder<
     NiceMock<MockResolve>, NiceMock<MockStoreInference>, NiceMock<MockActivateChild>, NiceMock<MockRefuteLeaf>,
-    NiceMock<MockDeactivateNode>, NiceMock<MockCheckNodeRefuted>>;
+    NiceMock<MockDeactivateNode>, NiceMock<MockIsNodeRefuted>>;
 
 struct PudUnfolderTest : public ::testing::Test {
     NiceMock<MockResolve> resolver;
@@ -42,7 +42,7 @@ struct PudUnfolderTest : public ::testing::Test {
     NiceMock<MockActivateChild> activator;
     NiceMock<MockRefuteLeaf> refuter;
     NiceMock<MockDeactivateNode> deactivator;
-    NiceMock<MockCheckNodeRefuted> refuted_nodes;
+    NiceMock<MockIsNodeRefuted> refuted_nodes;
     test_unfolder_t unfolder{resolver, store_inference, activator, refuter, deactivator, refuted_nodes};
     pud_inference first{.parent = 4, .call_site = 1, .substitutions = {}, .body_goals = {}, .var_count = 1};
     pud_inference second{.parent = 4, .call_site = 1, .substitutions = {}, .body_goals = {}, .var_count = 2};
@@ -109,7 +109,7 @@ TEST_F(PudUnfolderTest, TheChangeHoldsTheLiveChildrenAndEveryRefutedLeaf) {
     ON_CALL(activator, activate_child(pud_test_node(4), pud_test_node(11))).WillByDefault(Return(true));
     ON_CALL(refuter, refute(pud_test_node(11)))
         .WillByDefault(Return(std::vector<pud_global_node_id>{pud_test_node(11), pud_test_node(20)}));
-    ON_CALL(refuted_nodes, check_refuted(pud_test_node(11))).WillByDefault(Return(true));
+    ON_CALL(refuted_nodes, is_refuted(pud_test_node(11))).WillByDefault(Return(true));
     EXPECT_EQ(unfolder.unfold(pud_test_node(4), 1), (pud_frontier_change{
         .offspring = {pud_test_node(10)}, .refuted = {pud_test_node(11), pud_test_node(20)}}));
 }

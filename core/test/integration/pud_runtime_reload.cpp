@@ -1402,7 +1402,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, NothingBelowARefutedInteriorNodeCome
         if (module.get_module_id() == 8001)
             base = &module;
     }
-    ASSERT_TRUE(base->check_refuted(2));
+    ASSERT_TRUE(base->is_refuted(2));
     ASSERT_THAT(base->get_children(2), Not(IsEmpty()));
     std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
     TypeParam reloaded_runtime(this->exprs);
@@ -1458,7 +1458,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ARefutationThatCrossedModulesStaysOn
         if (module.get_module_id() == 8002)
             dep_module = &module;
     }
-    ASSERT_TRUE(dep_module->check_refuted(0));
+    ASSERT_TRUE(dep_module->is_refuted(0));
     std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
     TypeParam reloaded_runtime(this->exprs);
     std::set<pud_global_node_id> reloaded_live;
@@ -5050,7 +5050,7 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AResumedUnfoldInADependencyRefutesTh
         if (module.get_module_id() == 8002)
             dep_module = &module;
     }
-    EXPECT_TRUE(dep_module->check_refuted(0));
+    EXPECT_TRUE(dep_module->is_refuted(0));
     EXPECT_THAT(reference_pud_module_differences(modules, resumed_modules), IsEmpty());
 
 }

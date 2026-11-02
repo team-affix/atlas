@@ -64,8 +64,8 @@ struct MockOpenQuery {
 struct MockHoldQuery {
     MOCK_METHOD(void, hold, (pud_mhq_head_id, pud_global_node_id, pud_body_goal_id));
 };
-struct MockCheckQueryExhausted {
-    MOCK_METHOD(bool, check_exhausted, (pud_mhq_head_id));
+struct MockIsQueryExhausted {
+    MOCK_METHOD(bool, is_exhausted, (pud_mhq_head_id));
 };
 
 using test_child_activator_t = pud_child_activator<
@@ -73,7 +73,7 @@ using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockResolveGoal>,
     NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>, NiceMock<MockIncrementLiveChildCount>,
     NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
-    NiceMock<MockHoldQuery>, NiceMock<MockCheckQueryExhausted>>;
+    NiceMock<MockHoldQuery>, NiceMock<MockIsQueryExhausted>>;
 
 // The parent, node 3 at lvc 5, has goals a and b, holds queries 40 and 41 for them, and the child,
 // node 4, was resolved on goal 0. The child keeps goal 1, adds goal 2 of its own, and two variables.
@@ -92,7 +92,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     NiceMock<MockForkQuery> forker;
     NiceMock<MockOpenQuery> opener;
     NiceMock<MockHoldQuery> holders;
-    NiceMock<MockCheckQueryExhausted> exhausted;
+    NiceMock<MockIsQueryExhausted> exhausted;
     test_child_activator_t activator{
         get_states, store_states, inferences, get_goals, get_node_axiom, resolve_goal, store_goals,
         store_node_axiom, live_child_counts, binder, watcher, forker, opener, holders, exhausted};
@@ -125,7 +125,7 @@ struct PudChildActivatorTest : public ::testing::Test {
             .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {}}));
         ON_CALL(opener, try_open(k_test_module, _, &goal_c, 7)).WillByDefault(Return(70));
         ON_CALL(forker, try_fork(41, _, &goal_b, 7)).WillByDefault(Return(60));
-        ON_CALL(exhausted, check_exhausted(_)).WillByDefault(Return(false));
+        ON_CALL(exhausted, is_exhausted(_)).WillByDefault(Return(false));
     }
 };
 
@@ -206,7 +206,7 @@ TEST_F(PudChildActivatorTest, AGoalOfItsOwnWithoutCandidatesRefutesTheChild) {
 }
 
 TEST_F(PudChildActivatorTest, AnInheritedQueryAlreadyExhaustedRefutesTheChildButIsStillHeld) {
-    ON_CALL(exhausted, check_exhausted(41u)).WillByDefault(Return(true));
+    ON_CALL(exhausted, is_exhausted(41u)).WillByDefault(Return(true));
     EXPECT_CALL(holders, hold(41u, pud_test_node(4), 1u));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
     EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));

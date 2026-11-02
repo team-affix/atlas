@@ -30,7 +30,7 @@ template<
     typename IForkQuery,
     typename IOpenQuery,
     typename IHoldQuery,
-    typename ICheckQueryExhausted>
+    typename IIsQueryExhausted>
 struct pud_child_activator {
     pud_child_activator(
         IGetActiveState& get_active_state,
@@ -47,7 +47,7 @@ struct pud_child_activator {
         IForkQuery& fork_query,
         IOpenQuery& open_query,
         IHoldQuery& hold_query,
-        ICheckQueryExhausted& check_query_exhausted);
+        IIsQueryExhausted& is_query_exhausted);
     bool activate_child(pud_global_node_id parent, pud_global_node_id child);
 private:
     IGetActiveState& get_active_state_;
@@ -64,7 +64,7 @@ private:
     IForkQuery& fork_query_;
     IOpenQuery& open_query_;
     IHoldQuery& hold_query_;
-    ICheckQueryExhausted& check_query_exhausted_;
+    IIsQueryExhausted& is_query_exhausted_;
 };
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
@@ -73,12 +73,12 @@ private:
              typename IStoreNodeGoals, typename IStoreNodeAxiom,                               \
              typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
              typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                    \
-             typename ICheckQueryExhausted>
+             typename IIsQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetActiveState, IStoreActiveState, IGetInference, IGetNodeGoals,      \
         IGetNodeAxiom, IResolveGoal, IStoreNodeGoals, IStoreNodeAxiom,        \
         IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IHoldQuery,    \
-        ICheckQueryExhausted>
+        IIsQueryExhausted>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
@@ -96,7 +96,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IForkQuery& fork_query,
     IOpenQuery& open_query,
     IHoldQuery& hold_query,
-    ICheckQueryExhausted& check_query_exhausted)
+    IIsQueryExhausted& is_query_exhausted)
     : get_active_state_(get_active_state)
     , store_active_state_(store_active_state)
     , get_inference_(get_inference)
@@ -111,7 +111,7 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , fork_query_(fork_query)
     , open_query_(open_query)
     , hold_query_(hold_query)
-    , check_query_exhausted_(check_query_exhausted) {}
+    , is_query_exhausted_(is_query_exhausted) {}
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
@@ -151,7 +151,7 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
     }
     for (const auto& [goal, head_id] : queries) {
         hold_query_.hold(head_id, child, goal);
-        refuted = refuted || check_query_exhausted_.check_exhausted(head_id);
+        refuted = refuted || is_query_exhausted_.is_exhausted(head_id);
     }
     store_active_state_.store(child, pud_active_state{
         .lvc = lvc,

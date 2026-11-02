@@ -47,15 +47,15 @@ const expr* pud_demoduler<IDemoduleFunctor, IMakeVar>::demodule(moduled_expr ter
     const auto found = memo_.find(key);
     if (found != memo_.end())
         return found->second;
-    const expr* demodulled = nullptr;
+    const expr* demoduled = nullptr;
     if (const expr::var* variable = std::get_if<expr::var>(&term.skeleton->content))
-        demodulled = make_var_.make_var(variable->index);
+        demoduled = make_var_.make_var(variable->index);
     else {
         const expr::functor& functor = std::get<expr::functor>(term.skeleton->content);
-        demodulled = demodule_functor_.demodule(moduled_functor{&functor, term.frame_offset, term.module});
+        demoduled = demodule_functor_.demodule(moduled_functor{&functor, term.frame_offset, term.module});
     }
-    memo_.emplace(key, demodulled);
-    return demodulled;
+    memo_.emplace(key, demoduled);
+    return demoduled;
 }
 
 #endif

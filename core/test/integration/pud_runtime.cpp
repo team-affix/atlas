@@ -66,8 +66,8 @@ TEST_F(PudRuntimeIntegrationTest, NodesWithTheSameLocalIdInTwoModulesStayApart) 
         query_children.push_back(pud_global_node_id{.module = query.module, .node = child});
     EXPECT_EQ(query_children, change.offspring);
     EXPECT_THAT(base.get_children(fact.node), IsEmpty());
-    EXPECT_TRUE(base.check_leaf(fact.node));
-    EXPECT_FALSE(base.check_refuted(fact.node));
+    EXPECT_TRUE(base.is_leaf(fact.node));
+    EXPECT_FALSE(base.is_refuted(fact.node));
 }
 
 TEST_F(PudRuntimeIntegrationTest, UnfoldingADependencysLeafKeepsADependentsQueryResolvable) {
@@ -90,7 +90,7 @@ TEST_F(PudRuntimeIntegrationTest, UnfoldingADependencysLeafKeepsADependentsQuery
     install_shared_functor_names(dependent, this->functors);
     runtime.register_module(dependent);
     runtime.unfold(step, 0);
-    EXPECT_FALSE(dependent.check_refuted(query.node));
+    EXPECT_FALSE(dependent.is_refuted(query.node));
     const pud_frontier_change change = runtime.unfold(query, 0);
     ASSERT_EQ(change.offspring.size(), 1u);
     EXPECT_EQ(change.offspring.front().module, query.module);
@@ -122,9 +122,9 @@ TEST_F(PudRuntimeIntegrationTest, ARefutationInADependencyRefutesTheDependentsLe
     runtime.register_module(dependent);
     const pud_frontier_change change = runtime.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
-    EXPECT_TRUE(base_mod.check_refuted(mid.node));
-    EXPECT_TRUE(dependent.check_refuted(top.node));
-    EXPECT_FALSE(dependent.check_refuted(other.node));
+    EXPECT_TRUE(base_mod.is_refuted(mid.node));
+    EXPECT_TRUE(dependent.is_refuted(top.node));
+    EXPECT_FALSE(dependent.is_refuted(other.node));
 }
 
 TEST_F(PudRuntimeIntegrationTest, ReloadedModulesPutBackTheSameFrontierWithoutRederivingRefutations) {

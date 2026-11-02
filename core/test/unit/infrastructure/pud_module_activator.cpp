@@ -22,8 +22,8 @@ namespace {
 struct MockListAxioms {
     MOCK_METHOD(const std::vector<pud_global_node_id>&, list_axioms, (pud_module_id));
 };
-struct MockCheckNodeRefuted {
-    MOCK_METHOD(bool, check_refuted, (pud_global_node_id));
+struct MockIsNodeRefuted {
+    MOCK_METHOD(bool, is_refuted, (pud_global_node_id));
 };
 struct MockGetChildren {
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_global_node_id));
@@ -42,14 +42,14 @@ struct MockDeactivateNode {
 };
 
 using test_module_activator_t = pud_module_activator<
-    NiceMock<MockListAxioms>, NiceMock<MockCheckNodeRefuted>, NiceMock<MockGetChildren>, NiceMock<MockActivateRoot>,
+    NiceMock<MockListAxioms>, NiceMock<MockIsNodeRefuted>, NiceMock<MockGetChildren>, NiceMock<MockActivateRoot>,
     NiceMock<MockActivateChild>, NiceMock<MockRefuteLeaf>, NiceMock<MockDeactivateNode>>;
 
 // The stored module, in the test module: axiom 0 has children 2 and 3, axiom 1 is a leaf, 2 is a
 // leaf, and 3 has the one child 4, a leaf. A refuted node stays refuted; refuting a node reports it.
 struct PudModuleActivatorTest : public ::testing::Test {
     NiceMock<MockListAxioms> axioms;
-    NiceMock<MockCheckNodeRefuted> refuted;
+    NiceMock<MockIsNodeRefuted> refuted;
     NiceMock<MockGetChildren> children;
     NiceMock<MockActivateRoot> root_activator;
     NiceMock<MockActivateChild> child_activator;
@@ -66,12 +66,12 @@ struct PudModuleActivatorTest : public ::testing::Test {
         ON_CALL(axioms, list_axioms(k_test_module)).WillByDefault(ReturnRef(axiom_list));
         for (const auto& [node, kids] : child_lists)
             ON_CALL(children, get_children(pud_test_node(node))).WillByDefault(ReturnRef(kids));
-        ON_CALL(refuted, check_refuted(_)).WillByDefault(Invoke(this, &PudModuleActivatorTest::check_refuted));
+        ON_CALL(refuted, is_refuted(_)).WillByDefault(Invoke(this, &PudModuleActivatorTest::is_refuted));
         ON_CALL(refuter, refute(_)).WillByDefault(Invoke(this, &PudModuleActivatorTest::refute));
         ON_CALL(deactivator, deactivate(_)).WillByDefault(Return(std::vector<pud_global_node_id>{}));
     }
 
-    bool check_refuted(pud_global_node_id node) { return refuted_nodes.contains(node); }
+    bool is_refuted(pud_global_node_id node) { return refuted_nodes.contains(node); }
 
     std::vector<pud_global_node_id> refute(pud_global_node_id node) {
         refuted_nodes.insert(node);

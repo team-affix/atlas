@@ -93,7 +93,7 @@ TEST_F(PudFrontierChangesIntegrationTest, ARuleWithAnUnprovableGoalOpensRefuted)
     const pud_frontier_change change = runtime.register_module(mod);
     EXPECT_THAT(change.offspring, IsEmpty());
     EXPECT_THAT(change.refuted, ElementsAre(rule_node));
-    EXPECT_TRUE(mod.check_refuted(rule_node.node));
+    EXPECT_TRUE(mod.is_refuted(rule_node.node));
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, UnfoldingReportsTheChildrenButNeverTheUnfoldedLeaf) {
@@ -176,8 +176,8 @@ TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefute
     const pud_global_node_id blue = children.at(1);
     EXPECT_THAT(change.offspring, ElementsAre(red));
     EXPECT_THAT(change.refuted, ElementsAre(blue));
-    EXPECT_TRUE(mod.check_refuted(blue.node));
-    EXPECT_FALSE(mod.check_refuted(red.node));
+    EXPECT_TRUE(mod.is_refuted(blue.node));
+    EXPECT_FALSE(mod.is_refuted(red.node));
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, SiblingsRefutedOnArrivalThatShareAnExhaustedQueryAreRefutedOnce) {
@@ -219,8 +219,8 @@ TEST_F(PudFrontierChangesIntegrationTest, ARefutationIsReportedInEveryTreeItReac
     runtime.register_module(mod);
     const pud_frontier_change change = runtime.unfold(mid, 0);
     EXPECT_THAT(change.refuted, Contains(top));
-    EXPECT_TRUE(mod.check_refuted(mid.node));
-    EXPECT_TRUE(mod.check_refuted(top.node));
+    EXPECT_TRUE(mod.is_refuted(mid.node));
+    EXPECT_TRUE(mod.is_refuted(top.node));
 }
 
 TEST_F(PudFrontierChangesIntegrationTest, AnAxiomWhoseOnlyCandidateIsRefutedDuringRegistrationIsRefutedToo) {
@@ -238,5 +238,5 @@ TEST_F(PudFrontierChangesIntegrationTest, AnAxiomWhoseOnlyCandidateIsRefutedDuri
     install_shared_functor_names(mod, this->functors);
     const pud_frontier_change registered = runtime.register_module(mod);
     EXPECT_THAT(registered.refuted, Contains(rule_node));
-    EXPECT_TRUE(mod.check_refuted(rule_node.node));
+    EXPECT_TRUE(mod.is_refuted(rule_node.node));
 }

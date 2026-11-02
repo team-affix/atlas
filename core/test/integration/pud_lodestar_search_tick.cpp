@@ -29,8 +29,8 @@ struct MockGetParent {
     MOCK_METHOD(std::optional<pud_global_node_id>, get_parent, (pud_global_node_id));
 };
 
-struct MockCheckRefuted {
-    MOCK_METHOD(bool, check_refuted, (pud_global_node_id));
+struct MockIsNodeRefuted {
+    MOCK_METHOD(bool, is_refuted, (pud_global_node_id));
 };
 
 struct MockGetNodeGoals {
@@ -60,10 +60,10 @@ struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
         node(0), children, focus, focus};
     pud_lodestar_focus_extender<pud_lodestar_focus_set, pud_lodestar_focus_set> extender{focus, focus};
     pud_lodestar_frontier frontier;
-    MockCheckRefuted refuted;
+    MockIsNodeRefuted refuted;
     MockGetNodeGoals goals;
     pud_lodestar_solved_leaf_finder<
-        pud_lodestar_frontier, pud_lodestar_focus_set, MockCheckRefuted, MockGetNodeGoals>
+        pud_lodestar_frontier, pud_lodestar_focus_set, MockIsNodeRefuted, MockGetNodeGoals>
         finder{frontier, focus, refuted, goals};
     MockGetParent parents;
     pud_node_depth_counter<MockGetParent> depths{parents};
@@ -105,7 +105,7 @@ TEST_F(PudLodestarSearchTickIntegrationTest, TheFinderReturnsTheSmallestSolvedFo
     focus.insert(node(0));
     focus.insert(node(2));
     frontier.apply_register(pud_frontier_change{.offspring = {node(2), node(0), node(1)}, .refuted = {}});
-    EXPECT_CALL(refuted, check_refuted).WillRepeatedly(Return(false));
+    EXPECT_CALL(refuted, is_refuted).WillRepeatedly(Return(false));
     EXPECT_CALL(goals, get).WillRepeatedly(::testing::ReturnRef(empty));
     const std::optional<pud_global_node_id> found = finder.find();
     ASSERT_TRUE(found.has_value());
@@ -116,7 +116,7 @@ TEST_F(PudLodestarSearchTickIntegrationTest, ErasingAReturnedLeafMakesTheNextSol
     focus.insert(node(0));
     focus.insert(node(2));
     frontier.apply_register(pud_frontier_change{.offspring = {node(0), node(2)}, .refuted = {}});
-    EXPECT_CALL(refuted, check_refuted).WillRepeatedly(Return(false));
+    EXPECT_CALL(refuted, is_refuted).WillRepeatedly(Return(false));
     EXPECT_CALL(goals, get).WillRepeatedly(::testing::ReturnRef(empty));
     frontier.erase(finder.find().value());
     const std::optional<pud_global_node_id> next = finder.find();

@@ -11,7 +11,7 @@ lodestar_command_handler::lodestar_command_handler(
     size_t max_node_depth,
     size_t sim_progress_interval)
     : loaded_(module_paths)
-    , focus_(pud_focus{}.parse(focus_text))
+    , focus_(pud_focus_parser{}.parse(focus_text))
     , runtime_(
           loaded_.exprs(),
           focus_,

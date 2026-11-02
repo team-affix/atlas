@@ -73,7 +73,7 @@ void PUD_MODULE_OSTREAM_INSERTER::insert_module(std::ostream& out, const pud_mod
         insert_inference_.insert_inference(out, module.get_inference(inference));
     insert_uint64_.insert_uint64(out, node_count);
     for (pud_node_id node = 0; node < node_count; ++node)
-        insert_uint8_.insert_uint8(out, module.check_refuted(node) ? 1 : 0);
+        insert_uint8_.insert_uint8(out, module.is_refuted(node) ? 1 : 0);
     const std::vector<std::string>& names = module.functor_names();
     insert_uint64_.insert_uint64(out, names.size());
     for (const std::string& name : names) {

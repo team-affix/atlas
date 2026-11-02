@@ -15,7 +15,7 @@ template<
     typename IActivateChild,
     typename IRefuteLeaf,
     typename IDeactivateNode,
-    typename ICheckNodeRefuted>
+    typename IIsNodeRefuted>
 struct pud_unfolder {
     pud_unfolder(
         IResolve& resolve,
@@ -23,7 +23,7 @@ struct pud_unfolder {
         IActivateChild& activate_child,
         IRefuteLeaf& refute_leaf,
         IDeactivateNode& deactivate_node,
-        ICheckNodeRefuted& check_node_refuted);
+        IIsNodeRefuted& is_node_refuted);
     pud_frontier_change unfold(pud_global_node_id leaf, pud_body_goal_id goal);
 private:
     IResolve& resolve_;
@@ -31,14 +31,14 @@ private:
     IActivateChild& activate_child_;
     IRefuteLeaf& refute_leaf_;
     IDeactivateNode& deactivate_node_;
-    ICheckNodeRefuted& check_node_refuted_;
+    IIsNodeRefuted& is_node_refuted_;
 };
 
 #define PUD_UNFOLDER_TEMPLATE                                                              \
     template<typename IResolve, typename IStoreInference, typename IActivateChild,        \
-             typename IRefuteLeaf, typename IDeactivateNode, typename ICheckNodeRefuted>
+             typename IRefuteLeaf, typename IDeactivateNode, typename IIsNodeRefuted>
 #define PUD_UNFOLDER \
-    pud_unfolder<IResolve, IStoreInference, IActivateChild, IRefuteLeaf, IDeactivateNode, ICheckNodeRefuted>
+    pud_unfolder<IResolve, IStoreInference, IActivateChild, IRefuteLeaf, IDeactivateNode, IIsNodeRefuted>
 
 PUD_UNFOLDER_TEMPLATE
 PUD_UNFOLDER::pud_unfolder(
@@ -47,13 +47,13 @@ PUD_UNFOLDER::pud_unfolder(
     IActivateChild& activate_child,
     IRefuteLeaf& refute_leaf,
     IDeactivateNode& deactivate_node,
-    ICheckNodeRefuted& check_node_refuted)
+    IIsNodeRefuted& is_node_refuted)
     : resolve_(resolve)
     , store_inference_(store_inference)
     , activate_child_(activate_child)
     , refute_leaf_(refute_leaf)
     , deactivate_node_(deactivate_node)
-    , check_node_refuted_(check_node_refuted) {}
+    , is_node_refuted_(is_node_refuted) {}
 
 PUD_UNFOLDER_TEMPLATE
 pud_frontier_change PUD_UNFOLDER::unfold(pud_global_node_id leaf, pud_body_goal_id goal) {
@@ -77,7 +77,7 @@ pud_frontier_change PUD_UNFOLDER::unfold(pud_global_node_id leaf, pud_body_goal_
         change.refuted.insert(change.refuted.end(), refuted.begin(), refuted.end());
     }
     for (pud_global_node_id child : children) {
-        if (check_node_refuted_.check_refuted(child))
+        if (is_node_refuted_.is_refuted(child))
             continue;
         change.offspring.push_back(child);
     }

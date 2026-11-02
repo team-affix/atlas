@@ -57,7 +57,7 @@ void pud_module_inspect_command_handler::operator()() {
     const size_t inference_count = node_count - axiom_count;
     size_t refuted_count = 0;
     for (pud_node_id node = 0; node < node_count; ++node) {
-        if (module.check_refuted(node))
+        if (module.is_refuted(node))
             ++refuted_count;
     }
     std::cout << "axioms: " << axiom_count << '\n';

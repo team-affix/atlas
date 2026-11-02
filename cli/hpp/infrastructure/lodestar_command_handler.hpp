@@ -7,7 +7,7 @@
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/global_functor_name_printer.hpp"
 #include "infrastructure/id_var_printer.hpp"
-#include "infrastructure/pud_focus.hpp"
+#include "infrastructure/pud_focus_parser.hpp"
 #include "infrastructure/pud_loaded_modules.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
 #include "infrastructure/pud_solve_loop.hpp"

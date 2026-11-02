@@ -25,8 +25,8 @@ struct MockModuleData {
     MOCK_METHOD(const pud_inference&, get_inference, (pud_node_id), (const));
     MOCK_METHOD(std::optional<pud_node_id>, get_parent, (pud_node_id), (const));
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_node_id), (const));
-    MOCK_METHOD(bool, check_leaf, (pud_node_id), (const));
-    MOCK_METHOD(bool, check_refuted, (pud_node_id), (const));
+    MOCK_METHOD(bool, is_leaf, (pud_node_id), (const));
+    MOCK_METHOD(bool, is_refuted, (pud_node_id), (const));
 };
 
 struct PudModulesTest : public ::testing::Test {
@@ -262,14 +262,14 @@ TEST_F(PudModulesTest, EveryLookupReachesTheNodesOwnModuleByItsLocalId) {
     EXPECT_CALL(other_data, get_axiom(0)).WillOnce(ReturnRef(axiom));
     EXPECT_CALL(other_data, get_inference(3)).WillOnce(ReturnRef(inference));
     EXPECT_CALL(other_data, get_children(3)).WillOnce(ReturnRef(children));
-    EXPECT_CALL(other_data, check_leaf(3)).WillOnce(Return(true));
-    EXPECT_CALL(other_data, check_refuted(3)).WillOnce(Return(true));
+    EXPECT_CALL(other_data, is_leaf(3)).WillOnce(Return(true));
+    EXPECT_CALL(other_data, is_refuted(3)).WillOnce(Return(true));
     EXPECT_CALL(other_data, mark_refuted(3));
     EXPECT_EQ(&modules.get_axiom(pud_global_node_id{.module = 20, .node = 0}), &axiom);
     EXPECT_EQ(&modules.get_inference(pud_global_node_id{.module = 20, .node = 3}), &inference);
     EXPECT_EQ(&modules.get_children(pud_global_node_id{.module = 20, .node = 3}), &children);
-    EXPECT_TRUE(modules.check_leaf(pud_global_node_id{.module = 20, .node = 3}));
-    EXPECT_TRUE(modules.check_refuted(pud_global_node_id{.module = 20, .node = 3}));
+    EXPECT_TRUE(modules.is_leaf(pud_global_node_id{.module = 20, .node = 3}));
+    EXPECT_TRUE(modules.is_refuted(pud_global_node_id{.module = 20, .node = 3}));
     modules.mark_refuted(pud_global_node_id{.module = 20, .node = 3});
 }
 
@@ -310,8 +310,8 @@ TEST_F(PudModulesTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
     ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
     modules.register_module(base_data);
     modules.register_module(other_data);
-    ON_CALL(base_data, check_refuted(0)).WillByDefault(Return(true));
-    ON_CALL(other_data, check_refuted(0)).WillByDefault(Return(false));
-    EXPECT_TRUE(modules.check_refuted(pud_global_node_id{.module = 10, .node = 0}));
-    EXPECT_FALSE(modules.check_refuted(pud_global_node_id{.module = 20, .node = 0}));
+    ON_CALL(base_data, is_refuted(0)).WillByDefault(Return(true));
+    ON_CALL(other_data, is_refuted(0)).WillByDefault(Return(false));
+    EXPECT_TRUE(modules.is_refuted(pud_global_node_id{.module = 10, .node = 0}));
+    EXPECT_FALSE(modules.is_refuted(pud_global_node_id{.module = 20, .node = 0}));
 }

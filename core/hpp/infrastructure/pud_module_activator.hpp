@@ -11,7 +11,7 @@
 
 template<
     typename IListAxioms,
-    typename ICheckNodeRefuted,
+    typename IIsNodeRefuted,
     typename IGetChildren,
     typename IActivateRoot,
     typename IActivateChild,
@@ -20,7 +20,7 @@ template<
 struct pud_module_activator {
     pud_module_activator(
         IListAxioms& list_axioms,
-        ICheckNodeRefuted& check_node_refuted,
+        IIsNodeRefuted& is_node_refuted,
         IGetChildren& get_children,
         IActivateRoot& activate_root,
         IActivateChild& activate_child,
@@ -29,7 +29,7 @@ struct pud_module_activator {
     pud_frontier_change activate_module(pud_module_id module);
 private:
     IListAxioms& list_axioms_;
-    ICheckNodeRefuted& check_node_refuted_;
+    IIsNodeRefuted& is_node_refuted_;
     IGetChildren& get_children_;
     IActivateRoot& activate_root_;
     IActivateChild& activate_child_;
@@ -38,24 +38,24 @@ private:
 };
 
 #define PUD_MODULE_ACTIVATOR_TEMPLATE                                                      \
-    template<typename IListAxioms, typename ICheckNodeRefuted, typename IGetChildren,      \
+    template<typename IListAxioms, typename IIsNodeRefuted, typename IGetChildren,      \
              typename IActivateRoot, typename IActivateChild, typename IRefuteLeaf,        \
              typename IDeactivateNode>
 #define PUD_MODULE_ACTIVATOR                                                               \
-    pud_module_activator<IListAxioms, ICheckNodeRefuted, IGetChildren, IActivateRoot, IActivateChild, \
+    pud_module_activator<IListAxioms, IIsNodeRefuted, IGetChildren, IActivateRoot, IActivateChild, \
         IRefuteLeaf, IDeactivateNode>
 
 PUD_MODULE_ACTIVATOR_TEMPLATE
 PUD_MODULE_ACTIVATOR::pud_module_activator(
     IListAxioms& list_axioms,
-    ICheckNodeRefuted& check_node_refuted,
+    IIsNodeRefuted& is_node_refuted,
     IGetChildren& get_children,
     IActivateRoot& activate_root,
     IActivateChild& activate_child,
     IRefuteLeaf& refute_leaf,
     IDeactivateNode& deactivate_node)
     : list_axioms_(list_axioms)
-    , check_node_refuted_(check_node_refuted)
+    , is_node_refuted_(is_node_refuted)
     , get_children_(get_children)
     , activate_root_(activate_root)
     , activate_child_(activate_child)
@@ -67,7 +67,7 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
     std::deque<pud_global_node_id> descending;
     std::vector<pud_global_node_id> axioms_arrived_refuted;
     for (pud_global_node_id axiom : list_axioms_.list_axioms(module)) {
-        if (check_node_refuted_.check_refuted(axiom))
+        if (is_node_refuted_.is_refuted(axiom))
             continue;
         descending.push_back(axiom);
         if (!activate_root_.activate_root(axiom))
@@ -83,7 +83,7 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
     while (!descending.empty()) {
         const pud_global_node_id node = descending.front();
         descending.pop_front();
-        if (check_node_refuted_.check_refuted(node))
+        if (is_node_refuted_.is_refuted(node))
             continue;
         const std::vector<pud_node_id>& stored_children = get_children_.get_children(node);
         if (stored_children.empty()) {
@@ -93,7 +93,7 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
         std::vector<pud_global_node_id> children;
         for (pud_node_id stored_child : stored_children) {
             const pud_global_node_id child{.module = module, .node = stored_child};
-            if (check_node_refuted_.check_refuted(child))
+            if (is_node_refuted_.is_refuted(child))
                 continue;
             children.push_back(child);
         }
@@ -115,7 +115,7 @@ pud_frontier_change PUD_MODULE_ACTIVATOR::activate_module(pud_module_id module) 
         descending.insert(descending.end(), children.begin(), children.end());
     }
     for (pud_global_node_id leaf : leaves) {
-        if (check_node_refuted_.check_refuted(leaf))
+        if (is_node_refuted_.is_refuted(leaf))
             continue;
         change.offspring.push_back(leaf);
     }

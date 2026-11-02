@@ -45,7 +45,7 @@ struct pud_mhq {
     void remove(pud_mhq_head_id head_id);
     std::vector<pud_mhq_head_id> invalidate_leaf(pud_global_node_id leaf);
     std::vector<pud_mhcs_head_id> candidates(pud_mhq_head_id head_id) const;
-    bool check_exhausted(pud_mhq_head_id head_id) const;
+    bool is_exhausted(pud_mhq_head_id head_id) const;
 private:
     struct candidacy {
         pud_global_node_id axiom;
@@ -182,7 +182,7 @@ std::vector<pud_mhcs_head_id> PUD_MHQ::candidates(pud_mhq_head_id head_id) const
 }
 
 PUD_MHQ_TEMPLATE
-bool PUD_MHQ::check_exhausted(pud_mhq_head_id head_id) const {
+bool PUD_MHQ::is_exhausted(pud_mhq_head_id head_id) const {
     return queries_.at(head_id).empty();
 }
 

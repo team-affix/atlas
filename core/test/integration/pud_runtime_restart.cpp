@@ -1066,8 +1066,8 @@ TYPED_TEST(PudRuntimeRestartIntegrationTest, AfterARestartAnUnfoldInADependencyR
         if (module.get_module_id() == 8002)
             dep_module = &module;
     }
-    EXPECT_TRUE(dep_module->check_refuted(0));
-    EXPECT_FALSE(dep_module->check_refuted(1));
+    EXPECT_TRUE(dep_module->is_refuted(0));
+    EXPECT_FALSE(dep_module->is_refuted(1));
     EXPECT_THAT(reference_pud_module_differences(twin_modules, restarted_modules), IsEmpty());
 }
 
