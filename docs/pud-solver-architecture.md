@@ -48,7 +48,7 @@ Adding accessors to a shared runtime for each new heuristic (witness counts, que
 ### 3. One composition root per solver (and per manual driver)
 
 - Each **automated PUD solver** (and each distinct **manual driver**, if any) gets its own **`pud_<name>_manifest`** as the **entry point**, same pattern as `horizon_manifest` vs `ridge_manifest`.
-- Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_modules`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
+- Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_module_registry`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
 - Heuristic code may read **manifest internals directly** (query holders, MHQ, active states, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
 
 ### 4. Manual stack vs solver stacks (planned naming)
@@ -73,7 +73,7 @@ Integration tests that keep a `live` set and call `unfold` are the model for man
 ### 6. Module access pattern (unchanged, intentional)
 
 - Callers **own** `pud_module` (or test doubles).
-- **`pud_modules<IModule>`** registers **`IModule&`**, stores **`IModule*`**, exposes tree operations via **`pud_global_node_id`**.
+- **`pud_module_registry<IModule>`** registers **`IModule&`**, stores **`IModule*`**, exposes tree operations via **`pud_global_node_id`**.
 - Downstream components use **capability-style DI**; production usually passes the **same `modules_` registry** in many template slots.
 - **Future reactive behavior** (e.g. intercept writes): provide an alternate **`IModule`** (or wrapper) that delegates to real storage and hooks `store_inference` / `mark_refuted`, without changing the unfolder's public shape.
 
@@ -89,7 +89,7 @@ Serde and CLI use **concrete `pud_module`**; the live engine uses the registry p
 
 | CHC | PUD (direction) |
 |-----|------------------|
-| `db` + resolution infra | `pud_manifest` kernel + `pud_modules` |
+| `db` + resolution infra | `pud_manifest` kernel + `pud_module_registry` |
 | Per-solver manifest + `run_sim` | Per-solver manifest + driver loop (`unfold` steps) |
 | Session state in memory | Session state in memory; **modules** persisted |
 | Weak external boundary for heuristics | Same for heuristics **inside manifests**; **stronger** persistence boundary (`pud_module`) |
@@ -105,4 +105,4 @@ Serde and CLI use **concrete `pud_module`**; the live engine uses the registry p
 - [pud-architecture.md](pud-architecture.md) — stored vs live planes, manifest composition.
 - `core/hpp/infrastructure/pud_runtime.hpp` — current manual facade (to rename).
 - `core/hpp/infrastructure/pud_manifest.hpp` — kernel composition root.
-- `core/hpp/infrastructure/pud_modules.hpp` — `IModule` registry pattern.
+- `core/hpp/infrastructure/pud_module_registry.hpp` — `IModule` registry pattern.

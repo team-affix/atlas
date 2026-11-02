@@ -12,7 +12,7 @@ pud_lodestar_runtime::pud_lodestar_runtime(
           max_open_goals) {}
 
 void pud_lodestar_runtime::register_module(pud_module& module) {
-    manifest_.module_registrar_.register_module(module);
+    manifest_.module_loader_.load(module);
 }
 
 bool pud_lodestar_runtime::next() {

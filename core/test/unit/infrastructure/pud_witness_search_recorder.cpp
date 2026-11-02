@@ -2,7 +2,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_witness_log.hpp"
+#include "infrastructure/pud_witness_search_recorder.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -26,21 +26,21 @@ pud_replay replay_at(pud_node_id node) {
     return pud_replay{.node = pud_test_node(node), .frame_offset = 0, .ubs_state = {}};
 }
 
-struct PudWitnessLogTest : public ::testing::Test {
+struct PudWitnessSearchRecorderTest : public ::testing::Test {
     NiceMock<MockMhws> searches;
-    pud_witness_log<NiceMock<MockMhws>> log{searches};
+    pud_witness_search_recorder<NiceMock<MockMhws>> log{searches};
 };
 
 }
 
-TEST_F(PudWitnessLogTest, AddsAndForksAreForwarded) {
+TEST_F(PudWitnessSearchRecorderTest, AddsAndForksAreForwarded) {
     EXPECT_CALL(searches, try_add(replay_at(5))).WillOnce(Return(40));
     EXPECT_CALL(searches, try_fork(40, replay_at(6))).WillOnce(Return(std::nullopt));
     EXPECT_EQ(log.try_add(replay_at(5)), 40u);
     EXPECT_EQ(log.try_fork(40, replay_at(6)), std::nullopt);
 }
 
-TEST_F(PudWitnessLogTest, AdvanceRemoveAndInvalidateAreForwarded) {
+TEST_F(PudWitnessSearchRecorderTest, AdvanceRemoveAndInvalidateAreForwarded) {
     const pud_witness_advance advanced{.search_root = replay_at(7), .next_sibling = 1};
     EXPECT_CALL(searches, advance(40)).WillOnce(Return(advanced));
     EXPECT_CALL(searches, remove(41));
@@ -50,12 +50,12 @@ TEST_F(PudWitnessLogTest, AdvanceRemoveAndInvalidateAreForwarded) {
     EXPECT_THAT(log.invalidate_leaf(pud_test_node(3)), ElementsAre(42));
 }
 
-TEST_F(PudWitnessLogTest, ASearchsNodeIsTheWitnessTheSearchRestsOn) {
+TEST_F(PudWitnessSearchRecorderTest, ASearchsNodeIsTheWitnessTheSearchRestsOn) {
     EXPECT_CALL(searches, find_witness(40)).WillOnce(Return(pud_test_node(9)));
     EXPECT_EQ(log.node_of(40), pud_test_node(9));
 }
 
-TEST_F(PudWitnessLogTest, AddsAndForksAreRecordedOnlyBetweenBeginAndTake) {
+TEST_F(PudWitnessSearchRecorderTest, AddsAndForksAreRecordedOnlyBetweenBeginAndTake) {
     EXPECT_CALL(searches, try_add(_)).WillOnce(Return(40)).WillOnce(Return(41)).WillOnce(Return(42));
     EXPECT_CALL(searches, try_fork(_, _)).WillOnce(Return(43)).WillOnce(Return(std::nullopt));
     log.try_add(replay_at(5));

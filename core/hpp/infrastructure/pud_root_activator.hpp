@@ -15,7 +15,7 @@
 
 template<
     typename IGetAxiom,
-    typename IOpenGoals,
+    typename IBuildRootGoalList,
     typename IStoreNodeGoals,
     typename IStoreNodeAxiom,
     typename IStoreActiveState,
@@ -25,7 +25,7 @@ template<
 struct pud_root_activator {
     pud_root_activator(
         IGetAxiom& get_axiom,
-        IOpenGoals& open_goals,
+        IBuildRootGoalList& build_root_goal_list,
         IStoreNodeGoals& store_node_goals,
         IStoreNodeAxiom& store_node_axiom,
         IStoreActiveState& store_active_state,
@@ -35,7 +35,7 @@ struct pud_root_activator {
     bool activate_root(pud_global_node_id root);
 private:
     IGetAxiom& get_axiom_;
-    IOpenGoals& open_goals_;
+    IBuildRootGoalList& build_root_goal_list_;
     IStoreNodeGoals& store_node_goals_;
     IStoreNodeAxiom& store_node_axiom_;
     IStoreActiveState& store_active_state_;
@@ -45,17 +45,17 @@ private:
 };
 
 #define PUD_ROOT_ACTIVATOR_TEMPLATE                                                            \
-    template<typename IGetAxiom, typename IOpenGoals, typename IStoreNodeGoals,                \
+    template<typename IGetAxiom, typename IBuildRootGoalList, typename IStoreNodeGoals,                \
              typename IStoreNodeAxiom, typename IStoreActiveState, typename IWatchRoot,         \
              typename IOpenQuery, typename IHoldQuery>
 #define PUD_ROOT_ACTIVATOR                                                                       \
-    pud_root_activator<IGetAxiom, IOpenGoals, IStoreNodeGoals, IStoreNodeAxiom,                \
+    pud_root_activator<IGetAxiom, IBuildRootGoalList, IStoreNodeGoals, IStoreNodeAxiom,                \
         IStoreActiveState, IWatchRoot, IOpenQuery, IHoldQuery>
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
 PUD_ROOT_ACTIVATOR::pud_root_activator(
     IGetAxiom& get_axiom,
-    IOpenGoals& open_goals,
+    IBuildRootGoalList& build_root_goal_list,
     IStoreNodeGoals& store_node_goals,
     IStoreNodeAxiom& store_node_axiom,
     IStoreActiveState& store_active_state,
@@ -63,7 +63,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     IOpenQuery& open_query,
     IHoldQuery& hold_query)
     : get_axiom_(get_axiom)
-    , open_goals_(open_goals)
+    , build_root_goal_list_(build_root_goal_list)
     , store_node_goals_(store_node_goals)
     , store_node_axiom_(store_node_axiom)
     , store_active_state_(store_active_state)
@@ -74,7 +74,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
 PUD_ROOT_ACTIVATOR_TEMPLATE
 bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     const rule& axiom = get_axiom_.get_axiom(root);
-    const pud_goal_list goals = open_goals_.open_goals(axiom.body);
+    const pud_goal_list goals = build_root_goal_list_.build(axiom.body);
     store_node_goals_.store(root, goals);
     store_node_axiom_.store(root, root);
     const pud_ubs_state bindings{};

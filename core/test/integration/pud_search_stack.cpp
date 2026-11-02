@@ -11,7 +11,7 @@
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
-#include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_module_registry.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
@@ -30,13 +30,13 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     using unifier_factory_t = pud_unifier_factory<globalizer, expr_pool, pud_identity_global_functor_ids, cycle_detector_factory_t::cycle_detector_t>;
     using normalizer_factory_t = pud_normalizer_factory<globalizer, expr_pool, expr_pool, copy_demoduler_t>;
     using unit_queries_t = std::deque<pud_mhq_head_id>;
-    using modules_t = pud_modules<pud_module>;
+    using module_registry_t = pud_module_registry<pud_module>;
     using replayer_t =
-        pud_replayer<modules_t, modules_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
-    using mhws_t = pud_mhws<replayer_t, modules_t, modules_t, modules_t>;
+        pud_replayer<module_registry_t, module_registry_t, expr_pool, bind_map_factory_t, cycle_detector_factory_t, unifier_factory_t>;
+    using mhws_t = pud_mhws<replayer_t, module_registry_t, module_registry_t, module_registry_t>;
     using mhcs_t =
-        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, modules_t, modules_t, modules_t>;
-    using mhq_t = pud_mhq<replayer_t, modules_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
+        pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t, module_registry_t>;
+    using mhq_t = pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
 
     static constexpr pud_module_id k_module = 0;
     static constexpr pud_module_id k_other_module = 1;
@@ -51,7 +51,7 @@ struct PudSearchStackIntegrationTest : public ::testing::Test {
     unifier_factory_t unifiers{globalize, exprs, global_functor_ids};
     normalizer_factory_t normalizers{globalize, exprs, exprs, copy_demoduler};
     std::deque<pud_module> module_data;
-    modules_t modules;
+    module_registry_t modules;
     unit_queries_t unit_queries;
     replayer_t replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
     mhws_t mhws{replayer, modules, modules, modules};

@@ -25,10 +25,10 @@ struct MockGetQueryCandidates {
 struct MockGetCandidatePath {
     MOCK_METHOD(const std::vector<pud_global_node_id>&, path, (pud_mhcs_head_id));
 };
-struct MockAcceptCandidate {
+struct MockBuildInference {
     MOCK_METHOD(
         pud_inference,
-        accept,
+        build,
         (pud_global_node_id,
          pud_body_goal_id,
          const pud_ubs_state&,
@@ -39,15 +39,15 @@ struct MockAcceptCandidate {
 
 using test_resolver_t = pud_resolver<
     NiceMock<MockGetActiveState>, NiceMock<MockGetNodeGoals>, NiceMock<MockGetQueryCandidates>,
-    NiceMock<MockGetCandidatePath>, NiceMock<MockAcceptCandidate>>;
+    NiceMock<MockGetCandidatePath>, NiceMock<MockBuildInference>>;
 
 struct PudResolverTest : public ::testing::Test {
     NiceMock<MockGetActiveState> states;
     NiceMock<MockGetNodeGoals> goals;
     NiceMock<MockGetQueryCandidates> candidates;
     NiceMock<MockGetCandidatePath> paths;
-    NiceMock<MockAcceptCandidate> acceptor;
-    test_resolver_t resolver{states, goals, candidates, paths, acceptor};
+    NiceMock<MockBuildInference> inference_builder;
+    test_resolver_t resolver{states, goals, candidates, paths, inference_builder};
     expr goal{expr::functor{1, {}}};
     pud_goal_list leaf_goals{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(2, &goal), .next_id = 3};
     pud_active_state state{
@@ -70,9 +70,9 @@ struct PudResolverTest : public ::testing::Test {
 
 TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrderAtTheLeafsLvc) {
     InSequence in_order;
-    EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
         .WillOnce(Return(first_delta));
-    EXPECT_CALL(acceptor, accept(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
         .WillOnce(Return(second_delta));
     EXPECT_EQ(resolver.resolve(pud_test_node(5), 2), (std::vector<pud_inference>{first_delta, second_delta}));
 }

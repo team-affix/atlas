@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "pud_test_node.hpp"
-#include "infrastructure/pud_modules.hpp"
+#include "infrastructure/pud_module_registry.hpp"
 #include "value_objects/expr.hpp"
 
 using ::testing::ElementsAre;
@@ -31,8 +31,8 @@ struct MockModuleData {
     MOCK_METHOD(uint32_t, append_functor_name, (const std::string&));
 };
 
-struct PudModulesTest : public ::testing::Test {
-    pud_modules<NiceMock<MockModuleData>> modules;
+struct PudModuleRegistryTest : public ::testing::Test {
+    pud_module_registry<NiceMock<MockModuleData>> modules;
     expr head{expr::functor{1, {}}};
     rule axiom{&head, {}, 0};
     pud_inference inference{.parent = 0, .call_site = 0, .substitutions = {}, .body_goals = {}, .var_count = 0};
@@ -41,7 +41,7 @@ struct PudModulesTest : public ::testing::Test {
 
 }
 
-TEST_F(PudModulesTest, AModulesAxiomsAreItsFirstNodes) {
+TEST_F(PudModuleRegistryTest, AModulesAxiomsAreItsFirstNodes) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -56,7 +56,7 @@ TEST_F(PudModulesTest, AModulesAxiomsAreItsFirstNodes) {
             pud_global_node_id{.module = 10, .node = 2}));
 }
 
-TEST_F(PudModulesTest, AModuleWithoutDependenciesSeesOnlyItsOwnAxioms) {
+TEST_F(PudModuleRegistryTest, AModuleWithoutDependenciesSeesOnlyItsOwnAxioms) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -68,7 +68,7 @@ TEST_F(PudModulesTest, AModuleWithoutDependenciesSeesOnlyItsOwnAxioms) {
         ElementsAre(pud_global_node_id{.module = 10, .node = 0}, pud_global_node_id{.module = 10, .node = 1}));
 }
 
-TEST_F(PudModulesTest, AModuleSeesItsDependenciesAxiomsBeforeItsOwn) {
+TEST_F(PudModuleRegistryTest, AModuleSeesItsDependenciesAxiomsBeforeItsOwn) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -90,7 +90,7 @@ TEST_F(PudModulesTest, AModuleSeesItsDependenciesAxiomsBeforeItsOwn) {
     EXPECT_THAT(modules.list_axioms(20), ElementsAre(pud_global_node_id{.module = 20, .node = 0}));
 }
 
-TEST_F(PudModulesTest, ADependencyNeverSeesItsDependentsAxioms) {
+TEST_F(PudModuleRegistryTest, ADependencyNeverSeesItsDependentsAxioms) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -106,7 +106,7 @@ TEST_F(PudModulesTest, ADependencyNeverSeesItsDependentsAxioms) {
     EXPECT_THAT(modules.list_visible_axioms(10), ElementsAre(pud_global_node_id{.module = 10, .node = 0}));
 }
 
-TEST_F(PudModulesTest, IndirectDependenciesAreSeenDependenciesFirst) {
+TEST_F(PudModuleRegistryTest, IndirectDependenciesAreSeenDependenciesFirst) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -133,7 +133,7 @@ TEST_F(PudModulesTest, IndirectDependenciesAreSeenDependenciesFirst) {
             pud_global_node_id{.module = 30, .node = 0}));
 }
 
-TEST_F(PudModulesTest, ASharedDependencyIsSeenOnce) {
+TEST_F(PudModuleRegistryTest, ASharedDependencyIsSeenOnce) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -167,7 +167,7 @@ TEST_F(PudModulesTest, ASharedDependencyIsSeenOnce) {
             pud_global_node_id{.module = 40, .node = 0}));
 }
 
-TEST_F(PudModulesTest, SiblingModulesDoNotSeeEachOther) {
+TEST_F(PudModuleRegistryTest, SiblingModulesDoNotSeeEachOther) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -194,7 +194,7 @@ TEST_F(PudModulesTest, SiblingModulesDoNotSeeEachOther) {
         ElementsAre(pud_global_node_id{.module = 10, .node = 0}, pud_global_node_id{.module = 30, .node = 0}));
 }
 
-TEST_F(PudModulesTest, AModuleWithNoAxiomsSeesItsDependencies) {
+TEST_F(PudModuleRegistryTest, AModuleWithNoAxiomsSeesItsDependencies) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -211,7 +211,7 @@ TEST_F(PudModulesTest, AModuleWithNoAxiomsSeesItsDependencies) {
     EXPECT_THAT(modules.list_visible_axioms(20), ElementsAre(pud_global_node_id{.module = 10, .node = 0}));
 }
 
-TEST_F(PudModulesTest, RegisteringAModuleBeforeItsDependencyFails) {
+TEST_F(PudModuleRegistryTest, RegisteringAModuleBeforeItsDependencyFails) {
     NiceMock<MockModuleData> dependent_data;
     std::vector<pud_module_id> dependent_dependencies{10};
     ON_CALL(dependent_data, get_module_id()).WillByDefault(Return(20));
@@ -220,7 +220,7 @@ TEST_F(PudModulesTest, RegisteringAModuleBeforeItsDependencyFails) {
     EXPECT_THROW(modules.register_module(dependent_data), std::logic_error);
 }
 
-TEST_F(PudModulesTest, RegisteringAModuleTwiceFails) {
+TEST_F(PudModuleRegistryTest, RegisteringAModuleTwiceFails) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -230,7 +230,7 @@ TEST_F(PudModulesTest, RegisteringAModuleTwiceFails) {
     EXPECT_THROW(modules.register_module(base_data), std::logic_error);
 }
 
-TEST_F(PudModulesTest, AnInferenceIsStoredInTheNamedModuleAndNamedThere) {
+TEST_F(PudModuleRegistryTest, AnInferenceIsStoredInTheNamedModuleAndNamedThere) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -248,7 +248,7 @@ TEST_F(PudModulesTest, AnInferenceIsStoredInTheNamedModuleAndNamedThere) {
     EXPECT_EQ(modules.store_inference(20, inference), (pud_global_node_id{.module = 20, .node = 1}));
 }
 
-TEST_F(PudModulesTest, EveryLookupReachesTheNodesOwnModuleByItsLocalId) {
+TEST_F(PudModuleRegistryTest, EveryLookupReachesTheNodesOwnModuleByItsLocalId) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -275,7 +275,7 @@ TEST_F(PudModulesTest, EveryLookupReachesTheNodesOwnModuleByItsLocalId) {
     modules.mark_refuted(pud_global_node_id{.module = 20, .node = 3});
 }
 
-TEST_F(PudModulesTest, AParentIsInItsChildsModule) {
+TEST_F(PudModuleRegistryTest, AParentIsInItsChildsModule) {
     NiceMock<MockModuleData> other_data;
     std::vector<pud_module_id> other_dependencies{};
     ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
@@ -288,7 +288,7 @@ TEST_F(PudModulesTest, AParentIsInItsChildsModule) {
         (std::optional<pud_global_node_id>{pud_global_node_id{.module = 20, .node = 1}}));
 }
 
-TEST_F(PudModulesTest, AnAxiomHasNoParent) {
+TEST_F(PudModuleRegistryTest, AnAxiomHasNoParent) {
     NiceMock<MockModuleData> other_data;
     std::vector<pud_module_id> other_dependencies{};
     ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
@@ -299,7 +299,7 @@ TEST_F(PudModulesTest, AnAxiomHasNoParent) {
     EXPECT_EQ(modules.get_parent(pud_global_node_id{.module = 20, .node = 0}), std::nullopt);
 }
 
-TEST_F(PudModulesTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
+TEST_F(PudModuleRegistryTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
@@ -318,7 +318,7 @@ TEST_F(PudModulesTest, TheSameLocalIdInTwoModulesNamesTwoNodes) {
     EXPECT_FALSE(modules.is_refuted(pud_global_node_id{.module = 20, .node = 0}));
 }
 
-TEST_F(PudModulesTest, AFunctorNameIsAppendedToTheNamedModule) {
+TEST_F(PudModuleRegistryTest, AFunctorNameIsAppendedToTheNamedModule) {
     NiceMock<MockModuleData> base_data;
     std::vector<pud_module_id> base_dependencies{};
     ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));

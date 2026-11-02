@@ -15,17 +15,17 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-// The acceptor over real node stores and the real replayer and term machinery. Every root is the one
+// The inference builder over real node stores and the real replayer and term machinery. Every root is the one
 // axiom of its own module and its children are stored straight into that module, so a test states
 // exactly what each node adds. Every node is activated as it is made, which records its goals.
-struct PudAcceptorIntegrationTest : public ::testing::Test {
+struct PudInferenceBuilderIntegrationTest : public ::testing::Test {
     using manifest_t = pud_manifest<pud_module, expr_pool>;
 
     test_functors functors;
     expr_pool exprs;
     std::deque<pud_module> module_data;
     manifest_t manifest{exprs};
-    manifest_t::acceptor_t& acceptor = manifest.acceptor_;
+    manifest_t::inference_builder_t& builder = manifest.inference_builder_;
     pud_ubs_state empty_state;
     pud_global_node_id caller = pud_test_node(99);
     pud_body_goal_id call_site = 0;
@@ -57,13 +57,13 @@ struct PudAcceptorIntegrationTest : public ::testing::Test {
             manifest.functor_linker_.link(*caller_storage);
             manifest.modules_.register_module(*caller_storage);
         }
-        return acceptor.accept(caller_node, site, state, acceptor_lvc, goal, path);
+        return builder.build(caller_node, site, state, acceptor_lvc, goal, path);
     }
 private:
     std::optional<pud_module> caller_storage;
 };
 
-TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
+TEST_F(PudInferenceBuilderIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -78,7 +78,7 @@ TEST_F(PudAcceptorIntegrationTest, FactCandidateInstantiatesTheGoalsVariable) {
     EXPECT_EQ(delta.var_count, 0u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitution) {
+TEST_F(PudInferenceBuilderIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitution) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -93,7 +93,7 @@ TEST_F(PudAcceptorIntegrationTest, GroundGoalAgainstAMatchingFactNeedsNoSubstitu
     EXPECT_EQ(delta.var_count, 0u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, RuleCandidateAddsItsBodyOverFreshVariables) {
+TEST_F(PudInferenceBuilderIntegrationTest, RuleCandidateAddsItsBodyOverFreshVariables) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -108,7 +108,7 @@ TEST_F(PudAcceptorIntegrationTest, RuleCandidateAddsItsBodyOverFreshVariables) {
     EXPECT_EQ(delta.var_count, 1u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVariableCount) {
+TEST_F(PudInferenceBuilderIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVariableCount) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -126,7 +126,7 @@ TEST_F(PudAcceptorIntegrationTest, FreshVariablesAreNumberedFromTheAcceptorsVari
     EXPECT_EQ(delta.var_count, 2u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedAway) {
+TEST_F(PudInferenceBuilderIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedAway) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -141,7 +141,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidateVariableBoundToTheGoalIsSubstitutedA
     EXPECT_EQ(delta.var_count, 0u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAVariableSubstitution) {
+TEST_F(PudInferenceBuilderIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAVariableSubstitution) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -155,7 +155,7 @@ TEST_F(PudAcceptorIntegrationTest, AcceptorVariablesMergedByTheCandidateBecomeAV
     EXPECT_EQ(delta.var_count, 0u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
+TEST_F(PudInferenceBuilderIntegrationTest, AcceptorsBindingsAreRespected) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -172,7 +172,7 @@ TEST_F(PudAcceptorIntegrationTest, AcceptorsBindingsAreRespected) {
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 1, .value = var(0)}));
 }
 
-TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) {
+TEST_F(PudInferenceBuilderIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -185,7 +185,7 @@ TEST_F(PudAcceptorIntegrationTest, UntouchedAcceptorVariablesAreNotSubstituted) 
     EXPECT_THAT(delta.substitutions, ElementsAre(pud_substitution{.var_idx = 2, .value = atom("a")}));
 }
 
-TEST_F(PudAcceptorIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
+TEST_F(PudInferenceBuilderIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -210,7 +210,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidateDeepInATreeReplaysItsWholePath) {
     EXPECT_EQ(delta.var_count, 1u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal) {
+TEST_F(PudInferenceBuilderIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal) {
     const expr* a = atom("a");
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
@@ -235,7 +235,7 @@ TEST_F(PudAcceptorIntegrationTest, CandidatesClosedCallSiteIsNotAddedAsABodyGoal
     EXPECT_THAT(delta.body_goals, ElementsAre(functor("r", {atom("a")})));
 }
 
-TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently) {
+TEST_F(PudInferenceBuilderIntegrationTest, SharedFreshVariablesAreTranslatedConsistently) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,
@@ -256,7 +256,7 @@ TEST_F(PudAcceptorIntegrationTest, SharedFreshVariablesAreTranslatedConsistently
     EXPECT_EQ(delta.var_count, 0u);
 }
 
-TEST_F(PudAcceptorIntegrationTest, CallerVarsAreExportedWithoutBeingLookedUp) {
+TEST_F(PudInferenceBuilderIntegrationTest, CallerVarsAreExportedWithoutBeingLookedUp) {
     const pud_module_id module = module_data.size();
     module_data.emplace_back(
         module,

@@ -1,5 +1,5 @@
-#ifndef PUD_EXPORTER_HPP
-#define PUD_EXPORTER_HPP
+#ifndef PUD_TERM_EXPORTER_HPP
+#define PUD_TERM_EXPORTER_HPP
 
 #include <cstdint>
 #include <functional>
@@ -15,8 +15,8 @@
 #include "value_objects/ubs_class.hpp"
 
 template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, typename IRelinkFunctor>
-struct pud_exporter {
-    pud_exporter(
+struct pud_term_exporter {
+    pud_term_exporter(
         IGlobalize& globalize,
         IMakeFunctor& make_functor,
         IMakeVar& make_var,
@@ -42,12 +42,12 @@ private:
     std::unordered_map<moduled_expr, const expr*, moduled_expr_hash> exported_;
 };
 
-#define PUD_EXPORTER_TEMPLATE \
+#define PUD_TERM_EXPORTER_TEMPLATE \
     template<typename IGlobalize, typename IMakeFunctor, typename IMakeVar, typename IFind, typename IRelinkFunctor>
-#define PUD_EXPORTER pud_exporter<IGlobalize, IMakeFunctor, IMakeVar, IFind, IRelinkFunctor>
+#define PUD_TERM_EXPORTER pud_term_exporter<IGlobalize, IMakeFunctor, IMakeVar, IFind, IRelinkFunctor>
 
-PUD_EXPORTER_TEMPLATE
-PUD_EXPORTER::pud_exporter(
+PUD_TERM_EXPORTER_TEMPLATE
+PUD_TERM_EXPORTER::pud_term_exporter(
     IGlobalize& globalize,
     IMakeFunctor& make_functor,
     IMakeVar& make_var,
@@ -64,8 +64,8 @@ PUD_EXPORTER::pud_exporter(
     , translations_(translations)
     , exported_() {}
 
-PUD_EXPORTER_TEMPLATE
-const expr* PUD_EXPORTER::export_expr(moduled_expr source, pud_module_id accepting_module) {
+PUD_TERM_EXPORTER_TEMPLATE
+const expr* PUD_TERM_EXPORTER::export_expr(moduled_expr source, pud_module_id accepting_module) {
     std::vector<frame> pending;
     std::optional<const expr*> finished = enter(source, pending);
     while (!pending.empty()) {
@@ -88,8 +88,8 @@ const expr* PUD_EXPORTER::export_expr(moduled_expr source, pud_module_id accepti
     return finished.value();
 }
 
-PUD_EXPORTER_TEMPLATE
-std::optional<const expr*> PUD_EXPORTER::enter(moduled_expr framed, std::vector<frame>& pending) {
+PUD_TERM_EXPORTER_TEMPLATE
+std::optional<const expr*> PUD_TERM_EXPORTER::enter(moduled_expr framed, std::vector<frame>& pending) {
     if (const expr::var* var = std::get_if<expr::var>(&framed.skeleton->content)) {
         const ubs_class var_class = find_.find(globalize_.globalize(framed.frame_offset, var->index));
         if (var_class.rep < caller_lvc_)
@@ -108,7 +108,7 @@ std::optional<const expr*> PUD_EXPORTER::enter(moduled_expr framed, std::vector<
     return std::nullopt;
 }
 
-#undef PUD_EXPORTER
-#undef PUD_EXPORTER_TEMPLATE
+#undef PUD_TERM_EXPORTER
+#undef PUD_TERM_EXPORTER_TEMPLATE
 
 #endif

@@ -7,7 +7,7 @@
 #include "value_objects/pud_unfold_outcome.hpp"
 
 // Unfolds one leaf on one goal and carries the change into the frontier and the focus set, mirroring
-// what pud_module_registrar does for a registered module.
+// what pud_module_loader does for a registered module.
 template<typename IUnfold, typename IApplyUnfold, typename IExtendFocus, typename IContainsFocusNode>
 struct pud_unfold_applier {
     pud_unfold_applier(

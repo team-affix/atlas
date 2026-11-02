@@ -17,37 +17,37 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , bind_map_factory_()
     , modules_()
     , functor_relinker_(link_table_, link_table_, symbol_table_, modules_, link_table_)
-    , exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
+    , term_exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
-    , goal_resolver_()
-    , initial_goal_opener_()
+    , child_goal_list_builder_()
+    , root_goal_list_builder_()
     , live_child_counts_()
     , refutation_propagator_(modules_, live_child_counts_, modules_)
     , unit_queries_()
     , replayer_(modules_, modules_, expr_pool, bind_map_factory_, cycle_detector_factory_, unifier_factory_)
     , mhws_(replayer_, modules_, modules_, modules_)
-    , witness_log_(mhws_)
-    , mhcs_(replayer_, witness_log_, witness_log_, witness_log_, witness_log_, witness_log_, modules_, modules_, modules_)
-    , candidate_witness_index_(mhcs_, witness_log_)
+    , witness_search_recorder_(mhws_)
+    , mhcs_(replayer_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, modules_, modules_, modules_)
+    , candidate_witness_index_(mhcs_, witness_search_recorder_)
     , mhq_(replayer_, modules_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, unit_queries_)
     , active_states_()
     , query_holders_()
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, initial_goal_opener_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
           query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, goal_resolver_, node_goals_,
+          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
           node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
-    , acceptor_(
+    , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
-          unifier_factory_, exporter_factory_)
-    , resolver_(active_states_, node_goals_, mhq_, mhcs_, acceptor_)
+          unifier_factory_, term_exporter_factory_)
+    , resolver_(active_states_, node_goals_, mhq_, mhcs_, inference_builder_)
     , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_)
@@ -61,7 +61,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unfold_allower_(node_depth_counter_, node_goals_, max_node_depth, max_open_goals)
     , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
     , ring_builder_(
-          mhq_, candidate_witness_index_, witness_log_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
+          mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
     , non_conjecture_round_robin_()
     , conjecture_round_robin_()
     , unfold_applier_(unfolder_, frontier_, focus_extender_, focus_set_)
@@ -81,6 +81,6 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , search_stepper_(
           solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,
           max_unfolds)
-    , module_registrar_(functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_) {
+    , module_loader_(functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_) {
     focus_set_.insert(focus_axiom);
 }

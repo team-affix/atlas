@@ -1,5 +1,5 @@
-#ifndef PUD_MODULES_HPP
-#define PUD_MODULES_HPP
+#ifndef PUD_MODULE_REGISTRY_HPP
+#define PUD_MODULE_REGISTRY_HPP
 
 #include <cstdint>
 #include <optional>
@@ -15,8 +15,8 @@
 #include "debug_assert.hpp"
 
 template<typename IModule>
-struct pud_modules {
-    pud_modules();
+struct pud_module_registry {
+    pud_module_registry();
     void register_module(IModule& data);
     const std::vector<pud_global_node_id>& list_axioms(pud_module_id module) const;
     const std::vector<pud_global_node_id>& list_visible_axioms(pud_module_id module) const;
@@ -45,11 +45,11 @@ private:
 };
 
 template<typename IModule>
-pud_modules<IModule>::pud_modules()
+pud_module_registry<IModule>::pud_module_registry()
     : modules_() {}
 
 template<typename IModule>
-void pud_modules<IModule>::register_module(IModule& data) {
+void pud_module_registry<IModule>::register_module(IModule& data) {
     const pud_module_id module = data.get_module_id();
     DEBUG_ASSERT(!modules_.contains(module));
     for (pud_module_id dependency : data.get_dependencies())
@@ -70,42 +70,42 @@ void pud_modules<IModule>::register_module(IModule& data) {
 }
 
 template<typename IModule>
-const std::vector<pud_global_node_id>& pud_modules<IModule>::list_axioms(pud_module_id module) const {
+const std::vector<pud_global_node_id>& pud_module_registry<IModule>::list_axioms(pud_module_id module) const {
     return modules_.at(module).axioms;
 }
 
 template<typename IModule>
-const std::vector<pud_global_node_id>& pud_modules<IModule>::list_visible_axioms(pud_module_id module) const {
+const std::vector<pud_global_node_id>& pud_module_registry<IModule>::list_visible_axioms(pud_module_id module) const {
     return modules_.at(module).visible_axioms;
 }
 
 template<typename IModule>
-pud_global_node_id pud_modules<IModule>::store_inference(pud_module_id module, pud_inference inference) {
+pud_global_node_id pud_module_registry<IModule>::store_inference(pud_module_id module, pud_inference inference) {
     return pud_global_node_id{.module = module, .node = modules_.at(module).data->store_inference(std::move(inference))};
 }
 
 template<typename IModule>
-void pud_modules<IModule>::mark_refuted(pud_global_node_id node) {
+void pud_module_registry<IModule>::mark_refuted(pud_global_node_id node) {
     modules_.at(node.module).data->mark_refuted(node.node);
 }
 
 template<typename IModule>
-const rule& pud_modules<IModule>::get_axiom(pud_global_node_id axiom) const {
+const rule& pud_module_registry<IModule>::get_axiom(pud_global_node_id axiom) const {
     return modules_.at(axiom.module).data->get_axiom(axiom.node);
 }
 
 template<typename IModule>
-const pud_inference& pud_modules<IModule>::get_inference(pud_global_node_id inference) const {
+const pud_inference& pud_module_registry<IModule>::get_inference(pud_global_node_id inference) const {
     return modules_.at(inference.module).data->get_inference(inference.node);
 }
 
 template<typename IModule>
-uint32_t pud_modules<IModule>::append_functor_name(pud_module_id module, const std::string& name) {
+uint32_t pud_module_registry<IModule>::append_functor_name(pud_module_id module, const std::string& name) {
     return modules_.at(module).data->append_functor_name(name);
 }
 
 template<typename IModule>
-std::optional<pud_global_node_id> pud_modules<IModule>::get_parent(pud_global_node_id node) const {
+std::optional<pud_global_node_id> pud_module_registry<IModule>::get_parent(pud_global_node_id node) const {
     const std::optional<pud_node_id> parent = modules_.at(node.module).data->get_parent(node.node);
     if (!parent.has_value())
         return std::nullopt;
@@ -113,22 +113,22 @@ std::optional<pud_global_node_id> pud_modules<IModule>::get_parent(pud_global_no
 }
 
 template<typename IModule>
-const std::vector<pud_node_id>& pud_modules<IModule>::get_children(pud_global_node_id node) const {
+const std::vector<pud_node_id>& pud_module_registry<IModule>::get_children(pud_global_node_id node) const {
     return modules_.at(node.module).data->get_children(node.node);
 }
 
 template<typename IModule>
-bool pud_modules<IModule>::is_leaf(pud_global_node_id node) const {
+bool pud_module_registry<IModule>::is_leaf(pud_global_node_id node) const {
     return modules_.at(node.module).data->is_leaf(node.node);
 }
 
 template<typename IModule>
-bool pud_modules<IModule>::is_refuted(pud_global_node_id node) const {
+bool pud_module_registry<IModule>::is_refuted(pud_global_node_id node) const {
     return modules_.at(node.module).data->is_refuted(node.node);
 }
 
 template<typename IModule>
-void pud_modules<IModule>::visit_dependencies(
+void pud_module_registry<IModule>::visit_dependencies(
     pud_module_id module,
     std::unordered_set<pud_module_id>& visited,
     std::vector<pud_module_id>& dependencies_first) const {

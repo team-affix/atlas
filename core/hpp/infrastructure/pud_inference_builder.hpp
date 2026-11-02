@@ -1,5 +1,5 @@
-#ifndef PUD_ACCEPTOR_HPP
-#define PUD_ACCEPTOR_HPP
+#ifndef PUD_INFERENCE_BUILDER_HPP
+#define PUD_INFERENCE_BUILDER_HPP
 
 #include <cstdint>
 #include <optional>
@@ -28,8 +28,8 @@ template<
     typename IMakeCycleDetector,
     typename IMakeUnifier,
     typename IMakeExporter>
-struct pud_acceptor {
-    pud_acceptor(
+struct pud_inference_builder {
+    pud_inference_builder(
         IGetNodeGoals& get_node_goals,
         IGetAxiom& get_axiom,
         IGetInference& get_inference,
@@ -39,7 +39,7 @@ struct pud_acceptor {
         IMakeCycleDetector& make_cycle_detector,
         IMakeUnifier& make_unifier,
         IMakeExporter& make_exporter);
-    pud_inference accept(
+    pud_inference build(
         pud_global_node_id acceptor,
         pud_body_goal_id call_site,
         const pud_ubs_state& acceptor_ubs_state,
@@ -63,16 +63,16 @@ private:
     IMakeExporter& make_exporter_;
 };
 
-#define PUD_ACCEPTOR_TEMPLATE                                                              \
+#define PUD_INFERENCE_BUILDER_TEMPLATE                                                              \
     template<typename IGetNodeGoals, typename IGetAxiom, typename IGetInference, typename IMakeVar, \
              typename IMakeFunctor, typename IMakeBindMap, typename IMakeCycleDetector, typename IMakeUnifier,    \
              typename IMakeExporter>
-#define PUD_ACCEPTOR                                                                       \
-    pud_acceptor<IGetNodeGoals, IGetAxiom, IGetInference, IMakeVar, IMakeFunctor, IMakeBindMap,          \
+#define PUD_INFERENCE_BUILDER                                                                       \
+    pud_inference_builder<IGetNodeGoals, IGetAxiom, IGetInference, IMakeVar, IMakeFunctor, IMakeBindMap,          \
         IMakeCycleDetector, IMakeUnifier, IMakeExporter>
 
-PUD_ACCEPTOR_TEMPLATE
-PUD_ACCEPTOR::pud_acceptor(
+PUD_INFERENCE_BUILDER_TEMPLATE
+PUD_INFERENCE_BUILDER::pud_inference_builder(
     IGetNodeGoals& get_node_goals,
     IGetAxiom& get_axiom,
     IGetInference& get_inference,
@@ -92,8 +92,8 @@ PUD_ACCEPTOR::pud_acceptor(
     , make_unifier_(make_unifier)
     , make_exporter_(make_exporter) {}
 
-PUD_ACCEPTOR_TEMPLATE
-pud_inference PUD_ACCEPTOR::accept(
+PUD_INFERENCE_BUILDER_TEMPLATE
+pud_inference PUD_INFERENCE_BUILDER::build(
     pud_global_node_id acceptor,
     pud_body_goal_id call_site,
     const pud_ubs_state& acceptor_ubs_state,
@@ -149,8 +149,8 @@ pud_inference PUD_ACCEPTOR::accept(
     return inference;
 }
 
-PUD_ACCEPTOR_TEMPLATE
-void PUD_ACCEPTOR::note_caller_classes(
+PUD_INFERENCE_BUILDER_TEMPLATE
+void PUD_INFERENCE_BUILDER::note_caller_classes(
     const std::optional<std::vector<ubs_class>>& edited,
     uint32_t acceptor_lvc,
     std::set<uint32_t>& touched_caller_reps) {
@@ -165,7 +165,7 @@ void PUD_ACCEPTOR::note_caller_classes(
     }
 }
 
-#undef PUD_ACCEPTOR
-#undef PUD_ACCEPTOR_TEMPLATE
+#undef PUD_INFERENCE_BUILDER
+#undef PUD_INFERENCE_BUILDER_TEMPLATE
 
 #endif

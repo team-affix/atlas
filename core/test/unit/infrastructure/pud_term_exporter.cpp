@@ -5,7 +5,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_exporter.hpp"
+#include "infrastructure/pud_term_exporter.hpp"
 #include "pud_identity_demoduler.hpp"
 #include "value_objects/expr.hpp"
 #include "pud_moduled_functor_helper.hpp"
@@ -43,11 +43,11 @@ ubs_class singleton(uint32_t var) {
     return ubs_class{.root = var, .size = 1, .rep = var, .value = std::nullopt};
 }
 
-using test_exporter_t = pud_exporter<
+using test_exporter_t = pud_term_exporter<
     NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>,
     pud_identity_functor_relinker>;
 
-struct PudExporterTest : public ::testing::Test {
+struct PudTermExporterTest : public ::testing::Test {
     std::deque<expr> owned;
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockMakeFunctor> make_functor;
@@ -60,7 +60,7 @@ struct PudExporterTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudExporterTest::var));
+        ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudTermExporterTest::var));
     }
 
     const expr* var(uint32_t index) {
@@ -76,7 +76,7 @@ struct PudExporterTest : public ::testing::Test {
 
 }
 
-TEST_F(PudExporterTest, AClassRepresentedBelowTheLvcIsTheCallersVariable) {
+TEST_F(PudTermExporterTest, AClassRepresentedBelowTheLvcIsTheCallersVariable) {
     const expr* caller_var = var(3);
     ON_CALL(find, find(14)).WillByDefault(Return(ubs_class{.root = 14, .size = 2, .rep = 3, .value = std::nullopt}));
     EXPECT_CALL(make_var, make_var(3u)).WillOnce(Return(caller_var));
@@ -84,7 +84,7 @@ TEST_F(PudExporterTest, AClassRepresentedBelowTheLvcIsTheCallersVariable) {
     EXPECT_THAT(translations, IsEmpty());
 }
 
-TEST_F(PudExporterTest, ACallerClassIsKeptEvenWhenBound) {
+TEST_F(PudTermExporterTest, ACallerClassIsKeptEvenWhenBound) {
     const expr* caller_var = var(3);
     ON_CALL(find, find(3)).WillByDefault(Return(ubs_class{.root = 3, .size = 1, .rep = 3, .value = pud_test_moduled_functor(functor(1, {}), 0)}));
     EXPECT_CALL(make_var, make_var(3u)).WillOnce(Return(caller_var));
@@ -92,14 +92,14 @@ TEST_F(PudExporterTest, ACallerClassIsKeptEvenWhenBound) {
     EXPECT_EQ(exporter.export_expr({var(3), 0, 0}, 0), caller_var);
 }
 
-TEST_F(PudExporterTest, UnboundCalleeClassesAreNumberedDenselyFromTheLvcInFirstMetOrder) {
+TEST_F(PudTermExporterTest, UnboundCalleeClassesAreNumberedDenselyFromTheLvcInFirstMetOrder) {
     EXPECT_CALL(make_var, make_var(10u)).Times(2);
     EXPECT_CALL(make_var, make_var(11u)).Times(1);
     exporter.export_expr({functor(1, {var(7), var(4), var(7)}), 10, 0}, 0);
     EXPECT_THAT(translations, UnorderedElementsAre(Pair(17u, 10u), Pair(14u, 11u)));
 }
 
-TEST_F(PudExporterTest, AFreshVariableIsKeptForItsClassAcrossExports) {
+TEST_F(PudTermExporterTest, AFreshVariableIsKeptForItsClassAcrossExports) {
     ON_CALL(find, find(16)).WillByDefault(Return(ubs_class{.root = 15, .size = 2, .rep = 15, .value = std::nullopt}));
     EXPECT_CALL(make_var, make_var(10u)).Times(2);
     exporter.export_expr({var(5), 10, 0}, 0);
@@ -107,7 +107,7 @@ TEST_F(PudExporterTest, AFreshVariableIsKeptForItsClassAcrossExports) {
     EXPECT_THAT(translations, UnorderedElementsAre(Pair(15u, 10u)));
 }
 
-TEST_F(PudExporterTest, ATranslationAlreadyGivenIsReusedAndNumberingContinuesAfterIt) {
+TEST_F(PudTermExporterTest, ATranslationAlreadyGivenIsReusedAndNumberingContinuesAfterIt) {
     translations.emplace(14, 10);
     EXPECT_CALL(make_var, make_var(10u));
     EXPECT_CALL(make_var, make_var(11u));
@@ -115,7 +115,7 @@ TEST_F(PudExporterTest, ATranslationAlreadyGivenIsReusedAndNumberingContinuesAft
     EXPECT_THAT(translations, UnorderedElementsAre(Pair(14u, 10u), Pair(15u, 11u)));
 }
 
-TEST_F(PudExporterTest, ABoundCalleeClassIsReplacedByItsValueReadInItsOwnFrame) {
+TEST_F(PudTermExporterTest, ABoundCalleeClassIsReplacedByItsValueReadInItsOwnFrame) {
     const expr* bound_shape = functor(2, {var(5)});
     const expr* fresh = var(10);
     const expr* rebuilt = functor(2, {fresh});
@@ -128,7 +128,7 @@ TEST_F(PudExporterTest, ABoundCalleeClassIsReplacedByItsValueReadInItsOwnFrame) 
     EXPECT_EQ(exporter.export_expr({var(2), 10, 0}, 0), rebuilt);
 }
 
-TEST_F(PudExporterTest, ASharedSubtermIsRebuiltOnceAcrossExports) {
+TEST_F(PudTermExporterTest, ASharedSubtermIsRebuiltOnceAcrossExports) {
     const expr* shared = functor(2, {});
     const expr* rebuilt_shared = functor(2, {});
     EXPECT_CALL(make_functor, make_functor(2u, _)).WillOnce(Return(rebuilt_shared));
@@ -140,10 +140,10 @@ struct MockRelinkFunctor {
     MOCK_METHOD(uint32_t, relink, (pud_module_id, uint32_t, pud_module_id));
 };
 
-using translating_exporter_t = pud_exporter<
+using translating_exporter_t = pud_term_exporter<
     NiceMock<MockGlobalize>, NiceMock<MockMakeFunctor>, NiceMock<MockMakeVar>, NiceMock<MockFind>, MockRelinkFunctor>;
 
-struct PudExporterTranslationTest : public ::testing::Test {
+struct PudTermExporterTranslationTest : public ::testing::Test {
     std::deque<expr> owned;
     NiceMock<MockGlobalize> globalize;
     NiceMock<MockMakeFunctor> make_functor;
@@ -166,11 +166,11 @@ struct PudExporterTranslationTest : public ::testing::Test {
     void SetUp() override {
         ON_CALL(globalize, globalize(_, _)).WillByDefault(Invoke(&offset_index));
         ON_CALL(find, find(_)).WillByDefault(Invoke(&singleton));
-        ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudExporterTranslationTest::var));
+        ON_CALL(make_var, make_var(_)).WillByDefault(Invoke(this, &PudTermExporterTranslationTest::var));
     }
 };
 
-TEST_F(PudExporterTranslationTest, EachFunctorNodeIsTranslatedAndAVariableIsNot) {
+TEST_F(PudTermExporterTranslationTest, EachFunctorNodeIsTranslatedAndAVariableIsNot) {
     const expr* variable = var(0);
     const expr* inner = functor(6, {variable});
     const expr* right = functor(7, {});
@@ -191,7 +191,7 @@ TEST_F(PudExporterTranslationTest, EachFunctorNodeIsTranslatedAndAVariableIsNot)
     EXPECT_EQ(exporter.export_expr(moduled_expr{term, 0, 3}, 8), translated);
 }
 
-TEST_F(PudExporterTranslationTest, ASecondExportIsASeparateWalk) {
+TEST_F(PudTermExporterTranslationTest, ASecondExportIsASeparateWalk) {
     const expr* first = functor(5, {});
     const expr* second = functor(5, {});
     const expr* translated = functor(15, {});
@@ -201,7 +201,7 @@ TEST_F(PudExporterTranslationTest, ASecondExportIsASeparateWalk) {
     EXPECT_EQ(exporter.export_expr(moduled_expr{second, 0, 3}, 8), translated);
 }
 
-TEST_F(PudExporterTranslationTest, AVariableIsNotRelinked) {
+TEST_F(PudTermExporterTranslationTest, AVariableIsNotRelinked) {
     EXPECT_CALL(relinker, relink(_, _, _)).Times(0);
     EXPECT_CALL(make_var, make_var(4u)).WillOnce(Return(var(4)));
     ON_CALL(find, find(4)).WillByDefault(Return(ubs_class{.root = 4, .size = 1, .rep = 4, .value = std::nullopt}));

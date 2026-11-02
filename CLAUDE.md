@@ -68,12 +68,12 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
 
 ### PUD engine (`docs/pud-architecture.md`)
 
-- **Stored plane:** `pud_modules` → `pud_module` trees (node goals, axioms, appended inferences).
+- **Stored plane:** `pud_module_registry` → `pud_module` trees (node goals, axioms, appended inferences).
   Nodes are never deleted, and refutation is a flag. This plane is what gets serialized.
 - **Live plane:** frontier leaves with `pud_active_state` (binding snapshot, structure watch, body goal → MHQ head),
   plus `pud_query_holders`. This plane is rebuilt by activation on load and never persisted.
 - **Search stack per query head:** `pud_mhq` → `pud_mhcs` → `pud_mhws` → `pud_replayer`, which walks stored inferences.
-- `unfold(leaf, body_goal)` materializes a child via resolver/acceptor, moves activity to the
+- `unfold(leaf, body_goal)` materializes a child via the resolver and inference builder, moves activity to the
   children (`pud_activity_mover`) and retires the parent. Lodestar's driver decides which unfolds to make.
 - A live leaf holds a query for every goal: a failed open or fork refutes the node. Code asserts this
   (`DEBUG_ASSERT`) rather than guarding the impossible case.

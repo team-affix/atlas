@@ -1,8 +1,8 @@
-#include "infrastructure/pud_goal_resolver.hpp"
+#include "infrastructure/pud_child_goal_list_builder.hpp"
 #include <utility>
 #include <immer/map_transient.hpp>
 
-pud_goal_list pud_goal_resolver::resolve_goal(
+pud_goal_list pud_child_goal_list_builder::build(
     const pud_goal_list& goals,
     pud_body_goal_id closed_goal,
     const std::vector<const expr*>& added_goals) const {
