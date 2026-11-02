@@ -10,7 +10,6 @@ struct pud_lodestar_choice {
     pud_lodestar_slot_id slot;
     pud_global_node_id leaf;
     pud_body_goal_id body_goal;
-    bool eligible;
     auto operator<=>(const pud_lodestar_choice&) const = default;
 };
 

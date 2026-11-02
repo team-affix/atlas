@@ -48,11 +48,7 @@ struct MockRefuteBlocked {
 };
 
 struct MockUnfoldOne {
-    MOCK_METHOD(bool, unfold_one, ());
-};
-
-struct MockCheckLastUnfoldOnFocus {
-    MOCK_METHOD(bool, last_unfold_on_focus, (), (const));
+    MOCK_METHOD(pud_lodestar_unfold_outcome, unfold_one, ());
 };
 
 struct PudLodestarSearchStepperTest : public ::testing::Test {
@@ -67,14 +63,12 @@ struct PudLodestarSearchStepperTest : public ::testing::Test {
     MockTakeSolution take;
     MockRefuteBlocked refute;
     MockUnfoldOne unfold;
-    MockCheckLastUnfoldOnFocus last_on_focus;
     pud_lodestar_search_stepper<
         MockClearSolution, MockCountSolutions, MockGetPendingConflicts, MockSetPendingConflicts, MockGetStopped,
-        MockSetStopped, MockGetFocusUnfolds, MockSetFocusUnfolds, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne,
-        MockCheckLastUnfoldOnFocus>
+        MockSetStopped, MockGetFocusUnfolds, MockSetFocusUnfolds, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne>
         stepper{
             clear, counted, pending, set_pending, stopped, set_stopped, focus_unfolds, set_focus_unfolds, take,
-            refute, unfold, last_on_focus, 2};
+            refute, unfold, 2};
 };
 
 }
@@ -147,8 +141,7 @@ TEST_F(PudLodestarSearchStepperTest, AnUnfoldOutsideTheFocusDoesNotSpendBudget) 
     EXPECT_CALL(take, take()).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
     EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(0u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(true));
-    EXPECT_CALL(last_on_focus, last_unfold_on_focus()).WillOnce(Return(false));
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::off_focus));
     EXPECT_CALL(take, take()).WillOnce(Return(true));
     EXPECT_CALL(set_focus_unfolds, set_focus_unfolds).Times(0);
     EXPECT_TRUE(stepper.step());
@@ -162,8 +155,7 @@ TEST_F(PudLodestarSearchStepperTest, AFocusUnfoldSpendsOneFromTheBudget) {
     EXPECT_CALL(take, take()).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
     EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(1u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(true));
-    EXPECT_CALL(last_on_focus, last_unfold_on_focus()).WillOnce(Return(true));
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::on_focus));
     EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(1u));
     EXPECT_CALL(set_focus_unfolds, set_focus_unfolds(2u));
     EXPECT_CALL(take, take()).WillOnce(Return(false));
@@ -181,7 +173,7 @@ TEST_F(PudLodestarSearchStepperTest, NothingLeftToUnfoldStops) {
     EXPECT_CALL(take, take()).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false));
     EXPECT_CALL(focus_unfolds, get_focus_unfolds()).WillOnce(Return(0u));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(false));
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::none));
     EXPECT_CALL(set_stopped, set_stopped(true));
     EXPECT_FALSE(stepper.step());
 }

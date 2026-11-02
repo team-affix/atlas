@@ -59,7 +59,18 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , focus_extender_(focus_set_, focus_set_)
     , node_depth_counter_(modules_)
     , unfold_allower_(node_depth_counter_, node_goals_, max_node_depth)
-    , driver_(*this, frontier_, non_conjecture_unfolds_per_conjecture_unfold)
+    , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
+    , ring_builder_(
+          mhq_, candidate_watch_, witness_log_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
+    , non_conjecture_round_robin_()
+    , conjecture_round_robin_()
+    , unfold_applier_(unfolder_, frontier_, focus_extender_, focus_set_)
+    , unit_propagator_(
+          unit_queries_, query_holders_, query_holders_, mhq_, frontier_, modules_, unfold_allower_, unfold_applier_)
+    , blocked_refuter_(query_lister_, leaf_refuter_, frontier_)
+    , driver_(
+          unit_propagator_, query_lister_, ring_builder_, non_conjecture_round_robin_, conjecture_round_robin_,
+          unfold_applier_, non_conjecture_unfolds_per_conjecture_unfold)
     , solved_leaf_finder_(frontier_, focus_set_, modules_, node_goals_)
     , solution_term_reader_(node_axioms_, modules_, active_states_)
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
@@ -69,7 +80,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           frontier_)
     , search_stepper_(
           solution_store_, solution_store_, pending_conflict_store_, pending_conflict_store_, unfold_budget_store_,
-          unfold_budget_store_, unfold_budget_store_, unfold_budget_store_, solution_taker_, driver_, driver_,
+          unfold_budget_store_, unfold_budget_store_, unfold_budget_store_, solution_taker_, blocked_refuter_,
           driver_, max_unfolds)
     , module_registrar_(
           functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,

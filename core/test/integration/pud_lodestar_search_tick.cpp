@@ -46,11 +46,7 @@ struct MockRefuteBlocked {
 };
 
 struct MockUnfoldOne {
-    MOCK_METHOD(bool, unfold_one, ());
-};
-
-struct MockCheckLastUnfoldOnFocus {
-    MOCK_METHOD(bool, last_unfold_on_focus, (), (const));
+    MOCK_METHOD(pud_lodestar_unfold_outcome, unfold_one, ());
 };
 
 struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
@@ -73,15 +69,12 @@ struct PudLodestarSearchTickIntegrationTest : public ::testing::Test {
     MockTakeSolution take;
     MockRefuteBlocked refute;
     MockUnfoldOne unfold;
-    MockCheckLastUnfoldOnFocus last_on_focus;
     pud_lodestar_search_stepper<
         pud_solution_store, pud_solution_store, pud_pending_conflict_store, pud_pending_conflict_store,
         pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store, pud_lodestar_unfold_budget_store,
-        pud_lodestar_unfold_budget_store, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne,
-        MockCheckLastUnfoldOnFocus>
+        pud_lodestar_unfold_budget_store, MockTakeSolution, MockRefuteBlocked, MockUnfoldOne>
         stepper{
-            solutions, solutions, conflicts, conflicts, budget, budget, budget, budget, take, refute, unfold,
-            last_on_focus, 1};
+            solutions, solutions, conflicts, conflicts, budget, budget, budget, budget, take, refute, unfold, 1};
     pud_goal_list empty;
     std::vector<pud_node_id> axiom_children{1};
     std::vector<pud_node_id> none;
@@ -138,8 +131,7 @@ TEST_F(PudLodestarSearchTickIntegrationTest, AConflictTickClearsThePreviousSolut
 TEST_F(PudLodestarSearchTickIntegrationTest, OneFocusUnfoldSpendsTheBudgetOnTheRealStore) {
     EXPECT_CALL(take, take()).WillOnce(Return(false)).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false)).WillOnce(Return(false));
-    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(true));
-    EXPECT_CALL(last_on_focus, last_unfold_on_focus()).WillOnce(Return(true));
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_lodestar_unfold_outcome::on_focus));
     EXPECT_TRUE(stepper.step());
     EXPECT_EQ(budget.get_focus_unfolds(), 1u);
     EXPECT_TRUE(budget.get_stopped());

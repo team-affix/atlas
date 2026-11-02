@@ -5,30 +5,25 @@
 #include <unordered_map>
 #include <vector>
 #include "value_objects/pud_global_node_id.hpp"
+#include "value_objects/pud_lodestar_watched_candidate.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "value_objects/pud_replay.hpp"
 
 template<typename IMhcs, typename IWitnessLog>
 struct pud_lodestar_candidate_watch {
-    struct watched {
-        bool self_witness;
-        pud_global_node_id self_leaf;
-        std::vector<pud_mhws_head_id> witnesses;
-    };
-
     pud_lodestar_candidate_watch(IMhcs& inner, IWitnessLog& witnesses);
     std::optional<pud_mhcs_head_id> try_add(pud_replay axiom_root);
     std::optional<pud_mhcs_head_id> try_fork(pud_mhcs_head_id head_id, pud_replay axiom_root);
     void remove(pud_mhcs_head_id head_id);
     std::vector<pud_mhcs_head_id> invalidate_leaf(pud_global_node_id leaf);
-    const watched* find(pud_mhcs_head_id head_id) const;
+    const pud_lodestar_watched_candidate* find(pud_mhcs_head_id head_id) const;
 private:
     void record(pud_mhcs_head_id head_id, const std::vector<pud_mhws_head_id>& added);
 
     IMhcs& inner_;
     IWitnessLog& witnesses_;
-    std::unordered_map<pud_mhcs_head_id, watched> by_candidate_;
+    std::unordered_map<pud_mhcs_head_id, pud_lodestar_watched_candidate> by_candidate_;
 };
 
 template<typename IMhcs, typename IWitnessLog>
@@ -41,7 +36,7 @@ pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::pud_lodestar_candidate_watch(
 template<typename IMhcs, typename IWitnessLog>
 void pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::record(
     pud_mhcs_head_id head_id, const std::vector<pud_mhws_head_id>& added) {
-    watched stored{.self_witness = added.empty(), .self_leaf = {}, .witnesses = added};
+    pud_lodestar_watched_candidate stored{.self_witness = added.empty(), .self_leaf = {}, .witnesses = added};
     if (stored.self_witness) {
         const std::vector<pud_global_node_id>& walked = inner_.path(head_id);
         if (!walked.empty())
@@ -89,7 +84,7 @@ std::vector<pud_mhcs_head_id> pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::
 }
 
 template<typename IMhcs, typename IWitnessLog>
-const typename pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::watched*
+const pud_lodestar_watched_candidate*
 pud_lodestar_candidate_watch<IMhcs, IWitnessLog>::find(pud_mhcs_head_id head_id) const {
     const auto found = by_candidate_.find(head_id);
     if (found == by_candidate_.end())
