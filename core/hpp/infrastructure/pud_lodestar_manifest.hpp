@@ -22,23 +22,23 @@
 #include "infrastructure/pud_goal_resolver.hpp"
 #include "infrastructure/pud_initial_goal_opener.hpp"
 #include "infrastructure/pud_leaf_refuter.hpp"
-#include "infrastructure/pud_lodestar_blocked_refuter.hpp"
-#include "infrastructure/pud_lodestar_candidate_watch.hpp"
+#include "infrastructure/pud_blocked_leaf_refuter.hpp"
+#include "infrastructure/pud_candidate_watch.hpp"
 #include "infrastructure/pud_lodestar_driver.hpp"
-#include "infrastructure/pud_lodestar_focus_extender.hpp"
-#include "infrastructure/pud_lodestar_focus_seeder.hpp"
-#include "infrastructure/pud_lodestar_focus_set.hpp"
-#include "infrastructure/pud_lodestar_frontier.hpp"
-#include "infrastructure/pud_lodestar_module_registrar.hpp"
-#include "infrastructure/pud_lodestar_query_lister.hpp"
+#include "infrastructure/pud_focus_extender.hpp"
+#include "infrastructure/pud_focus_seeder.hpp"
+#include "infrastructure/pud_focus_set.hpp"
+#include "infrastructure/pud_frontier.hpp"
+#include "infrastructure/pud_module_registrar.hpp"
+#include "infrastructure/pud_focus_query_lister.hpp"
 #include "infrastructure/pud_lodestar_ring_builder.hpp"
 #include "infrastructure/pud_lodestar_round_robin.hpp"
-#include "infrastructure/pud_lodestar_search_stepper.hpp"
-#include "infrastructure/pud_lodestar_solution_taker.hpp"
-#include "infrastructure/pud_lodestar_solved_leaf_finder.hpp"
-#include "infrastructure/pud_lodestar_unfold_applier.hpp"
-#include "infrastructure/pud_lodestar_unit_propagator.hpp"
-#include "infrastructure/pud_lodestar_witness_log.hpp"
+#include "infrastructure/pud_search_stepper.hpp"
+#include "infrastructure/pud_solution_taker.hpp"
+#include "infrastructure/pud_solved_leaf_finder.hpp"
+#include "infrastructure/pud_unfold_applier.hpp"
+#include "infrastructure/pud_unit_propagator.hpp"
+#include "infrastructure/pud_witness_log.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
 #include "infrastructure/pud_mhws.hpp"
@@ -49,7 +49,7 @@
 #include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_lodestar_pending_conflict_store.hpp"
+#include "infrastructure/pud_pending_conflict_store.hpp"
 #include "infrastructure/pud_query_holders.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
@@ -57,10 +57,10 @@
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_solution_normalizer.hpp"
-#include "infrastructure/pud_lodestar_solution_store.hpp"
-#include "infrastructure/pud_lodestar_solution_term_reader.hpp"
+#include "infrastructure/pud_solution_store.hpp"
+#include "infrastructure/pud_solution_term_reader.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
-#include "infrastructure/pud_lodestar_unfold_allower.hpp"
+#include "infrastructure/pud_unfold_allower.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_global_node_id.hpp"
@@ -109,8 +109,8 @@ struct pud_lodestar_manifest {
     struct mhws_t : pud_mhws<replayer_t, modules_t, modules_t, modules_t> {
         using pud_mhws<replayer_t, modules_t, modules_t, modules_t>::pud_mhws;
     };
-    struct witness_log_t : pud_lodestar_witness_log<mhws_t> {
-        using pud_lodestar_witness_log<mhws_t>::pud_lodestar_witness_log;
+    struct witness_log_t : pud_witness_log<mhws_t> {
+        using pud_witness_log<mhws_t>::pud_witness_log;
     };
     struct mhcs_t : pud_mhcs<
         replayer_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, modules_t, modules_t,
@@ -119,8 +119,8 @@ struct pud_lodestar_manifest {
             replayer_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, witness_log_t, modules_t,
             modules_t, modules_t>::pud_mhcs;
     };
-    struct candidate_watch_t : pud_lodestar_candidate_watch<mhcs_t, witness_log_t> {
-        using pud_lodestar_candidate_watch<mhcs_t, witness_log_t>::pud_lodestar_candidate_watch;
+    struct candidate_watch_t : pud_candidate_watch<mhcs_t, witness_log_t> {
+        using pud_candidate_watch<mhcs_t, witness_log_t>::pud_candidate_watch;
     };
     struct mhq_t : pud_mhq<replayer_t, modules_t, candidate_watch_t, candidate_watch_t, candidate_watch_t, candidate_watch_t, unit_queries_t> {
         using pud_mhq<
@@ -178,46 +178,46 @@ struct pud_lodestar_manifest {
         using pud_module_activator<
             modules_t, modules_t, modules_t, root_activator_t, leaf_refuter_t, activity_mover_t>::pud_module_activator;
     };
-    struct focus_seeder_t : pud_lodestar_focus_seeder<modules_t, pud_lodestar_focus_set, pud_lodestar_focus_set> {
-        using pud_lodestar_focus_seeder<modules_t, pud_lodestar_focus_set, pud_lodestar_focus_set>::pud_lodestar_focus_seeder;
+    struct focus_seeder_t : pud_focus_seeder<modules_t, pud_focus_set, pud_focus_set> {
+        using pud_focus_seeder<modules_t, pud_focus_set, pud_focus_set>::pud_focus_seeder;
     };
-    struct focus_extender_t : pud_lodestar_focus_extender<pud_lodestar_focus_set, pud_lodestar_focus_set> {
-        using pud_lodestar_focus_extender<pud_lodestar_focus_set, pud_lodestar_focus_set>::pud_lodestar_focus_extender;
+    struct focus_extender_t : pud_focus_extender<pud_focus_set, pud_focus_set> {
+        using pud_focus_extender<pud_focus_set, pud_focus_set>::pud_focus_extender;
     };
     struct node_depth_counter_t : pud_node_depth_counter<modules_t> {
         using pud_node_depth_counter<modules_t>::pud_node_depth_counter;
     };
-    struct unfold_allower_t : pud_lodestar_unfold_allower<node_depth_counter_t, node_goals_t> {
-        using pud_lodestar_unfold_allower<node_depth_counter_t, node_goals_t>::pud_lodestar_unfold_allower;
+    struct unfold_allower_t : pud_unfold_allower<node_depth_counter_t, node_goals_t> {
+        using pud_unfold_allower<node_depth_counter_t, node_goals_t>::pud_unfold_allower;
     };
-    struct query_lister_t : pud_lodestar_query_lister<
-        pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, pud_active_states, node_goals_t, mhq_t> {
-        using pud_lodestar_query_lister<
-            pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, pud_active_states, node_goals_t,
-            mhq_t>::pud_lodestar_query_lister;
+    struct query_lister_t : pud_focus_query_lister<
+        pud_frontier, pud_focus_set, modules_t, pud_active_states, node_goals_t, mhq_t> {
+        using pud_focus_query_lister<
+            pud_frontier, pud_focus_set, modules_t, pud_active_states, node_goals_t,
+            mhq_t>::pud_focus_query_lister;
     };
     struct ring_builder_t : pud_lodestar_ring_builder<
-        mhq_t, candidate_watch_t, witness_log_t, pud_lodestar_focus_set, pud_lodestar_frontier, modules_t,
+        mhq_t, candidate_watch_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
         pud_active_states, mhq_t, unfold_allower_t> {
         using pud_lodestar_ring_builder<
-            mhq_t, candidate_watch_t, witness_log_t, pud_lodestar_focus_set, pud_lodestar_frontier, modules_t,
+            mhq_t, candidate_watch_t, witness_log_t, pud_focus_set, pud_frontier, modules_t,
             pud_active_states, mhq_t, unfold_allower_t>::pud_lodestar_ring_builder;
     };
-    struct unfold_applier_t : pud_lodestar_unfold_applier<
-        unfolder_t, pud_lodestar_frontier, focus_extender_t, pud_lodestar_focus_set> {
-        using pud_lodestar_unfold_applier<
-            unfolder_t, pud_lodestar_frontier, focus_extender_t, pud_lodestar_focus_set>::pud_lodestar_unfold_applier;
+    struct unfold_applier_t : pud_unfold_applier<
+        unfolder_t, pud_frontier, focus_extender_t, pud_focus_set> {
+        using pud_unfold_applier<
+            unfolder_t, pud_frontier, focus_extender_t, pud_focus_set>::pud_unfold_applier;
     };
-    struct unit_propagator_t : pud_lodestar_unit_propagator<
-        unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_lodestar_frontier, modules_t,
+    struct unit_propagator_t : pud_unit_propagator<
+        unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_frontier, modules_t,
         unfold_allower_t, unfold_applier_t> {
-        using pud_lodestar_unit_propagator<
-            unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_lodestar_frontier, modules_t,
-            unfold_allower_t, unfold_applier_t>::pud_lodestar_unit_propagator;
+        using pud_unit_propagator<
+            unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_frontier, modules_t,
+            unfold_allower_t, unfold_applier_t>::pud_unit_propagator;
     };
-    struct blocked_refuter_t : pud_lodestar_blocked_refuter<query_lister_t, leaf_refuter_t, pud_lodestar_frontier> {
-        using pud_lodestar_blocked_refuter<
-            query_lister_t, leaf_refuter_t, pud_lodestar_frontier>::pud_lodestar_blocked_refuter;
+    struct blocked_refuter_t : pud_blocked_leaf_refuter<query_lister_t, leaf_refuter_t, pud_frontier> {
+        using pud_blocked_leaf_refuter<
+            query_lister_t, leaf_refuter_t, pud_frontier>::pud_blocked_leaf_refuter;
     };
     struct driver_t : pud_lodestar_driver<
         unit_propagator_t, query_lister_t, ring_builder_t, pud_lodestar_round_robin, pud_lodestar_round_robin,
@@ -226,13 +226,13 @@ struct pud_lodestar_manifest {
             unit_propagator_t, query_lister_t, ring_builder_t, pud_lodestar_round_robin, pud_lodestar_round_robin,
             unfold_applier_t>::pud_lodestar_driver;
     };
-    struct solved_leaf_finder_t : pud_lodestar_solved_leaf_finder<
-        pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, node_goals_t> {
-        using pud_lodestar_solved_leaf_finder<
-            pud_lodestar_frontier, pud_lodestar_focus_set, modules_t, node_goals_t>::pud_lodestar_solved_leaf_finder;
+    struct solved_leaf_finder_t : pud_solved_leaf_finder<
+        pud_frontier, pud_focus_set, modules_t, node_goals_t> {
+        using pud_solved_leaf_finder<
+            pud_frontier, pud_focus_set, modules_t, node_goals_t>::pud_solved_leaf_finder;
     };
-    struct solution_term_reader_t : pud_lodestar_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
-        using pud_lodestar_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_lodestar_solution_term_reader;
+    struct solution_term_reader_t : pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states> {
+        using pud_solution_term_reader<node_axioms_t, modules_t, pud_active_states>::pud_solution_term_reader;
     };
     struct normalizer_factory_t : pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t> {
         using pud_normalizer_factory<globalizer, expr_pool, expr_pool, demoduler_t>::pud_normalizer_factory;
@@ -240,26 +240,26 @@ struct pud_lodestar_manifest {
     struct solution_normalizer_t : pud_solution_normalizer<demoduler_t, normalizer_factory_t> {
         using pud_solution_normalizer<demoduler_t, normalizer_factory_t>::pud_solution_normalizer;
     };
-    struct solution_taker_t : pud_lodestar_solution_taker<
-        solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t, pud_lodestar_solution_store,
-        pud_lodestar_frontier> {
-        using pud_lodestar_solution_taker<
+    struct solution_taker_t : pud_solution_taker<
+        solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t, pud_solution_store,
+        pud_frontier> {
+        using pud_solution_taker<
             solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t,
-            pud_lodestar_solution_store, pud_lodestar_frontier>::pud_lodestar_solution_taker;
+            pud_solution_store, pud_frontier>::pud_solution_taker;
     };
-    struct search_stepper_t : pud_lodestar_search_stepper<
-        pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, solution_taker_t, blocked_refuter_t, driver_t,
+    struct search_stepper_t : pud_search_stepper<
+        pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t, driver_t,
         query_lister_t> {
-        using pud_lodestar_search_stepper<
-            pud_lodestar_solution_store, pud_lodestar_pending_conflict_store, solution_taker_t, blocked_refuter_t,
-            driver_t, query_lister_t>::pud_lodestar_search_stepper;
+        using pud_search_stepper<
+            pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t,
+            driver_t, query_lister_t>::pud_search_stepper;
     };
-    struct module_registrar_t : pud_lodestar_module_registrar<
-        pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-        pud_lodestar_pending_conflict_store> {
-        using pud_lodestar_module_registrar<
-            pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_lodestar_frontier,
-            pud_lodestar_pending_conflict_store>::pud_lodestar_module_registrar;
+    struct module_registrar_t : pud_module_registrar<
+        pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_frontier,
+        pud_pending_conflict_store> {
+        using pud_module_registrar<
+            pud_module, functor_linker_t, modules_t, focus_seeder_t, module_activator_t, pud_frontier,
+            pud_pending_conflict_store>::pud_module_registrar;
     };
 
     pud_lodestar_manifest(
@@ -311,10 +311,10 @@ struct pud_lodestar_manifest {
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 
-    pud_lodestar_focus_set              focus_set_;
-    pud_lodestar_solution_store         solution_store_;
-    pud_lodestar_pending_conflict_store pending_conflict_store_;
-    pud_lodestar_frontier               frontier_;
+    pud_focus_set              focus_set_;
+    pud_solution_store         solution_store_;
+    pud_pending_conflict_store pending_conflict_store_;
+    pud_frontier               frontier_;
 
     focus_seeder_t                   focus_seeder_;
     focus_extender_t                 focus_extender_;

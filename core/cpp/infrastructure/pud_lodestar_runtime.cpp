@@ -27,7 +27,7 @@ size_t pud_lodestar_runtime::solution_depth() const {
     return manifest_.solution_store_.solution_depth();
 }
 
-pud_lodestar_stop_reason pud_lodestar_runtime::stop_reason() const {
+pud_search_stop_reason pud_lodestar_runtime::stop_reason() const {
     return manifest_.search_stepper_.stop_reason();
 }
 

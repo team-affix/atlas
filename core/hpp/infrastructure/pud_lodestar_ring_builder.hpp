@@ -8,10 +8,10 @@
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_lodestar_choice.hpp"
-#include "value_objects/pud_lodestar_query.hpp"
+#include "value_objects/pud_leaf_goal_query.hpp"
 #include "value_objects/pud_lodestar_side.hpp"
 #include "value_objects/pud_lodestar_slot_id.hpp"
-#include "value_objects/pud_lodestar_watched_candidate.hpp"
+#include "value_objects/pud_watched_candidate.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 
@@ -41,11 +41,11 @@ struct pud_lodestar_ring_builder {
         IGetActiveState& get_active_state,
         IIsQueryExhausted& is_query_exhausted,
         IAllowUnfold& allow_unfold);
-    std::vector<pud_lodestar_choice> build(const std::vector<pud_lodestar_query>& queries, bool focus_ring) const;
+    std::vector<pud_lodestar_choice> build(const std::vector<pud_leaf_goal_query>& queries, bool focus_ring) const;
 private:
     void push_witness_slot(
         std::vector<pud_lodestar_choice>& ring,
-        const pud_lodestar_query& query,
+        const pud_leaf_goal_query& query,
         pud_mhcs_head_id candidate,
         pud_lodestar_side side,
         pud_global_node_id leaf) const;
@@ -92,13 +92,13 @@ PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
 
 PUD_LODESTAR_RING_BUILDER_TEMPLATE
 std::vector<pud_lodestar_choice> PUD_LODESTAR_RING_BUILDER::build(
-    const std::vector<pud_lodestar_query>& queries, bool focus_ring) const {
+    const std::vector<pud_leaf_goal_query>& queries, bool focus_ring) const {
     std::vector<pud_lodestar_choice> ring;
-    for (const pud_lodestar_query& query : queries) {
+    for (const pud_leaf_goal_query& query : queries) {
         if (!query.has_candidates)
             continue;
         for (const pud_mhcs_head_id candidate : get_query_candidates_.candidates(query.head)) {
-            const pud_lodestar_watched_candidate* watched = find_watched_candidate_.find(candidate);
+            const pud_watched_candidate* watched = find_watched_candidate_.find(candidate);
             if (watched == nullptr)
                 continue;
             if (watched->self_witness) {
@@ -136,7 +136,7 @@ std::vector<pud_lodestar_choice> PUD_LODESTAR_RING_BUILDER::build(
 PUD_LODESTAR_RING_BUILDER_TEMPLATE
 void PUD_LODESTAR_RING_BUILDER::push_witness_slot(
     std::vector<pud_lodestar_choice>& ring,
-    const pud_lodestar_query& query,
+    const pud_leaf_goal_query& query,
     pud_mhcs_head_id candidate,
     pud_lodestar_side side,
     pud_global_node_id leaf) const {

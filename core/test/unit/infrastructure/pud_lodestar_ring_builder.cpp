@@ -20,7 +20,7 @@ struct MockGetQueryCandidates {
     MOCK_METHOD(std::vector<pud_mhcs_head_id>, candidates, (pud_mhq_head_id), (const));
 };
 struct MockFindWatchedCandidate {
-    MOCK_METHOD(const pud_lodestar_watched_candidate*, find, (pud_mhcs_head_id), (const));
+    MOCK_METHOD(const pud_watched_candidate*, find, (pud_mhcs_head_id), (const));
 };
 struct MockFindWitnessNode {
     MOCK_METHOD(std::optional<pud_global_node_id>, node_of, (pud_mhws_head_id), (const));
@@ -50,7 +50,7 @@ using test_ring_builder_t = pud_lodestar_ring_builder<
     NiceMock<MockGetActiveState>, NiceMock<MockIsQueryExhausted>, NiceMock<MockAllowUnfold>>;
 
 pud_lodestar_choice choice(
-    pud_lodestar_query query,
+    pud_leaf_goal_query query,
     pud_mhcs_head_id candidate,
     pud_lodestar_side side,
     pud_global_node_id leaf,
@@ -77,10 +77,10 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
     NiceMock<MockIsQueryExhausted> exhausted;
     NiceMock<MockAllowUnfold> allower;
     test_ring_builder_t builder{candidates, watch, witnesses, focus, frontier, refuted, states, exhausted, allower};
-    pud_lodestar_query query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true};
-    pud_lodestar_watched_candidate witnessed{
+    pud_leaf_goal_query query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true};
+    pud_watched_candidate witnessed{
         .self_witness = false, .self_leaf = {}, .witnesses = {50, 51}};
-    pud_lodestar_watched_candidate self_witnessed{
+    pud_watched_candidate self_witnessed{
         .self_witness = true, .self_leaf = pud_test_node(12), .witnesses = {}};
     std::set<pud_global_node_id> live{pud_test_node(3), pud_test_node(10), pud_test_node(11), pud_test_node(12)};
     pud_active_state ready_on_goal_five{
@@ -178,7 +178,7 @@ TEST_F(PudLodestarRingBuilderTest, ACallerSlotNeedsItsQueryNodeToBeUnfoldable) {
 }
 
 TEST_F(PudLodestarRingBuilderTest, TheRingIsSortedBySlotWhateverTheQueryOrder) {
-    const pud_lodestar_query earlier{.node = pud_test_node(1), .goal = 0, .head = 41, .has_candidates = true};
+    const pud_leaf_goal_query earlier{.node = pud_test_node(1), .goal = 0, .head = 41, .has_candidates = true};
     const pud_lodestar_choice earlier_caller = choice(
         earlier, std::numeric_limits<pud_mhcs_head_id>::max(), pud_lodestar_side::caller, pud_test_node(1), 0);
     ON_CALL(candidates, candidates(41)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{}));

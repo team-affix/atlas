@@ -74,7 +74,7 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
     ASSERT_TRUE(runtime.next());
     EXPECT_EQ(runtime.solution(), nullptr);
     EXPECT_FALSE(runtime.next());
-    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::refuted);
+    EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::refuted);
 }
 
 // q(X) :- nat(X) has a solution at every depth, so only a session limit can end the search.
@@ -107,7 +107,7 @@ TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesThe
     while (runtime.next())
         ++ticks;
     EXPECT_GT(ticks, 0u);
-    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::exhausted);
+    EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::exhausted);
     EXPECT_FALSE(modules[1].is_refuted(0));
 }
 
@@ -116,11 +116,11 @@ TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt)
     register_into(runtime);
     while (runtime.next()) {
     }
-    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::budget_spent);
+    EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::budget_spent);
     EXPECT_FALSE(modules[1].is_refuted(0));
 }
 
 TEST_F(PudLodestarSessionLimitTest, ASessionRunsUntilItStops) {
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 64, 64);
-    EXPECT_EQ(runtime.stop_reason(), pud_lodestar_stop_reason::running);
+    EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::running);
 }

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <iostream>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_lodestar_stop_reason.hpp"
+#include "value_objects/pud_search_stop_reason.hpp"
 
 // Ticks a PUD solver session to its end, printing every solution and waiting for Enter after each.
 // The last line says how the session ended: REFUTED, EXHAUSTED, or nothing when the unfold budget
@@ -102,10 +102,10 @@ void PUD_SOLVE_LOOP::run() {
     }
     if (interval_ > 0 && total_ticks > 0)
         print_stats_.print();
-    const pud_lodestar_stop_reason reason = get_stop_reason_.stop_reason();
-    if (reason == pud_lodestar_stop_reason::refuted)
+    const pud_search_stop_reason reason = get_stop_reason_.stop_reason();
+    if (reason == pud_search_stop_reason::refuted)
         std::cout << "REFUTED\n";
-    if (reason == pud_lodestar_stop_reason::exhausted)
+    if (reason == pud_search_stop_reason::exhausted)
         std::cout << "EXHAUSTED\n";
 }
 

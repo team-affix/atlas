@@ -78,7 +78,7 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
 - A live leaf holds a query for every goal: a failed open or fork refutes the node. Code asserts this
   (`DEBUG_ASSERT`) rather than guarding the impossible case.
 - `pud_runtime` / `pud_manifest` are the manual harness tests drive; they live in `core/test/`.
-- Lodestar sessions end with a `pud_lodestar_stop_reason`: `refuted`, `exhausted` (node limits block every
+- Lodestar sessions end with a `pud_search_stop_reason`: `refuted`, `exhausted` (node limits block every
   unfold), or `budget_spent` (`--max-unfolds` counts every unfold). See `docs/pud-solver-architecture.md`.
 
 ## Build & test
@@ -135,7 +135,8 @@ no overloads, no default args, no default member initializers. Paired operations
   `struct <Component>Test : ::testing::Test`. The SUT is a fixture member built with brace-init.
   Use `InSequence` when call order is the contract. Test names are behavior sentences in CamelCase
   (`ASolvedLeafIsNormalizedStoredAndErased`).
-- Domain prefixes: `pud_` (progressive unfolding database), `pud_lodestar_` (Lodestar-only types),
+- Domain prefixes: `pud_` (progressive unfolding database, including generic solver plumbing over it),
+  `pud_lodestar_` (only Lodestar's own heuristic and composition: its driver, rings, slots, manifest, runtime),
   `mhq` (multi-headed query; `mhcs` picks candidates, `mhws` searches witnesses, per
   `docs/pud-architecture.md`), `ubs` (union-by-size bind map), `mhu` (multi-head unification),
   `dbuct_` (a solver family that parallels the plain one).

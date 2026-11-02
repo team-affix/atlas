@@ -14,7 +14,7 @@ struct MockPudRuntime {
     MOCK_METHOD(bool, next, ());
     MOCK_METHOD(const expr*, solution, (), (const));
     MOCK_METHOD(size_t, solution_depth, (), (const));
-    MOCK_METHOD(pud_lodestar_stop_reason, stop_reason, (), (const));
+    MOCK_METHOD(pud_search_stop_reason, stop_reason, (), (const));
 };
 struct MockPudExprPrinter {
     MOCK_METHOD(void, print, (const expr*), (const));
@@ -69,7 +69,7 @@ PudSolveLoopTest::PudSolveLoopTest()
     , old_out_(std::cout.rdbuf(captured_out_.rdbuf())) {
     ON_CALL(runtime, next()).WillByDefault(Return(false));
     ON_CALL(runtime, solution()).WillByDefault(Return(nullptr));
-    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_lodestar_stop_reason::refuted));
+    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_search_stop_reason::refuted));
 }
 
 PudSolveLoopTest::~PudSolveLoopTest() {
@@ -84,12 +84,12 @@ TEST_F(PudSolveLoopTest, ARefutedSessionEndsWithREFUTED) {
 }
 
 TEST_F(PudSolveLoopTest, AnExhaustedSessionEndsWithEXHAUSTED) {
-    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_lodestar_stop_reason::exhausted));
+    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_search_stop_reason::exhausted));
     EXPECT_EQ(run_loop(0), "EXHAUSTED\n");
 }
 
 TEST_F(PudSolveLoopTest, ASpentBudgetEndsWithoutAFinalLine) {
-    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_lodestar_stop_reason::budget_spent));
+    ON_CALL(runtime, stop_reason()).WillByDefault(Return(pud_search_stop_reason::budget_spent));
     EXPECT_EQ(run_loop(0), "");
 }
 

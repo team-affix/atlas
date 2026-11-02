@@ -9,7 +9,7 @@
 #include "infrastructure/pud_module.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_global_node_id.hpp"
-#include "value_objects/pud_lodestar_stop_reason.hpp"
+#include "value_objects/pud_search_stop_reason.hpp"
 
 struct pud_lodestar_runtime {
     pud_lodestar_runtime(
@@ -23,7 +23,7 @@ struct pud_lodestar_runtime {
     bool next();
     const expr* solution() const;
     size_t solution_depth() const;
-    pud_lodestar_stop_reason stop_reason() const;
+    pud_search_stop_reason stop_reason() const;
     const std::string& functor_name(uint32_t global_functor_id) const;
 private:
     pud_lodestar_manifest manifest_;
