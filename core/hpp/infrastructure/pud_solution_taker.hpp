@@ -10,7 +10,7 @@ template<
     typename IFindSolvedLeaf,
     typename IReadSolutionTerm,
     typename INormalizeSolution,
-    typename ICountNodeDepth,
+    typename IGetNodeDepth,
     typename ISetSolution,
     typename IEraseFrontierNode>
 struct pud_solution_taker {
@@ -18,7 +18,7 @@ struct pud_solution_taker {
         IFindSolvedLeaf& find_solved_leaf,
         IReadSolutionTerm& read_solution_term,
         INormalizeSolution& normalize_solution,
-        ICountNodeDepth& count_node_depth,
+        IGetNodeDepth& get_node_depth,
         ISetSolution& set_solution,
         IEraseFrontierNode& erase_frontier_node);
     bool take();
@@ -26,16 +26,16 @@ private:
     IFindSolvedLeaf& find_solved_leaf_;
     IReadSolutionTerm& read_solution_term_;
     INormalizeSolution& normalize_solution_;
-    ICountNodeDepth& count_node_depth_;
+    IGetNodeDepth& get_node_depth_;
     ISetSolution& set_solution_;
     IEraseFrontierNode& erase_frontier_node_;
 };
 
 #define PUD_SOLUTION_TAKER_TEMPLATE                                                         \
     template<typename IFindSolvedLeaf, typename IReadSolutionTerm, typename INormalizeSolution,     \
-             typename ICountNodeDepth, typename ISetSolution, typename IEraseFrontierNode>
+             typename IGetNodeDepth, typename ISetSolution, typename IEraseFrontierNode>
 #define PUD_SOLUTION_TAKER                                                                  \
-    pud_solution_taker<IFindSolvedLeaf, IReadSolutionTerm, INormalizeSolution, ICountNodeDepth, \
+    pud_solution_taker<IFindSolvedLeaf, IReadSolutionTerm, INormalizeSolution, IGetNodeDepth, \
         ISetSolution, IEraseFrontierNode>
 
 PUD_SOLUTION_TAKER_TEMPLATE
@@ -43,13 +43,13 @@ PUD_SOLUTION_TAKER::pud_solution_taker(
     IFindSolvedLeaf& find_solved_leaf,
     IReadSolutionTerm& read_solution_term,
     INormalizeSolution& normalize_solution,
-    ICountNodeDepth& count_node_depth,
+    IGetNodeDepth& get_node_depth,
     ISetSolution& set_solution,
     IEraseFrontierNode& erase_frontier_node)
     : find_solved_leaf_(find_solved_leaf)
     , read_solution_term_(read_solution_term)
     , normalize_solution_(normalize_solution)
-    , count_node_depth_(count_node_depth)
+    , get_node_depth_(get_node_depth)
     , set_solution_(set_solution)
     , erase_frontier_node_(erase_frontier_node) {}
 
@@ -60,7 +60,7 @@ bool PUD_SOLUTION_TAKER::take() {
         return false;
     const pud_solution_term term = read_solution_term_.read(leaf.value());
     const expr* solution = normalize_solution_.normalize(term.head, term.module, term.bindings);
-    set_solution_.set(solution, count_node_depth_.count(leaf.value()));
+    set_solution_.set(solution, get_node_depth_.get(leaf.value()));
     erase_frontier_node_.erase(leaf.value());
     return true;
 }

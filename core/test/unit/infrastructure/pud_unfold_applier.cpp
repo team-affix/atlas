@@ -17,22 +17,18 @@ struct MockUnfold {
 struct MockApplyUnfold {
     MOCK_METHOD(void, apply_unfold, (pud_global_node_id, const pud_frontier_change&));
 };
-struct MockExtendFocus {
-    MOCK_METHOD(void, extend, (pud_global_node_id, (const std::vector<pud_global_node_id>&)));
-};
 struct MockContainsFocusNode {
     MOCK_METHOD(bool, contains, (pud_global_node_id), (const));
 };
 
 using test_applier_t = pud_unfold_applier<
-    NiceMock<MockUnfold>, NiceMock<MockApplyUnfold>, NiceMock<MockExtendFocus>, NiceMock<MockContainsFocusNode>>;
+    NiceMock<MockUnfold>, NiceMock<MockApplyUnfold>, NiceMock<MockContainsFocusNode>>;
 
 struct PudUnfoldApplierTest : public ::testing::Test {
     NiceMock<MockUnfold> unfolder;
     NiceMock<MockApplyUnfold> frontier;
-    NiceMock<MockExtendFocus> focus_extender;
     NiceMock<MockContainsFocusNode> focus;
-    test_applier_t applier{unfolder, frontier, focus_extender, focus};
+    test_applier_t applier{unfolder, frontier, focus};
     pud_frontier_change change{.offspring = {pud_test_node(10), pud_test_node(11)}, .refuted = {pud_test_node(2)}};
 
     void SetUp() override {
@@ -42,11 +38,10 @@ struct PudUnfoldApplierTest : public ::testing::Test {
 
 }
 
-TEST_F(PudUnfoldApplierTest, TheChangeReachesTheFrontierThenTheFocusSet) {
+TEST_F(PudUnfoldApplierTest, TheUnfoldsChangeReachesTheFrontier) {
     InSequence order;
     EXPECT_CALL(unfolder, unfold(pud_test_node(4), 1));
     EXPECT_CALL(frontier, apply_unfold(pud_test_node(4), change));
-    EXPECT_CALL(focus_extender, extend(pud_test_node(4), change.offspring));
     applier.unfold(pud_test_node(4), 1);
 }
 

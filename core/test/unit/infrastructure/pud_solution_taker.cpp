@@ -20,8 +20,8 @@ struct MockNormalizeSolution {
     MOCK_METHOD(const expr*, normalize, (const expr*, pud_module_id, const pud_ubs_state&));
 };
 
-struct MockCountNodeDepth {
-    MOCK_METHOD(size_t, count, (pud_global_node_id));
+struct MockGetNodeDepth {
+    MOCK_METHOD(size_t, get, (pud_global_node_id));
 };
 
 struct MockSetSolution {
@@ -36,11 +36,11 @@ struct PudSolutionTakerTest : public ::testing::Test {
     MockFindSolvedLeaf finder;
     MockReadSolutionTerm reader;
     MockNormalizeSolution normalizer;
-    MockCountNodeDepth depths;
+    MockGetNodeDepth depths;
     MockSetSolution store;
     MockEraseFrontierNode frontier;
     pud_solution_taker<
-        MockFindSolvedLeaf, MockReadSolutionTerm, MockNormalizeSolution, MockCountNodeDepth, MockSetSolution,
+        MockFindSolvedLeaf, MockReadSolutionTerm, MockNormalizeSolution, MockGetNodeDepth, MockSetSolution,
         MockEraseFrontierNode>
         taker{finder, reader, normalizer, depths, store, frontier};
     expr head{expr::functor{2, {}}};
@@ -62,7 +62,7 @@ TEST_F(PudSolutionTakerTest, ASolvedLeafIsNormalizedStoredAndErased) {
     EXPECT_CALL(finder, find()).WillOnce(Return(leaf));
     EXPECT_CALL(reader, read(leaf)).WillOnce(Return(term));
     EXPECT_CALL(normalizer, normalize(&head, 3u, term.bindings)).WillOnce(Return(&solution));
-    EXPECT_CALL(depths, count(leaf)).WillOnce(Return(2u));
+    EXPECT_CALL(depths, get(leaf)).WillOnce(Return(2u));
     EXPECT_CALL(store, set(&solution, 2u));
     EXPECT_CALL(frontier, erase(leaf));
     EXPECT_TRUE(taker.take());
