@@ -6,7 +6,8 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_search_stop_reason.hpp"
 
-// Ticks a PUD solver session to its end, printing every solution and waiting for Enter after each.
+// Ticks a PUD solver session to its end, printing every solution and waiting for Enter after each. After
+// every tick, and once at the end, it gives the module saver a chance to write the modules back.
 // The last line says how the session ended: REFUTED, EXHAUSTED, or nothing when the unfold budget
 // ran out (so a caller can run the session again with more budget).
 template<
@@ -18,7 +19,9 @@ template<
     typename IOnTick,
     typename IPrintStats,
     typename IPauseTimer,
-    typename IResumeTimer>
+    typename IResumeTimer,
+    typename ITrySaveModules,
+    typename ITrySaveModulesFinal>
 struct pud_solve_loop {
     pud_solve_loop(
         INextTick& next_tick,
@@ -30,6 +33,8 @@ struct pud_solve_loop {
         IPrintStats& print_stats,
         IPauseTimer& pause_timer,
         IResumeTimer& resume_timer,
+        ITrySaveModules& try_save_modules,
+        ITrySaveModulesFinal& try_save_modules_final,
         size_t interval);
     void run();
 private:
@@ -42,16 +47,18 @@ private:
     IPrintStats& print_stats_;
     IPauseTimer& pause_timer_;
     IResumeTimer& resume_timer_;
+    ITrySaveModules& try_save_modules_;
+    ITrySaveModulesFinal& try_save_modules_final_;
     size_t interval_;
 };
 
 #define PUD_SOLVE_LOOP_TEMPLATE                                                                     \
     template<typename INextTick, typename IGetSolution, typename IGetSolutionDepth, typename IGetStopReason, \
              typename IPrintExpr, typename IOnTick, typename IPrintStats, typename IPauseTimer,     \
-             typename IResumeTimer>
+             typename IResumeTimer, typename ITrySaveModules, typename ITrySaveModulesFinal>
 #define PUD_SOLVE_LOOP                                                                              \
     pud_solve_loop<INextTick, IGetSolution, IGetSolutionDepth, IGetStopReason, IPrintExpr, IOnTick, \
-        IPrintStats, IPauseTimer, IResumeTimer>
+        IPrintStats, IPauseTimer, IResumeTimer, ITrySaveModules, ITrySaveModulesFinal>
 
 PUD_SOLVE_LOOP_TEMPLATE
 PUD_SOLVE_LOOP::pud_solve_loop(
@@ -64,6 +71,8 @@ PUD_SOLVE_LOOP::pud_solve_loop(
     IPrintStats& print_stats,
     IPauseTimer& pause_timer,
     IResumeTimer& resume_timer,
+    ITrySaveModules& try_save_modules,
+    ITrySaveModulesFinal& try_save_modules_final,
     size_t interval)
     : next_tick_(next_tick)
     , get_solution_(get_solution)
@@ -74,6 +83,8 @@ PUD_SOLVE_LOOP::pud_solve_loop(
     , print_stats_(print_stats)
     , pause_timer_(pause_timer)
     , resume_timer_(resume_timer)
+    , try_save_modules_(try_save_modules)
+    , try_save_modules_final_(try_save_modules_final)
     , interval_(interval) {}
 
 PUD_SOLVE_LOOP_TEMPLATE
@@ -82,6 +93,7 @@ void PUD_SOLVE_LOOP::run() {
     size_t total_ticks = 0;
     while (next_tick_.next()) {
         ++total_ticks;
+        try_save_modules_.try_save();
         if (interval_ > 0) {
             on_tick_.on_tick();
             const bool boundary = total_ticks % interval_ == 0;
@@ -102,6 +114,7 @@ void PUD_SOLVE_LOOP::run() {
     }
     if (interval_ > 0 && total_ticks > 0)
         print_stats_.print();
+    try_save_modules_final_.try_save_final();
     const pud_search_stop_reason reason = get_stop_reason_.stop_reason();
     if (reason == pud_search_stop_reason::refuted)
         std::cout << "REFUTED\n";

@@ -6,7 +6,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     size_t max_unfolds,
     size_t non_conjecture_unfolds_per_conjecture_unfold,
     size_t max_node_depth,
-    size_t max_open_goals)
+    size_t max_open_goals,
+    bool report_stored_solutions)
     : symbol_table_()
     , link_table_()
     , demoduler_(link_table_, expr_pool, expr_pool)
@@ -72,6 +73,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           unit_propagator_, query_lister_, ring_builder_, non_conjecture_round_robin_, conjecture_round_robin_,
           unfold_applier_, non_conjecture_unfolds_per_conjecture_unfold)
     , solved_leaf_finder_(frontier_, focus_set_, modules_, node_goals_)
+    , stored_solution_dropper_(solved_leaf_finder_, modules_, frontier_, report_stored_solutions)
     , solution_term_reader_(node_axioms_, modules_, active_states_)
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
     , solution_normalizer_(demoduler_, normalizer_factory_)
@@ -81,6 +83,8 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , search_stepper_(
           solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,
           max_unfolds)
-    , module_loader_(functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_) {
+    , module_loader_(
+          functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
+          stored_solution_dropper_) {
     focus_set_.insert(focus_axiom);
 }

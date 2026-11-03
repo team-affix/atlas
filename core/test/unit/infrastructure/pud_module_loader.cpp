@@ -37,6 +37,10 @@ struct MockAddPendingConflicts {
     MOCK_METHOD(void, add, (size_t));
 };
 
+struct MockDropStoredSolutions {
+    MOCK_METHOD(void, drop, ());
+};
+
 struct PudModuleLoaderTest : public ::testing::Test {
     MockLinkFunctorNames linker;
     MockRegisterModule modules;
@@ -44,10 +48,11 @@ struct PudModuleLoaderTest : public ::testing::Test {
     MockActivateModule activator;
     MockApplyRegister frontier;
     MockAddPendingConflicts pending;
+    ::testing::NiceMock<MockDropStoredSolutions> dropper;
     pud_module_loader<
         module_t, MockLinkFunctorNames, MockRegisterModule, MockSeedFocus, MockActivateModule,
-        MockApplyRegister, MockAddPendingConflicts>
-        loader{linker, modules, seeder, activator, frontier, pending};
+        MockApplyRegister, MockAddPendingConflicts, ::testing::NiceMock<MockDropStoredSolutions>>
+        loader{linker, modules, seeder, activator, frontier, pending, dropper};
     module_t module;
 
     void SetUp() override {
@@ -69,6 +74,7 @@ TEST_F(PudModuleLoaderTest, RegistrationLinksSeedsActivatesAndCountsRefutations)
     EXPECT_CALL(activator, activate_module(9u)).WillOnce(Return(change));
     EXPECT_CALL(frontier, apply_register(change));
     EXPECT_CALL(pending, add(2u));
+    EXPECT_CALL(dropper, drop());
     loader.load(module);
 }
 

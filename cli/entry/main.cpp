@@ -139,6 +139,8 @@ int main(int argc, char** argv) {
         size_t max_node_depth = 64;
         size_t max_open_goals = std::numeric_limits<size_t>::max();
         size_t sim_progress_interval = 1000;
+        size_t save_every = 0;
+        bool report_stored_solutions = false;
     } lodestar_opts;
 
     auto* lodestar_sub = app.add_subcommand("lodestar", "Run the Lodestar PUD solver");
@@ -152,6 +154,15 @@ int main(int argc, char** argv) {
         "--max-open-goals", lodestar_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
     lodestar_sub->add_option("--sim-progress-interval", lodestar_opts.sim_progress_interval,
                              "Print progress every N ticks (0 disables)");
+    lodestar_sub->add_option(
+        "--save-every",
+        lodestar_opts.save_every,
+        "Overwrite each module file with its current state every N unfolds and when the run ends "
+        "(0, the default, never writes)");
+    lodestar_sub->add_flag(
+        "--report-stored-solutions",
+        lodestar_opts.report_stored_solutions,
+        "Also report solutions an earlier run already derived and saved in the modules");
     lodestar_sub->callback([&]() {
         lodestar_command_handler handler{
             lodestar_opts.modules,
@@ -160,7 +171,9 @@ int main(int argc, char** argv) {
             lodestar_opts.ratio,
             lodestar_opts.max_node_depth,
             lodestar_opts.max_open_goals,
-            lodestar_opts.sim_progress_interval};
+            lodestar_opts.sim_progress_interval,
+            lodestar_opts.save_every,
+            lodestar_opts.report_stored_solutions};
         handler();
     });
 
