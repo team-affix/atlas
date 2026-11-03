@@ -67,8 +67,12 @@
 #include "value_objects/pud_mhq_head_id.hpp"
 
 struct pud_lodestar_manifest {
-    using node_goals_t = pud_node_table<pud_goal_list>;
-    using node_axioms_t = pud_node_table<pud_global_node_id>;
+    struct node_goals_t : pud_node_table<pud_goal_list> {
+        using pud_node_table<pud_goal_list>::pud_node_table;
+    };
+    struct node_axioms_t : pud_node_table<pud_global_node_id> {
+        using pud_node_table<pud_global_node_id>::pud_node_table;
+    };
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
     };
@@ -81,7 +85,9 @@ struct pud_lodestar_manifest {
     struct cycle_detector_factory_t : pud_cycle_detector_factory<globalizer, demoduler_t> {
         using pud_cycle_detector_factory<globalizer, demoduler_t>::pud_cycle_detector_factory;
     };
-    using functor_linker_t = pud_functor_linker<pud_symbol_table, pud_link_table>;
+    struct functor_linker_t : pud_functor_linker<pud_symbol_table, pud_link_table> {
+        using pud_functor_linker<pud_symbol_table, pud_link_table>::pud_functor_linker;
+    };
     struct unifier_factory_t : pud_unifier_factory<
         globalizer, expr_pool, pud_link_table, cycle_detector_factory_t::cycle_detector_t> {
         using pud_unifier_factory<
