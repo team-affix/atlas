@@ -9,6 +9,11 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      # Test builds keep their asserts (-DDEBUG) but skip debug info and most optimization. Measured on the
+      # core tests: no -g halves peak compile memory, and -O1 instead of -O3 halves total compile CPU time
+      # (3053 s -> 1424 s), while the test run only goes from ~36 s to ~39 s. Local builds keep -g -O3.
+      CI_DEBUG_FAST_CXXFLAGS: -DDEBUG -O1
 
     steps:
       - uses: actions/checkout@v4
@@ -19,13 +24,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential default-jre libantlr4-runtime-dev
 
       - name: Build core tests
-        run: make core_debug_fast
+        run: make core_debug_fast DEBUG_FAST_CXXFLAGS="$CI_DEBUG_FAST_CXXFLAGS"
 
       - name: Build parser tests
-        run: make parser_debug_fast
+        run: make parser_debug_fast DEBUG_FAST_CXXFLAGS="$CI_DEBUG_FAST_CXXFLAGS"
 
       - name: Build CLI tests
-        run: make cli_debug_fast
+        run: make cli_debug_fast DEBUG_FAST_CXXFLAGS="$CI_DEBUG_FAST_CXXFLAGS"
 
       - name: Run core tests
         run: ./build/core_debug_fast
