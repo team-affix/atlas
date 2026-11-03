@@ -21,10 +21,6 @@ struct MockRegisterModule {
     MOCK_METHOD(void, register_module, (module_t&));
 };
 
-struct MockSeedFocus {
-    MOCK_METHOD(void, seed, (pud_module_id));
-};
-
 struct MockActivateModule {
     MOCK_METHOD(pud_frontier_change, activate_module, (pud_module_id));
 };
@@ -44,15 +40,14 @@ struct MockDropStoredSolutions {
 struct PudModuleLoaderTest : public ::testing::Test {
     MockLinkFunctorNames linker;
     MockRegisterModule modules;
-    MockSeedFocus seeder;
     MockActivateModule activator;
     MockApplyRegister frontier;
     MockAddPendingConflicts pending;
     ::testing::NiceMock<MockDropStoredSolutions> dropper;
     pud_module_loader<
-        module_t, MockLinkFunctorNames, MockRegisterModule, MockSeedFocus, MockActivateModule,
+        module_t, MockLinkFunctorNames, MockRegisterModule, MockActivateModule,
         MockApplyRegister, MockAddPendingConflicts, ::testing::NiceMock<MockDropStoredSolutions>>
-        loader{linker, modules, seeder, activator, frontier, pending, dropper};
+        loader{linker, modules, activator, frontier, pending, dropper};
     module_t module;
 
     void SetUp() override {
@@ -62,7 +57,7 @@ struct PudModuleLoaderTest : public ::testing::Test {
 
 }
 
-TEST_F(PudModuleLoaderTest, RegistrationLinksSeedsActivatesAndCountsRefutations) {
+TEST_F(PudModuleLoaderTest, RegistrationLinksActivatesAndCountsRefutations) {
     const pud_frontier_change change{.offspring = {pud_global_node_id{.module = 9, .node = 0}}, .refuted = {
         pud_global_node_id{.module = 9, .node = 1},
         pud_global_node_id{.module = 9, .node = 2},
@@ -70,7 +65,6 @@ TEST_F(PudModuleLoaderTest, RegistrationLinksSeedsActivatesAndCountsRefutations)
     InSequence order;
     EXPECT_CALL(linker, link);
     EXPECT_CALL(modules, register_module);
-    EXPECT_CALL(seeder, seed(9u));
     EXPECT_CALL(activator, activate_module(9u)).WillOnce(Return(change));
     EXPECT_CALL(frontier, apply_register(change));
     EXPECT_CALL(pending, add(2u));
@@ -82,7 +76,6 @@ TEST_F(PudModuleLoaderTest, ARegistrationWithNoRefutationsAddsNoConflicts) {
     const pud_frontier_change change{};
     EXPECT_CALL(linker, link);
     EXPECT_CALL(modules, register_module);
-    EXPECT_CALL(seeder, seed(9u));
     EXPECT_CALL(activator, activate_module(9u)).WillOnce(Return(change));
     EXPECT_CALL(frontier, apply_register(change));
     EXPECT_CALL(pending, add(0u));
