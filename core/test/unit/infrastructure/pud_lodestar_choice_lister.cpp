@@ -4,7 +4,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include "infrastructure/pud_lodestar_ring_builder.hpp"
+#include "infrastructure/pud_lodestar_choice_lister.hpp"
 #include "value_objects/pud_node_queries.hpp"
 #include "pud_test_node.hpp"
 
@@ -44,7 +44,7 @@ struct MockAllowUnfold {
     MOCK_METHOD(bool, allow, (pud_global_node_id), (const));
 };
 
-using test_ring_builder_t = pud_lodestar_ring_builder<
+using test_choice_lister_t = pud_lodestar_choice_lister<
     NiceMock<MockGetQueryCandidates>, NiceMock<MockFindCandidateWitnesses>, NiceMock<MockFindWitnessNode>,
     NiceMock<MockContainsFocusNode>, NiceMock<MockGetLiveNodes>, NiceMock<MockIsNodeRefuted>,
     NiceMock<MockGetNodeQueries>, NiceMock<MockIsQueryExhausted>, NiceMock<MockAllowUnfold>>;
@@ -66,7 +66,7 @@ pud_lodestar_choice choice(
 // Conjecture leaf 3 asks query 40 on its goal 0. Candidate 30 rests on witness searches 50 and 51,
 // whose leaves 10 and 11 lie outside the conjecture module; candidate 31 is its own witness at leaf
 // 12, inside it. Every leaf is live, unrefuted, may be unfolded, and holds goal 5 with candidates.
-struct PudLodestarRingBuilderTest : public ::testing::Test {
+struct PudLodestarChoiceListerTest : public ::testing::Test {
     NiceMock<MockGetQueryCandidates> candidates;
     NiceMock<MockFindCandidateWitnesses> witness_index;
     NiceMock<MockFindWitnessNode> witnesses;
@@ -76,7 +76,8 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
     NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockIsQueryExhausted> exhausted;
     NiceMock<MockAllowUnfold> allower;
-    test_ring_builder_t builder{candidates, witness_index, witnesses, focus, frontier, refuted, node_queries, exhausted, allower};
+    test_choice_lister_t lister{
+        candidates, witness_index, witnesses, focus, frontier, refuted, node_queries, exhausted, allower};
     pud_leaf_goal_query query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true};
     pud_candidate_witnesses witnessed{
         .self_witness = false, .self_leaf = {}, .witnesses = {50, 51}};
@@ -106,78 +107,78 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
 
 }
 
-TEST_F(PudLodestarRingBuilderTest, TheOuterRingHoldsTheWitnessLeavesOutsideTheConjectureModuleBySide) {
-    EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
+TEST_F(PudLodestarChoiceListerTest, TheOuterRingHoldsTheWitnessLeavesOutsideTheConjectureModuleBySide) {
+    EXPECT_EQ(lister.list(query, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::a, pud_test_node(10), 5),
         choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5),
     }));
 }
 
-TEST_F(PudLodestarRingBuilderTest, TheFocusRingHoldsTheWitnessLeavesInsideItAndOneCallerSlotPerQuery) {
-    EXPECT_EQ(builder.build({query}, true), (std::vector<pud_lodestar_choice>{
+TEST_F(PudLodestarChoiceListerTest, TheFocusRingHoldsTheWitnessLeavesInsideItAndOneCallerSlotPerQuery) {
+    EXPECT_EQ(lister.list(query, true), (std::vector<pud_lodestar_choice>{
         choice(query, 31, pud_lodestar_side::self, pud_test_node(12), 5),
         caller,
     }));
 }
 
-TEST_F(PudLodestarRingBuilderTest, AQueryWithoutCandidatesAddsNothingNotEvenACallerSlot) {
+TEST_F(PudLodestarChoiceListerTest, AQueryWithoutCandidatesAddsNothingNotEvenACallerSlot) {
     query.has_candidates = false;
     EXPECT_CALL(candidates, candidates(_)).Times(0);
-    EXPECT_THAT(builder.build({query}, true), IsEmpty());
+    EXPECT_THAT(lister.list(query, true), IsEmpty());
 }
 
-TEST_F(PudLodestarRingBuilderTest, AnUnwatchedCandidateOrAWitnessWithoutALeafAddsNothing) {
+TEST_F(PudLodestarChoiceListerTest, AnUnwatchedCandidateOrAWitnessWithoutALeafAddsNothing) {
     ON_CALL(witness_index, find(31)).WillByDefault(Return(nullptr));
     ON_CALL(witnesses, node_of(50)).WillByDefault(Return(std::nullopt));
-    EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
+    EXPECT_EQ(lister.list(query, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5)}));
-    EXPECT_EQ(builder.build({query}, true), (std::vector<pud_lodestar_choice>{caller}));
+    EXPECT_EQ(lister.list(query, true), (std::vector<pud_lodestar_choice>{caller}));
 }
 
-TEST_F(PudLodestarRingBuilderTest, AWitnessLeafNoLongerOnTheFrontierIsLeftOut) {
+TEST_F(PudLodestarChoiceListerTest, AWitnessLeafNoLongerOnTheFrontierIsLeftOut) {
     live.erase(pud_test_node(10));
-    EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
+    EXPECT_EQ(lister.list(query, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5)}));
 }
 
-TEST_F(PudLodestarRingBuilderTest, ARefutedWitnessLeafIsLeftOut) {
+TEST_F(PudLodestarChoiceListerTest, ARefutedWitnessLeafIsLeftOut) {
     ON_CALL(refuted, is_refuted(pud_test_node(11))).WillByDefault(Return(true));
-    EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
+    EXPECT_EQ(lister.list(query, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::a, pud_test_node(10), 5)}));
 }
 
-TEST_F(PudLodestarRingBuilderTest, AWitnessLeafThatMayNotBeUnfoldedIsLeftOut) {
+TEST_F(PudLodestarChoiceListerTest, AWitnessLeafThatMayNotBeUnfoldedIsLeftOut) {
     ON_CALL(allower, allow(pud_test_node(10))).WillByDefault(Return(false));
-    EXPECT_EQ(builder.build({query}, false), (std::vector<pud_lodestar_choice>{
+    EXPECT_EQ(lister.list(query, false), (std::vector<pud_lodestar_choice>{
         choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5)}));
 }
 
-TEST_F(PudLodestarRingBuilderTest, AWitnessLeafWithoutAGoalThatHasCandidatesIsLeftOut) {
+TEST_F(PudLodestarChoiceListerTest, AWitnessLeafWithoutAGoalThatHasCandidatesIsLeftOut) {
     ON_CALL(exhausted, is_exhausted(60)).WillByDefault(Return(true));
-    EXPECT_THAT(builder.build({query}, false), IsEmpty());
+    EXPECT_THAT(lister.list(query, false), IsEmpty());
 }
 
-TEST_F(PudLodestarRingBuilderTest, AWitnessLeafIsUnfoldedOnItsSmallestGoalThatHasCandidates) {
+TEST_F(PudLodestarChoiceListerTest, AWitnessLeafIsUnfoldedOnItsSmallestGoalThatHasCandidates) {
     pud_node_queries three_goals{pud_node_queries{}.set(7, 62).set(4, 61).set(6, 63)};
     ON_CALL(node_queries, get(pud_test_node(10))).WillByDefault(ReturnRef(three_goals));
     ON_CALL(exhausted, is_exhausted(61)).WillByDefault(Return(true));
-    const std::vector<pud_lodestar_choice> ring = builder.build({query}, false);
-    ASSERT_EQ(ring.size(), 2u);
-    EXPECT_EQ(ring[0].body_goal, 6u);
+    const std::vector<pud_lodestar_choice> choices = lister.list(query, false);
+    ASSERT_EQ(choices.size(), 2u);
+    EXPECT_EQ(choices[0].body_goal, 6u);
 }
 
-TEST_F(PudLodestarRingBuilderTest, ACallerSlotNeedsItsQueryNodeToBeUnfoldable) {
+TEST_F(PudLodestarChoiceListerTest, ACallerSlotNeedsItsQueryNodeToBeUnfoldable) {
     ON_CALL(allower, allow(pud_test_node(3))).WillByDefault(Return(false));
-    EXPECT_EQ(builder.build({query}, true), (std::vector<pud_lodestar_choice>{
+    EXPECT_EQ(lister.list(query, true), (std::vector<pud_lodestar_choice>{
         choice(query, 31, pud_lodestar_side::self, pud_test_node(12), 5)}));
 }
 
-TEST_F(PudLodestarRingBuilderTest, TheRingIsSortedBySlotWhateverTheQueryOrder) {
-    const pud_leaf_goal_query earlier{.node = pud_test_node(1), .goal = 0, .head = 41, .has_candidates = true};
-    const pud_lodestar_choice earlier_caller = choice(
-        earlier, std::numeric_limits<pud_mhcs_head_id>::max(), pud_lodestar_side::caller, pud_test_node(1), 0);
-    ON_CALL(candidates, candidates(41)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{}));
-    const std::vector<pud_lodestar_choice> ring = builder.build({query, earlier}, true);
-    ASSERT_EQ(ring.size(), 3u);
-    EXPECT_EQ(ring.front(), earlier_caller);
+TEST_F(PudLodestarChoiceListerTest, TheChoicesAreSortedBySlotWhateverTheCandidateOrder) {
+    ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{31, 30}));
+    ON_CALL(focus, contains(pud_test_node(11))).WillByDefault(Return(true));
+    EXPECT_EQ(lister.list(query, true), (std::vector<pud_lodestar_choice>{
+        choice(query, 30, pud_lodestar_side::b, pud_test_node(11), 5),
+        choice(query, 31, pud_lodestar_side::self, pud_test_node(12), 5),
+        caller,
+    }));
 }
