@@ -25,6 +25,7 @@ struct MockModuleData {
     MOCK_METHOD(const rule&, get_axiom, (pud_node_id), (const));
     MOCK_METHOD(const pud_inference&, get_inference, (pud_node_id), (const));
     MOCK_METHOD(std::optional<pud_node_id>, get_parent, (pud_node_id), (const));
+    MOCK_METHOD(size_t, get_depth, (pud_node_id), (const));
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_node_id), (const));
     MOCK_METHOD(bool, is_leaf, (pud_node_id), (const));
     MOCK_METHOD(bool, is_refuted, (pud_node_id), (const));
@@ -286,6 +287,17 @@ TEST_F(PudModuleRegistryTest, AParentIsInItsChildsModule) {
     EXPECT_EQ(
         modules.get_parent(pud_global_node_id{.module = 20, .node = 3}),
         (std::optional<pud_global_node_id>{pud_global_node_id{.module = 20, .node = 1}}));
+}
+
+TEST_F(PudModuleRegistryTest, ADepthIsReadFromTheNodesModule) {
+    NiceMock<MockModuleData> other_data;
+    std::vector<pud_module_id> other_dependencies{};
+    ON_CALL(other_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(other_data, get_dependencies()).WillByDefault(ReturnRef(other_dependencies));
+    ON_CALL(other_data, count_axioms()).WillByDefault(Return(1));
+    modules.register_module(other_data);
+    EXPECT_CALL(other_data, get_depth(3)).WillOnce(Return(7u));
+    EXPECT_EQ(modules.get_depth(pud_global_node_id{.module = 20, .node = 3}), 7u);
 }
 
 TEST_F(PudModuleRegistryTest, AnAxiomHasNoParent) {

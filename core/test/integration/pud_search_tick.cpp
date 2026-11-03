@@ -8,7 +8,6 @@
 #include "infrastructure/pud_search_driver.hpp"
 #include "infrastructure/pud_searcher.hpp"
 #include "infrastructure/pud_solved_leaf_finder.hpp"
-#include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_pending_conflict_store.hpp"
 #include "infrastructure/pud_solution_store.hpp"
 #include "value_objects/pud_goal_list.hpp"
@@ -24,10 +23,6 @@ pud_global_node_id node(pud_node_id id) {
 
 struct MockGetChildren {
     MOCK_METHOD(const std::vector<pud_node_id>&, get_children, (pud_global_node_id));
-};
-
-struct MockGetParent {
-    MOCK_METHOD(std::optional<pud_global_node_id>, get_parent, (pud_global_node_id));
 };
 
 struct MockIsNodeRefuted {
@@ -66,8 +61,6 @@ struct PudSearchTickIntegrationTest : public ::testing::Test {
     pud_solved_leaf_finder<
         pud_frontier, pud_focus_set, MockIsNodeRefuted, MockGetNodeGoals>
         finder{frontier, focus, refuted, goals};
-    MockGetParent parents;
-    pud_node_depth_counter<MockGetParent> depths{parents};
     pud_solution_store solutions;
     pud_pending_conflict_store conflicts;
     MockTakeSolution take;
@@ -145,11 +138,4 @@ TEST_F(PudSearchTickIntegrationTest, SpendingTheBudgetStopsTheSessionAndLeavesNo
     EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::budget_spent);
     EXPECT_EQ(solutions.solution(), nullptr);
     EXPECT_FALSE(search.next());
-}
-
-TEST_F(PudSearchTickIntegrationTest, DepthFollowsTheRealParentChain) {
-    EXPECT_CALL(parents, get_parent(node(3))).WillOnce(Return(node(2)));
-    EXPECT_CALL(parents, get_parent(node(2))).WillOnce(Return(node(0)));
-    EXPECT_CALL(parents, get_parent(node(0))).WillOnce(Return(std::nullopt));
-    EXPECT_EQ(depths.count(node(3)), 2u);
 }

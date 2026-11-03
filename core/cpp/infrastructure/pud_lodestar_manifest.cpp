@@ -58,8 +58,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , frontier_()
     , focus_seeder_(focus_axiom, modules_, focus_set_, focus_set_)
     , focus_extender_(focus_set_, focus_set_)
-    , node_depth_counter_(modules_)
-    , unfold_allower_(node_depth_counter_, node_goals_, max_node_depth, max_open_goals)
+    , unfold_allower_(modules_, node_goals_, max_node_depth, max_open_goals)
     , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
     , ring_builder_(
           mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
@@ -78,7 +77,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
     , solution_normalizer_(demoduler_, normalizer_factory_)
     , solution_taker_(
-          solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depth_counter_, solution_store_,
+          solved_leaf_finder_, solution_term_reader_, solution_normalizer_, modules_, solution_store_,
           frontier_)
     , searcher_(
           solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,

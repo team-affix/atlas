@@ -24,6 +24,7 @@ struct pud_module {
     const rule& get_axiom(pud_node_id axiom) const;
     const pud_inference& get_inference(pud_node_id inference) const;
     std::optional<pud_node_id> get_parent(pud_node_id node) const;
+    size_t get_depth(pud_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_node_id node) const;
     bool is_leaf(pud_node_id node) const;
     bool is_refuted(pud_node_id node) const;
@@ -35,6 +36,7 @@ private:
     std::vector<rule> axioms_;
     std::deque<pud_inference> inferences_;
     std::deque<std::vector<pud_node_id>> children_;
+    std::vector<size_t> depths_;
     std::vector<bool> refuted_;
     std::vector<std::string> functor_names_;
 };
