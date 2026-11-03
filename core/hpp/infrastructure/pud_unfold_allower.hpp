@@ -32,7 +32,7 @@ pud_unfold_allower<IGetNodeDepth, IGetNodeGoals>::pud_unfold_allower(
 
 template<typename IGetNodeDepth, typename IGetNodeGoals>
 bool pud_unfold_allower<IGetNodeDepth, IGetNodeGoals>::allow(pud_global_node_id node) const {
-    if (get_node_depth_.get_depth(node) >= max_node_depth_)
+    if (get_node_depth_.get(node) >= max_node_depth_)
         return false;
     return get_node_goals_.get(node).goals.size() <= max_open_goals_;
 }

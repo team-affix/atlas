@@ -21,7 +21,7 @@ struct MockNormalizeSolution {
 };
 
 struct MockGetNodeDepth {
-    MOCK_METHOD(size_t, get_depth, (pud_global_node_id));
+    MOCK_METHOD(size_t, get, (pud_global_node_id));
 };
 
 struct MockSetSolution {
@@ -62,7 +62,7 @@ TEST_F(PudSolutionTakerTest, ASolvedLeafIsNormalizedStoredAndErased) {
     EXPECT_CALL(finder, find()).WillOnce(Return(leaf));
     EXPECT_CALL(reader, read(leaf)).WillOnce(Return(term));
     EXPECT_CALL(normalizer, normalize(&head, 3u, term.bindings)).WillOnce(Return(&solution));
-    EXPECT_CALL(depths, get_depth(leaf)).WillOnce(Return(2u));
+    EXPECT_CALL(depths, get(leaf)).WillOnce(Return(2u));
     EXPECT_CALL(store, set(&solution, 2u));
     EXPECT_CALL(frontier, erase(leaf));
     EXPECT_TRUE(taker.take());

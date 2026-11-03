@@ -21,6 +21,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , term_exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
+    , node_depths_()
     , child_goal_list_builder_()
     , root_goal_list_builder_()
     , live_child_counts_()
@@ -37,12 +38,12 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
-          query_holders_)
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_depths_, active_states_, structure_watcher_,
+          mhq_, query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
-          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
-          mhq_)
+          active_states_, active_states_, modules_, node_goals_, node_axioms_, node_depths_, child_goal_list_builder_,
+          node_goals_, node_axioms_, node_depths_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_,
+          query_holders_, mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
@@ -53,21 +54,18 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_)
     , focus_set_()
-    , node_depth_store_()
     , solution_store_()
     , pending_conflict_store_()
     , frontier_()
     , focus_seeder_(focus_axiom, modules_, focus_set_, focus_set_)
     , focus_extender_(focus_set_, focus_set_)
-    , node_depth_seeder_(modules_, modules_, node_depth_store_)
-    , node_depth_extender_(node_depth_store_, node_depth_store_)
-    , unfold_allower_(node_depth_store_, node_goals_, max_node_depth, max_open_goals)
+    , unfold_allower_(node_depths_, node_goals_, max_node_depth, max_open_goals)
     , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
     , ring_builder_(
           mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
     , non_conjecture_round_robin_()
     , conjecture_round_robin_()
-    , unfold_applier_(unfolder_, frontier_, focus_extender_, node_depth_extender_, focus_set_)
+    , unfold_applier_(unfolder_, frontier_, focus_extender_, focus_set_)
     , unit_propagator_(
           unit_queries_, query_holders_, query_holders_, mhq_, frontier_, modules_, unfold_allower_, unfold_applier_)
     , blocked_refuter_(query_lister_, leaf_refuter_, frontier_)
@@ -80,14 +78,14 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
     , solution_normalizer_(demoduler_, normalizer_factory_)
     , solution_taker_(
-          solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depth_store_, solution_store_,
+          solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depths_, solution_store_,
           frontier_)
     , searcher_(
           solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,
           max_unfolds)
     , search_driver_(searcher_.search())
     , module_loader_(
-          functor_linker_, modules_, node_depth_seeder_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
+          functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
           stored_solution_dropper_) {
     focus_set_.insert(focus_axiom);
 }

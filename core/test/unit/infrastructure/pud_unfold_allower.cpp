@@ -22,7 +22,7 @@ pud_goal_list goals_of(size_t goal_count) {
 }
 
 struct MockGetNodeDepth {
-    MOCK_METHOD(size_t, get_depth, (pud_global_node_id));
+    MOCK_METHOD(size_t, get, (pud_global_node_id));
 };
 
 struct MockGetNodeGoals {
@@ -40,25 +40,25 @@ struct PudUnfoldAllowerTest : public ::testing::Test {
 }
 
 TEST_F(PudUnfoldAllowerTest, ANodeUnderBothCapsIsAllowed) {
-    EXPECT_CALL(depths, get_depth(node())).WillOnce(Return(3u));
+    EXPECT_CALL(depths, get(node())).WillOnce(Return(3u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(at_cap));
     EXPECT_TRUE(allower.allow(node()));
 }
 
 TEST_F(PudUnfoldAllowerTest, ANodeAtTheDepthCapIsRefused) {
-    EXPECT_CALL(depths, get_depth(node())).WillOnce(Return(4u));
+    EXPECT_CALL(depths, get(node())).WillOnce(Return(4u));
     EXPECT_CALL(goals, get).Times(0);
     EXPECT_FALSE(allower.allow(node()));
 }
 
 TEST_F(PudUnfoldAllowerTest, ANodeWithTooManyOpenGoalsIsRefused) {
-    EXPECT_CALL(depths, get_depth(node())).WillOnce(Return(0u));
+    EXPECT_CALL(depths, get(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(over_cap));
     EXPECT_FALSE(allower.allow(node()));
 }
 
 TEST_F(PudUnfoldAllowerTest, SixtyFourOpenGoalsAreStillAllowed) {
-    EXPECT_CALL(depths, get_depth(node())).WillOnce(Return(0u));
+    EXPECT_CALL(depths, get(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(at_cap));
     EXPECT_TRUE(allower.allow(node()));
 }
@@ -66,7 +66,7 @@ TEST_F(PudUnfoldAllowerTest, SixtyFourOpenGoalsAreStillAllowed) {
 TEST_F(PudUnfoldAllowerTest, NoOpenGoalCapAllowsAnyNumberOfGoals) {
     pud_unfold_allower<MockGetNodeDepth, MockGetNodeGoals> uncapped{
         depths, goals, 4, std::numeric_limits<size_t>::max()};
-    EXPECT_CALL(depths, get_depth(node())).WillOnce(Return(0u));
+    EXPECT_CALL(depths, get(node())).WillOnce(Return(0u));
     EXPECT_CALL(goals, get(node())).WillOnce(ReturnRef(over_cap));
     EXPECT_TRUE(uncapped.allow(node()));
 }

@@ -29,6 +29,9 @@ struct MockStoreNodeGoals {
 struct MockStoreNodeAxiom {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_global_node_id));
 };
+struct MockStoreNodeDepth {
+    MOCK_METHOD(void, store, (pud_global_node_id, size_t));
+};
 struct MockStoreActiveState {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_active_state));
 };
@@ -44,7 +47,7 @@ struct MockHoldQuery {
 
 using test_root_activator_t = pud_root_activator<
     NiceMock<MockGetAxiom>, NiceMock<MockBuildRootGoalList>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>,
-    NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
+    NiceMock<MockStoreNodeDepth>, NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
 
 // The axiom at node 2 has the body a, b and three variables.
 struct PudRootActivatorTest : public ::testing::Test {
@@ -52,12 +55,13 @@ struct PudRootActivatorTest : public ::testing::Test {
     NiceMock<MockBuildRootGoalList> root_goal_lists;
     NiceMock<MockStoreNodeGoals> goals;
     NiceMock<MockStoreNodeAxiom> store_node_axiom;
+    NiceMock<MockStoreNodeDepth> store_node_depth;
     NiceMock<MockStoreActiveState> store_states;
     NiceMock<MockWatchRoot> watcher;
     NiceMock<MockOpenQuery> queries;
     NiceMock<MockHoldQuery> holders;
     test_root_activator_t activator{
-        axioms, root_goal_lists, goals, store_node_axiom, store_states, watcher, queries, holders};
+        axioms, root_goal_lists, goals, store_node_axiom, store_node_depth, store_states, watcher, queries, holders};
     expr head{expr::functor{9, {}}};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
@@ -80,6 +84,11 @@ struct PudRootActivatorTest : public ::testing::Test {
 
 TEST_F(PudRootActivatorTest, AnAxiomsRootAxiomIsItselfAndIsStoredWithItsGoals) {
     EXPECT_CALL(store_node_axiom, store(pud_test_node(2), pud_test_node(2)));
+    activator.activate_root(pud_test_node(2));
+}
+
+TEST_F(PudRootActivatorTest, AnAxiomIsAtDepthZero) {
+    EXPECT_CALL(store_node_depth, store(pud_test_node(2), 0u));
     activator.activate_root(pud_test_node(2));
 }
 

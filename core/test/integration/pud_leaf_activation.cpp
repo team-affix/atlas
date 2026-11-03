@@ -54,11 +54,12 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using binder_t = pud_binder<bind_map_factory_t, module_registry_t>;
     using watcher_t = pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool>;
     using root_activator_t = pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_active_states, watcher_t, mhq_t,
+        module_registry_t, pud_root_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_table<size_t>, pud_active_states, watcher_t, mhq_t,
         pud_query_holders>;
     using child_activator_t = pud_child_activator<
-        pud_active_states, pud_active_states, module_registry_t, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_child_goal_list_builder,
-        pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
+        pud_active_states, pud_active_states, module_registry_t, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>,
+        pud_node_table<size_t>, pud_child_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>,
+        pud_node_table<size_t>, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
         mhq_t, pud_query_holders, mhq_t>;
     using node_deactivator_t =
         pud_node_deactivator<pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
@@ -78,6 +79,7 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     module_registry_t modules;
     pud_node_table<pud_goal_list> node_goals;
     pud_node_table<pud_global_node_id> node_axioms;
+    pud_node_table<size_t> node_depths;
     pud_child_goal_list_builder child_goal_lists;
     pud_root_goal_list_builder root_goal_lists;
     pud_node_live_child_counts live_child_counts;
@@ -91,10 +93,10 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     binder_t binder{bind_maps, modules};
     watcher_t structure_watcher{bind_maps, modules, exprs};
     root_activator_t root_activator{
-        modules, root_goal_lists, node_goals, node_axioms, active_states, structure_watcher, mhq, query_holders};
+        modules, root_goal_lists, node_goals, node_axioms, node_depths, active_states, structure_watcher, mhq, query_holders};
     child_activator_t child_activator{
-        active_states, active_states, modules, node_goals, node_axioms, child_goal_lists, node_goals,
-        node_axioms, live_child_counts, binder, structure_watcher, mhq, mhq, query_holders, mhq};
+        active_states, active_states, modules, node_goals, node_axioms, node_depths, child_goal_lists, node_goals,
+        node_axioms, node_depths, live_child_counts, binder, structure_watcher, mhq, mhq, query_holders, mhq};
     node_deactivator_t node_deactivator{active_states, active_states, query_holders, mhq, mhq, query_holders};
 
     pud_global_node_id root{};

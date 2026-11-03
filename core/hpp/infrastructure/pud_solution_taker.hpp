@@ -60,7 +60,7 @@ bool PUD_SOLUTION_TAKER::take() {
         return false;
     const pud_solution_term term = read_solution_term_.read(leaf.value());
     const expr* solution = normalize_solution_.normalize(term.head, term.module, term.bindings);
-    set_solution_.set(solution, get_node_depth_.get_depth(leaf.value()));
+    set_solution_.set(solution, get_node_depth_.get(leaf.value()));
     erase_frontier_node_.erase(leaf.value());
     return true;
 }
