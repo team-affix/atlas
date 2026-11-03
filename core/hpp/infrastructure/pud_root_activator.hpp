@@ -18,7 +18,6 @@ template<
     typename IBuildRootGoalList,
     typename IStoreNodeGoals,
     typename IStoreNodeAxiom,
-    typename IStoreNodeDepth,
     typename IStoreActiveState,
     typename IWatchRoot,
     typename IOpenQuery,
@@ -29,7 +28,6 @@ struct pud_root_activator {
         IBuildRootGoalList& build_root_goal_list,
         IStoreNodeGoals& store_node_goals,
         IStoreNodeAxiom& store_node_axiom,
-        IStoreNodeDepth& store_node_depth,
         IStoreActiveState& store_active_state,
         IWatchRoot& watch_root,
         IOpenQuery& open_query,
@@ -40,7 +38,6 @@ private:
     IBuildRootGoalList& build_root_goal_list_;
     IStoreNodeGoals& store_node_goals_;
     IStoreNodeAxiom& store_node_axiom_;
-    IStoreNodeDepth& store_node_depth_;
     IStoreActiveState& store_active_state_;
     IWatchRoot& watch_root_;
     IOpenQuery& open_query_;
@@ -49,10 +46,10 @@ private:
 
 #define PUD_ROOT_ACTIVATOR_TEMPLATE                                                            \
     template<typename IGetAxiom, typename IBuildRootGoalList, typename IStoreNodeGoals,                \
-             typename IStoreNodeAxiom, typename IStoreNodeDepth, typename IStoreActiveState, typename IWatchRoot, \
+             typename IStoreNodeAxiom, typename IStoreActiveState, typename IWatchRoot,         \
              typename IOpenQuery, typename IHoldQuery>
 #define PUD_ROOT_ACTIVATOR                                                                       \
-    pud_root_activator<IGetAxiom, IBuildRootGoalList, IStoreNodeGoals, IStoreNodeAxiom, IStoreNodeDepth, \
+    pud_root_activator<IGetAxiom, IBuildRootGoalList, IStoreNodeGoals, IStoreNodeAxiom,                \
         IStoreActiveState, IWatchRoot, IOpenQuery, IHoldQuery>
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
@@ -61,7 +58,6 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     IBuildRootGoalList& build_root_goal_list,
     IStoreNodeGoals& store_node_goals,
     IStoreNodeAxiom& store_node_axiom,
-    IStoreNodeDepth& store_node_depth,
     IStoreActiveState& store_active_state,
     IWatchRoot& watch_root,
     IOpenQuery& open_query,
@@ -70,7 +66,6 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     , build_root_goal_list_(build_root_goal_list)
     , store_node_goals_(store_node_goals)
     , store_node_axiom_(store_node_axiom)
-    , store_node_depth_(store_node_depth)
     , store_active_state_(store_active_state)
     , watch_root_(watch_root)
     , open_query_(open_query)
@@ -82,7 +77,6 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     const pud_goal_list goals = build_root_goal_list_.build(axiom.body);
     store_node_goals_.store(root, goals);
     store_node_axiom_.store(root, root);
-    store_node_depth_.store(root, 0);
     const pud_ubs_state bindings{};
     immer::map<pud_body_goal_id, pud_mhq_head_id> queries;
     bool refuted = false;

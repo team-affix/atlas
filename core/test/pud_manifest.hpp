@@ -46,9 +46,6 @@ struct pud_manifest {
     struct node_axioms_t : pud_node_table<pud_global_node_id> {
         using pud_node_table<pud_global_node_id>::pud_node_table;
     };
-    struct node_depths_t : pud_node_table<size_t> {
-        using pud_node_table<size_t>::pud_node_table;
-    };
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
     };
@@ -114,19 +111,19 @@ struct pud_manifest {
         using pud_structure_watcher<bind_map_factory_t, module_registry_t, IExprPool>::pud_structure_watcher;
     };
     struct root_activator_t : pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_active_states,
+        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
         structure_watcher_t, mhq_t, pud_query_holders> {
         using pud_root_activator<
-            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_active_states,
+            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
             structure_watcher_t, mhq_t, pud_query_holders>::pud_root_activator;
     };
     struct child_activator_t : pud_child_activator<
-        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, node_depths_t,
-        pud_child_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_node_live_child_counts, binder_t,
+        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+        pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
         structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t> {
         using pud_child_activator<
-            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, node_depths_t,
-            pud_child_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_node_live_child_counts, binder_t,
+            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+            pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
             structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
     };
     struct node_deactivator_t : pud_node_deactivator<
@@ -179,7 +176,6 @@ struct pud_manifest {
     term_exporter_factory_t         term_exporter_factory_;
     node_goals_t               node_goals_;
     node_axioms_t              node_axioms_;
-    node_depths_t              node_depths_;
     pud_child_goal_list_builder          child_goal_list_builder_;
     pud_root_goal_list_builder    root_goal_list_builder_;
     pud_node_live_child_counts live_child_counts_;
@@ -222,7 +218,6 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , term_exporter_factory_(globalizer_, expr_pool, expr_pool, functor_relinker_)
     , node_goals_()
     , node_axioms_()
-    , node_depths_()
     , child_goal_list_builder_()
     , root_goal_list_builder_()
     , live_child_counts_()
@@ -237,11 +232,11 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_depths_, active_states_, structure_watcher_, mhq_,
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
           query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, node_depths_, child_goal_list_builder_,
-          node_goals_, node_axioms_, node_depths_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
+          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)

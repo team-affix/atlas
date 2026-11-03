@@ -12,6 +12,7 @@
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_child_activator.hpp"
+#include "infrastructure/pud_child_depth_recorder.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_term_exporter_factory.hpp"
@@ -56,6 +57,7 @@
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
 #include "infrastructure/pud_root_activator.hpp"
+#include "infrastructure/pud_root_depth_recorder.hpp"
 #include "infrastructure/pud_normalizer_factory.hpp"
 #include "infrastructure/pud_solution_normalizer.hpp"
 #include "infrastructure/pud_solution_store.hpp"
@@ -144,20 +146,26 @@ struct pud_lodestar_manifest {
         using pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool>::pud_structure_watcher;
     };
     struct root_activator_t : pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_active_states,
-        structure_watcher_t, mhq_t, pud_query_holders> {
+        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
+        mhq_t, pud_query_holders> {
         using pud_root_activator<
-            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_active_states,
-            structure_watcher_t, mhq_t, pud_query_holders>::pud_root_activator;
+            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states, structure_watcher_t,
+            mhq_t, pud_query_holders>::pud_root_activator;
+    };
+    struct root_depth_recorder_t : pud_root_depth_recorder<node_depths_t, root_activator_t> {
+        using pud_root_depth_recorder<node_depths_t, root_activator_t>::pud_root_depth_recorder;
     };
     struct child_activator_t : pud_child_activator<
-        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, node_depths_t,
-        pud_child_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_node_live_child_counts, binder_t,
-        structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t> {
+        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, pud_child_goal_list_builder,
+        node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
+        mhq_t, mhq_t, pud_query_holders, mhq_t> {
         using pud_child_activator<
-            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, node_depths_t,
-            pud_child_goal_list_builder, node_goals_t, node_axioms_t, node_depths_t, pud_node_live_child_counts, binder_t,
-            structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
+            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t, pud_child_goal_list_builder,
+            node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
+            mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
+    };
+    struct child_depth_recorder_t : pud_child_depth_recorder<node_depths_t, node_depths_t, child_activator_t> {
+        using pud_child_depth_recorder<node_depths_t, node_depths_t, child_activator_t>::pud_child_depth_recorder;
     };
     struct node_deactivator_t : pud_node_deactivator<
         pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders> {
@@ -177,16 +185,16 @@ struct pud_lodestar_manifest {
     struct resolver_t : pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t> {
         using pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t>::pud_resolver;
     };
-    struct activity_mover_t : pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t> {
-        using pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
+    struct activity_mover_t : pud_activity_mover<child_depth_recorder_t, leaf_refuter_t, node_deactivator_t> {
+        using pud_activity_mover<child_depth_recorder_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
     };
     struct unfolder_t : pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t> {
         using pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
     };
     struct module_activator_t : pud_module_activator<
-        module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t, activity_mover_t> {
+        module_registry_t, module_registry_t, module_registry_t, root_depth_recorder_t, leaf_refuter_t, activity_mover_t> {
         using pud_module_activator<
-            module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t, activity_mover_t>::pud_module_activator;
+            module_registry_t, module_registry_t, module_registry_t, root_depth_recorder_t, leaf_refuter_t, activity_mover_t>::pud_module_activator;
     };
     struct focus_seeder_t : pud_focus_seeder<module_registry_t, pud_focus_set, pud_focus_set> {
         using pud_focus_seeder<module_registry_t, pud_focus_set, pud_focus_set>::pud_focus_seeder;
@@ -316,6 +324,8 @@ struct pud_lodestar_manifest {
     structure_watcher_t        structure_watcher_;
     root_activator_t           root_activator_;
     child_activator_t          child_activator_;
+    root_depth_recorder_t      root_depth_recorder_;
+    child_depth_recorder_t     child_depth_recorder_;
     node_deactivator_t         node_deactivator_;
     leaf_refuter_t             leaf_refuter_;
 

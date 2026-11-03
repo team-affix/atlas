@@ -22,11 +22,9 @@ template<
     typename IGetInference,
     typename IGetNodeGoals,
     typename IGetNodeAxiom,
-    typename IGetNodeDepth,
     typename IBuildChildGoalList,
     typename IStoreNodeGoals,
     typename IStoreNodeAxiom,
-    typename IStoreNodeDepth,
     typename IIncrementLiveChildCount,
     typename IBind,
     typename IWatchDescend,
@@ -41,11 +39,9 @@ struct pud_child_activator {
         IGetInference& get_inference,
         IGetNodeGoals& get_node_goals,
         IGetNodeAxiom& get_node_axiom,
-        IGetNodeDepth& get_node_depth,
         IBuildChildGoalList& build_child_goal_list,
         IStoreNodeGoals& store_node_goals,
         IStoreNodeAxiom& store_node_axiom,
-        IStoreNodeDepth& store_node_depth,
         IIncrementLiveChildCount& increment_live_child_count,
         IBind& bind,
         IWatchDescend& watch_descend,
@@ -60,11 +56,9 @@ private:
     IGetInference& get_inference_;
     IGetNodeGoals& get_node_goals_;
     IGetNodeAxiom& get_node_axiom_;
-    IGetNodeDepth& get_node_depth_;
     IBuildChildGoalList& build_child_goal_list_;
     IStoreNodeGoals& store_node_goals_;
     IStoreNodeAxiom& store_node_axiom_;
-    IStoreNodeDepth& store_node_depth_;
     IIncrementLiveChildCount& increment_live_child_count_;
     IBind& bind_;
     IWatchDescend& watch_descend_;
@@ -76,15 +70,14 @@ private:
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
     template<typename IGetActiveState, typename IStoreActiveState, typename IGetInference,     \
-             typename IGetNodeGoals, typename IGetNodeAxiom, typename IGetNodeDepth,                   \
-             typename IBuildChildGoalList, typename IStoreNodeGoals, typename IStoreNodeAxiom,         \
-             typename IStoreNodeDepth,                                                         \
+             typename IGetNodeGoals, typename IGetNodeAxiom, typename IBuildChildGoalList,           \
+             typename IStoreNodeGoals, typename IStoreNodeAxiom,                               \
              typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
              typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                    \
              typename IIsQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetActiveState, IStoreActiveState, IGetInference, IGetNodeGoals,      \
-        IGetNodeAxiom, IGetNodeDepth, IBuildChildGoalList, IStoreNodeGoals, IStoreNodeAxiom, IStoreNodeDepth, \
+        IGetNodeAxiom, IBuildChildGoalList, IStoreNodeGoals, IStoreNodeAxiom,        \
         IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IHoldQuery,    \
         IIsQueryExhausted>
 
@@ -95,11 +88,9 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IGetInference& get_inference,
     IGetNodeGoals& get_node_goals,
     IGetNodeAxiom& get_node_axiom,
-    IGetNodeDepth& get_node_depth,
     IBuildChildGoalList& build_child_goal_list,
     IStoreNodeGoals& store_node_goals,
     IStoreNodeAxiom& store_node_axiom,
-    IStoreNodeDepth& store_node_depth,
     IIncrementLiveChildCount& increment_live_child_count,
     IBind& bind,
     IWatchDescend& watch_descend,
@@ -112,11 +103,9 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , get_inference_(get_inference)
     , get_node_goals_(get_node_goals)
     , get_node_axiom_(get_node_axiom)
-    , get_node_depth_(get_node_depth)
     , build_child_goal_list_(build_child_goal_list)
     , store_node_goals_(store_node_goals)
     , store_node_axiom_(store_node_axiom)
-    , store_node_depth_(store_node_depth)
     , increment_live_child_count_(increment_live_child_count)
     , bind_(bind)
     , watch_descend_(watch_descend)
@@ -133,7 +122,6 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
     const pud_goal_list goals = build_child_goal_list_.build(parent_goals, inference.call_site, inference.body_goals);
     store_node_goals_.store(child, goals);
     store_node_axiom_.store(child, get_node_axiom_.get(parent));
-    store_node_depth_.store(child, get_node_depth_.get(parent) + 1);
     increment_live_child_count_.increment(parent);
     const uint32_t lvc = parent_state.lvc + inference.var_count;
     pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);

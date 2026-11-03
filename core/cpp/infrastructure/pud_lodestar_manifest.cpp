@@ -38,21 +38,23 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_depths_, active_states_, structure_watcher_,
-          mhq_, query_holders_)
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
+          query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, node_depths_, child_goal_list_builder_,
-          node_goals_, node_axioms_, node_depths_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_,
-          query_holders_, mhq_)
+          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
+          mhq_)
+    , root_depth_recorder_(node_depths_, root_activator_)
+    , child_depth_recorder_(node_depths_, node_depths_, child_activator_)
     , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
           unifier_factory_, term_exporter_factory_)
     , resolver_(active_states_, node_goals_, mhq_, mhcs_, inference_builder_)
-    , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
+    , activity_mover_(child_depth_recorder_, leaf_refuter_, node_deactivator_)
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
-    , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_)
+    , module_activator_(modules_, modules_, modules_, root_depth_recorder_, leaf_refuter_, activity_mover_)
     , focus_set_()
     , solution_store_()
     , pending_conflict_store_()
