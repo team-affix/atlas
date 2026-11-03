@@ -153,3 +153,11 @@ TEST_F(PudSearchStepperTest, AStoppedSessionStaysStoppedWithoutSearching) {
     EXPECT_FALSE(stepper.step());
     EXPECT_EQ(stepper.stop_reason(), pud_search_stop_reason::budget_spent);
 }
+
+TEST_F(PudSearchStepperTest, TheUnfoldCountIsEveryUnfoldMadeSoFar) {
+    test_stepper_t stepper = make_stepper(4);
+    EXPECT_EQ(stepper.unfold_count(), 0u);
+    EXPECT_CALL(taker, take()).WillOnce(Return(false)).WillOnce(Return(false)).WillOnce(Return(true));
+    stepper.step();
+    EXPECT_EQ(stepper.unfold_count(), 2u);
+}

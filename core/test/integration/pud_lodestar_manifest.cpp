@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <deque>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
@@ -123,4 +124,34 @@ TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt)
 TEST_F(PudLodestarSessionLimitTest, ASessionRunsUntilItStops) {
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 64, 64);
     EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::running);
+}
+
+// Leaves a depth limit blocked are never written as refuted, so a later session over the same modules with a
+// deeper limit picks them up again and keeps unfolding.
+TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromTheBlockedLeaves) {
+    size_t shallow_solutions = 0;
+    {
+        pud_lodestar_runtime shallow(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64);
+        register_into(shallow);
+        while (shallow.next())
+            shallow_solutions += shallow.solution() != nullptr ? 1 : 0;
+        ASSERT_EQ(shallow.stop_reason(), pud_search_stop_reason::exhausted);
+    }
+    size_t refuted_nodes = 0;
+    for (pud_node_id node = 0; node < modules[1].count_nodes(); ++node)
+        refuted_nodes += modules[1].is_refuted(node) ? 1 : 0;
+    EXPECT_EQ(refuted_nodes, 0u);
+    EXPECT_GT(shallow_solutions, 0u);
+    const size_t stored_nodes = modules[1].count_nodes();
+    pud_lodestar_runtime deeper(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64);
+    for (pud_module& module : modules)
+        deeper.register_module(module);
+    size_t deepest = 0;
+    while (deeper.next()) {
+        if (deeper.solution() == nullptr)
+            continue;
+        deepest = std::max(deepest, deeper.solution_depth());
+    }
+    EXPECT_GT(modules[1].count_nodes(), stored_nodes);
+    EXPECT_GT(deepest, 2u);
 }

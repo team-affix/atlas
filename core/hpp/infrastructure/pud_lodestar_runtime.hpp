@@ -24,6 +24,7 @@ struct pud_lodestar_runtime {
     const expr* solution() const;
     size_t solution_depth() const;
     pud_search_stop_reason stop_reason() const;
+    size_t unfold_count() const;
     const std::string& functor_name(uint32_t global_functor_id) const;
 private:
     pud_lodestar_manifest manifest_;

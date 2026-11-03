@@ -5,6 +5,7 @@
 #include "infrastructure/pud_solve_loop.hpp"
 #include "value_objects/expr.hpp"
 
+using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
 
@@ -31,10 +32,17 @@ struct MockPudPauseTimer {
 struct MockPudResumeTimer {
     MOCK_METHOD(void, resume, ());
 };
+struct MockPudTrySaveModules {
+    MOCK_METHOD(void, try_save, ());
+};
+struct MockPudTrySaveModulesFinal {
+    MOCK_METHOD(void, try_save_final, ());
+};
 
 using test_loop_t = pud_solve_loop<
     MockPudRuntime, MockPudRuntime, MockPudRuntime, MockPudRuntime, NiceMock<MockPudExprPrinter>,
-    NiceMock<MockPudOnTick>, NiceMock<MockPudPrintStats>, NiceMock<MockPudPauseTimer>, NiceMock<MockPudResumeTimer>>;
+    NiceMock<MockPudOnTick>, NiceMock<MockPudPrintStats>, NiceMock<MockPudPauseTimer>, NiceMock<MockPudResumeTimer>,
+    NiceMock<MockPudTrySaveModules>, NiceMock<MockPudTrySaveModulesFinal>>;
 
 // Captures std::cout and feeds std::cin for the duration of each test.
 struct PudSolveLoopTest : public ::testing::Test {
@@ -46,11 +54,14 @@ struct PudSolveLoopTest : public ::testing::Test {
     NiceMock<MockPudPrintStats> print_stats;
     NiceMock<MockPudPauseTimer> pause_timer;
     NiceMock<MockPudResumeTimer> resume_timer;
+    NiceMock<MockPudTrySaveModules> saver;
+    NiceMock<MockPudTrySaveModulesFinal> final_saver;
     expr fact{expr::functor{2, {}}};
 
     std::string run_loop(size_t interval) {
         test_loop_t loop{
-            runtime, runtime, runtime, runtime, printer, on_tick, print_stats, pause_timer, resume_timer, interval};
+            runtime, runtime, runtime, runtime, printer, on_tick, print_stats, pause_timer, resume_timer, saver,
+            final_saver, interval};
         loop.run();
         return captured_out_.str();
     }
@@ -122,4 +133,21 @@ TEST_F(PudSolveLoopTest, NoProgressIsPrintedWhenDisabledOrWithoutTicks) {
     EXPECT_CALL(on_tick, on_tick()).Times(0);
     EXPECT_CALL(print_stats, print()).Times(0);
     run_loop(100);
+}
+
+TEST_F(PudSolveLoopTest, ModulesGetASaveChanceAfterEveryTickBeforeWaitingForEnter) {
+    EXPECT_CALL(runtime, next()).WillOnce(Return(true)).WillOnce(Return(true)).WillOnce(Return(false));
+    EXPECT_CALL(runtime, solution()).WillOnce(Return(&fact)).WillOnce(Return(nullptr));
+    InSequence order;
+    EXPECT_CALL(saver, try_save());
+    EXPECT_CALL(pause_timer, pause());
+    EXPECT_CALL(saver, try_save());
+    EXPECT_CALL(final_saver, try_save_final());
+    run_loop(0);
+}
+
+TEST_F(PudSolveLoopTest, TheFinalSaveChanceComesOnceBeforeTheLastLine) {
+    EXPECT_CALL(saver, try_save()).Times(0);
+    EXPECT_CALL(final_saver, try_save_final()).Times(1);
+    EXPECT_EQ(run_loop(0), "REFUTED\n");
 }

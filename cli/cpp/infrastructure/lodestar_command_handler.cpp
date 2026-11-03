@@ -10,7 +10,8 @@ lodestar_command_handler::lodestar_command_handler(
     size_t non_conjecture_unfolds_per_conjecture_unfold,
     size_t max_node_depth,
     size_t max_open_goals,
-    size_t sim_progress_interval)
+    size_t sim_progress_interval,
+    size_t unfolds_per_save)
     : loaded_(module_paths)
     , focus_(pud_focus_parser{}.parse(focus_text))
     , runtime_(
@@ -26,9 +27,10 @@ lodestar_command_handler::lodestar_command_handler(
     , clock_()
     , solve_timer_(clock_)
     , progress_(solve_timer_)
+    , autosaver_(runtime_, loaded_, unfolds_per_save)
     , solve_loop_(
           runtime_, runtime_, runtime_, runtime_, printer_, progress_, progress_, solve_timer_, solve_timer_,
-          sim_progress_interval) {
+          autosaver_, autosaver_, sim_progress_interval) {
     bool focus_loaded = false;
     for (const pud_module& module : loaded_.modules()) {
         if (module.get_module_id() != focus_.module)

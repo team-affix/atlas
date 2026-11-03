@@ -18,7 +18,7 @@ Unfolds of witnesses that conjecture queries rest on are dealt out by a round-ro
   - `refuted`: no open conjecture leaf is left. The CLI prints `REFUTED`.
   - `exhausted`: open conjecture leaves remain, but the node limits forbid every unfold. The CLI prints `EXHAUSTED`.
   - `budget_spent`: `max_unfolds` unfolds were made. The CLI prints no final line and exits 0.
-- `atlas lodestar` does not write unfolds back to module files, so a later run starts from the stored modules again.
+- `atlas lodestar --save-every N` overwrites each loaded module file with its current state every N unfolds and when the run ends (each file is written to `<path>.tmp` and renamed over the original). Without the flag, module files are never written, so a later run starts from the same stored modules again. A run over saved modules continues from the saved tree, including leaves an earlier run's limits had blocked, and reports the solved leaves already stored before finding new ones.
 
 Correctness tests live in [`pud_runtime_test_suite.cpp`](../core/test/unit/infrastructure/pud_runtime_test_suite.cpp), a parameterized suite copied from the legacy runtime tests. The legacy suite is not edited.
 

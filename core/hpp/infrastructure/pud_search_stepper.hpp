@@ -26,6 +26,7 @@ struct pud_search_stepper {
         size_t max_unfolds);
     bool step();
     pud_search_stop_reason stop_reason() const;
+    size_t unfold_count() const;
 private:
     IClearSolution& clear_solution_;
     ITakePendingConflict& take_pending_conflict_;
@@ -92,6 +93,11 @@ bool PUD_SEARCH_STEPPER::step() {
 PUD_SEARCH_STEPPER_TEMPLATE
 pud_search_stop_reason PUD_SEARCH_STEPPER::stop_reason() const {
     return stop_reason_;
+}
+
+PUD_SEARCH_STEPPER_TEMPLATE
+size_t PUD_SEARCH_STEPPER::unfold_count() const {
+    return unfolds_;
 }
 
 #undef PUD_SEARCH_STEPPER
