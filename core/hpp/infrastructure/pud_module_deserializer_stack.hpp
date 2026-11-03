@@ -10,11 +10,13 @@
 #include "infrastructure/istream_uint64_extractor.hpp"
 #include "infrastructure/pud_inference_istream_extractor.hpp"
 #include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_module_id_istream_extractor.hpp"
 #include "infrastructure/pud_module_istream_extractor.hpp"
 #include "infrastructure/rule_istream_extractor.hpp"
 
 struct pud_module_deserializer_stack {
     pud_module_deserializer_stack();
+    pud_module_id deserialize_module_id(std::istream& in) const;
     pud_module deserialize_module(std::istream& in) const;
     expr_pool& exprs();
 private:
@@ -24,6 +26,8 @@ private:
         rule_istream_extractor<expr_extractor_t, istream_uint64_extractor, istream_uint32_extractor>;
     using inference_extractor_t =
         pud_inference_istream_extractor<expr_extractor_t, istream_uint64_extractor, istream_uint32_extractor>;
+    using module_id_extractor_t =
+        pud_module_id_istream_extractor<istream_fixed_bytes_extractor, istream_uint64_extractor>;
 
     expr_pool expr_pool_;
     istream_uint8_extractor extract_uint8_;
@@ -33,7 +37,9 @@ private:
     expr_extractor_t extract_expr_;
     rule_extractor_t extract_rule_;
     inference_extractor_t extract_inference_;
+    module_id_extractor_t extract_module_id_;
     pud_module_istream_extractor<
+        module_id_extractor_t,
         istream_fixed_bytes_extractor,
         istream_uint64_extractor,
         rule_extractor_t,

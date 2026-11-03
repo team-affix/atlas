@@ -12,6 +12,9 @@ using ::testing::StrictMock;
 
 namespace {
 
+struct MockExtractModuleId {
+    MOCK_METHOD(pud_module_id, extract_module_id, (std::istream&), (const));
+};
 struct MockExtractFixedBytes {
     MOCK_METHOD(void, extract_fixed_bytes, (std::istream&, char*, size_t), (const));
 };
@@ -33,6 +36,7 @@ struct MockExtractUint8 {
 };
 
 using sut_t = pud_module_istream_extractor<
+    MockExtractModuleId,
     MockExtractFixedBytes,
     MockExtractUint64,
     MockExtractRule,
@@ -40,12 +44,14 @@ using sut_t = pud_module_istream_extractor<
     MockExtractUint8>;
 
 struct PudModuleIstreamExtractorTest : public ::testing::Test {
+    StrictMock<MockExtractModuleId> extract_module_id;
     StrictMock<MockExtractFixedBytes> extract_fixed_bytes;
     StrictMock<MockExtractUint64> extract_uint64;
     StrictMock<MockExtractRule> extract_rule;
     StrictMock<MockExtractInference> extract_inference;
     StrictMock<MockExtractUint8> extract_uint8;
     sut_t sut{
+        extract_module_id,
         extract_fixed_bytes,
         extract_uint64,
         extract_rule,
@@ -54,20 +60,11 @@ struct PudModuleIstreamExtractorTest : public ::testing::Test {
     std::istringstream in;
 };
 
-void write_magic_to_buffer(char* magic) {
-    magic[0] = 'P';
-    magic[1] = 'U';
-    magic[2] = 'D';
-    magic[3] = 'M';
-}
-
 }
 
 TEST_F(PudModuleIstreamExtractorTest, ValidMagicBuildsEmptyModule) {
     InSequence seq;
-    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
-        .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
-    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(7u));
+    EXPECT_CALL(extract_module_id, extract_module_id).WillOnce(Return(7u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
@@ -75,17 +72,6 @@ TEST_F(PudModuleIstreamExtractorTest, ValidMagicBuildsEmptyModule) {
     const pud_module module = sut.extract_module(in);
     EXPECT_EQ(module.get_module_id(), 7u);
     EXPECT_EQ(module.count_nodes(), 0u);
-}
-
-TEST_F(PudModuleIstreamExtractorTest, WrongMagicThrows) {
-    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
-        .WillOnce([](std::istream&, char* dest, size_t) {
-            dest[0] = 'X';
-            dest[1] = 'Y';
-            dest[2] = 'Z';
-            dest[3] = 'W';
-        });
-    EXPECT_THROW(sut.extract_module(in), std::runtime_error);
 }
 
 TEST_F(PudModuleIstreamExtractorTest, AxiomsAreReadBeforeInferences) {
@@ -99,9 +85,7 @@ TEST_F(PudModuleIstreamExtractorTest, AxiomsAreReadBeforeInferences) {
         .var_count = 0,
     };
     InSequence seq;
-    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
-        .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
-    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
+    EXPECT_CALL(extract_module_id, extract_module_id).WillOnce(Return(1u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
     EXPECT_CALL(extract_rule, extract_rule).WillOnce(Return(axiom));
@@ -117,9 +101,7 @@ TEST_F(PudModuleIstreamExtractorTest, AxiomsAreReadBeforeInferences) {
 
 TEST_F(PudModuleIstreamExtractorTest, RefutedNodeCountMismatchThrows) {
     InSequence seq;
-    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
-        .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
-    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(1u));
+    EXPECT_CALL(extract_module_id, extract_module_id).WillOnce(Return(1u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0u));
@@ -129,9 +111,7 @@ TEST_F(PudModuleIstreamExtractorTest, RefutedNodeCountMismatchThrows) {
 
 TEST_F(PudModuleIstreamExtractorTest, DependenciesAreReadAsACountThenEachIdInOrder) {
     InSequence seq;
-    EXPECT_CALL(extract_fixed_bytes, extract_fixed_bytes(_, _, 4))
-        .WillOnce([](std::istream&, char* dest, size_t) { write_magic_to_buffer(dest); });
-    EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(7u));
+    EXPECT_CALL(extract_module_id, extract_module_id).WillOnce(Return(7u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(2u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0x11u));
     EXPECT_CALL(extract_uint64, extract_uint64).WillOnce(Return(0x22u));

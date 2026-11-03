@@ -7,28 +7,43 @@
 
 #include "infrastructure/hex_uint64.hpp"
 
-pud_loaded_modules::pud_loaded_modules(const std::vector<std::string>& paths)
+pud_loaded_modules::pud_loaded_modules()
     : stack_()
     , serializer_()
     , modules_()
-    , paths_() {
-    if (paths.empty())
-        throw std::runtime_error("no module files");
-    std::deque<pud_module> loaded;
-    std::vector<std::string> loaded_paths;
-    std::unordered_map<pud_module_id, size_t> index_by_id;
-    for (const std::string& path : paths) {
-        std::ifstream in(path, std::ios::binary);
-        if (!in)
-            throw std::runtime_error("cannot open module file: " + path);
-        pud_module module = stack_.deserialize_module(in);
-        const pud_module_id id = module.get_module_id();
-        if (index_by_id.contains(id))
+    , paths_() {}
+
+pud_module_id pud_loaded_modules::read_module_id(const std::string& path) const {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("cannot open module file: " + path);
+    return stack_.deserialize_module_id(in);
+}
+
+const pud_module& pud_loaded_modules::read(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        throw std::runtime_error("cannot open module file: " + path);
+    pud_module module = stack_.deserialize_module(in);
+    for (const pud_module& loaded : modules_) {
+        if (loaded.get_module_id() == module.get_module_id())
             throw std::runtime_error("duplicate module id");
-        index_by_id.emplace(id, loaded.size());
-        loaded.push_back(std::move(module));
-        loaded_paths.push_back(path);
     }
+    modules_.push_back(std::move(module));
+    paths_.push_back(path);
+    return modules_.back();
+}
+
+void pud_loaded_modules::sort_by_dependencies() {
+    if (modules_.empty())
+        throw std::runtime_error("no module files");
+    std::deque<pud_module> loaded = std::move(modules_);
+    std::vector<std::string> loaded_paths = std::move(paths_);
+    modules_.clear();
+    paths_.clear();
+    std::unordered_map<pud_module_id, size_t> index_by_id;
+    for (size_t index = 0; index < loaded.size(); ++index)
+        index_by_id.emplace(loaded[index].get_module_id(), index);
     std::unordered_set<pud_module_id> visiting;
     std::unordered_set<pud_module_id> emitted;
     std::vector<pud_module_id> order;
