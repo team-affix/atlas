@@ -20,6 +20,7 @@ struct MockModuleData {
     MOCK_METHOD(pud_module_id, get_module_id, (), (const));
     MOCK_METHOD(const std::vector<pud_module_id>&, get_dependencies, (), (const));
     MOCK_METHOD(size_t, count_axioms, (), (const));
+    MOCK_METHOD(size_t, count_nodes, (), (const));
     MOCK_METHOD(pud_node_id, store_inference, (pud_inference));
     MOCK_METHOD(void, mark_refuted, (pud_node_id));
     MOCK_METHOD(const rule&, get_axiom, (pud_node_id), (const));
@@ -326,4 +327,24 @@ TEST_F(PudModuleRegistryTest, AFunctorNameIsAppendedToTheNamedModule) {
     modules.register_module(base_data);
     EXPECT_CALL(base_data, append_functor_name(std::string("succ"))).WillOnce(Return(4u));
     EXPECT_EQ(modules.append_functor_name(10, "succ"), 4u);
+}
+
+TEST_F(PudModuleRegistryTest, TheNodeCountIsTheSumOverEveryRegisteredModule) {
+    NiceMock<MockModuleData> base_data;
+    NiceMock<MockModuleData> derived_data;
+    std::vector<pud_module_id> base_dependencies{};
+    std::vector<pud_module_id> derived_dependencies{10};
+    ON_CALL(base_data, get_module_id()).WillByDefault(Return(10));
+    ON_CALL(base_data, get_dependencies()).WillByDefault(ReturnRef(base_dependencies));
+    ON_CALL(base_data, count_nodes()).WillByDefault(Return(7));
+    ON_CALL(derived_data, get_module_id()).WillByDefault(Return(20));
+    ON_CALL(derived_data, get_dependencies()).WillByDefault(ReturnRef(derived_dependencies));
+    ON_CALL(derived_data, count_nodes()).WillByDefault(Return(5));
+    modules.register_module(base_data);
+    modules.register_module(derived_data);
+    EXPECT_EQ(modules.count_nodes(), 12u);
+}
+
+TEST_F(PudModuleRegistryTest, NoModulesMeansNoNodes) {
+    EXPECT_EQ(modules.count_nodes(), 0u);
 }

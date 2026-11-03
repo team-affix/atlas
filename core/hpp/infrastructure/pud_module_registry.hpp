@@ -1,6 +1,7 @@
 #ifndef PUD_MODULE_REGISTRY_HPP
 #define PUD_MODULE_REGISTRY_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -29,6 +30,7 @@ struct pud_module_registry {
     const std::vector<pud_node_id>& get_children(pud_global_node_id node) const;
     bool is_leaf(pud_global_node_id node) const;
     bool is_refuted(pud_global_node_id node) const;
+    size_t count_nodes() const;
 private:
     struct registration {
         IModule* data;
@@ -125,6 +127,14 @@ bool pud_module_registry<IModule>::is_leaf(pud_global_node_id node) const {
 template<typename IModule>
 bool pud_module_registry<IModule>::is_refuted(pud_global_node_id node) const {
     return modules_.at(node.module).data->is_refuted(node.node);
+}
+
+template<typename IModule>
+size_t pud_module_registry<IModule>::count_nodes() const {
+    size_t node_count = 0;
+    for (const auto& [module, registered] : modules_)
+        node_count += registered.data->count_nodes();
+    return node_count;
 }
 
 template<typename IModule>
