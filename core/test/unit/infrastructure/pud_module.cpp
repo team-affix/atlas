@@ -208,20 +208,3 @@ TEST_F(PudModuleTest, ReadingAMissingFunctorNameThrows) {
     data.append_functor_name("nat");
     EXPECT_THROW((void)data.functor_names().at(1), std::out_of_range);
 }
-
-TEST_F(PudModuleTest, AnAxiomIsAtDepthZero) {
-    EXPECT_EQ(data.get_depth(0), 0u);
-    EXPECT_EQ(data.get_depth(1), 0u);
-}
-
-TEST_F(PudModuleTest, AnInferenceIsOneDeeperThanItsParent) {
-    const pud_node_id child = data.store_inference(
-        pud_inference{.parent = 0, .call_site = 0, .substitutions = {}, .body_goals = {&goal}, .var_count = 0});
-    const pud_node_id grandchild = data.store_inference(
-        pud_inference{.parent = child, .call_site = 0, .substitutions = {}, .body_goals = {}, .var_count = 0});
-    const pud_node_id sibling = data.store_inference(
-        pud_inference{.parent = 0, .call_site = 0, .substitutions = {}, .body_goals = {}, .var_count = 0});
-    EXPECT_EQ(data.get_depth(child), 1u);
-    EXPECT_EQ(data.get_depth(grandchild), 2u);
-    EXPECT_EQ(data.get_depth(sibling), 1u);
-}

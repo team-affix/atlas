@@ -10,7 +10,6 @@ pud_module::pud_module(pud_module_id module_id, std::vector<pud_module_id> depen
     , axioms_(std::move(axioms))
     , inferences_()
     , children_(axioms_.size())
-    , depths_(axioms_.size(), 0)
     , refuted_(axioms_.size(), false)
     , functor_names_() {}
 
@@ -36,10 +35,8 @@ pud_node_id pud_module::store_inference(pud_inference inference) {
     std::vector<pud_node_id>& siblings = children_.at(inference.parent);
     DEBUG_ASSERT(siblings.empty() || get_inference(siblings.front()).call_site == inference.call_site);
     siblings.push_back(node);
-    const size_t depth = depths_.at(inference.parent) + 1;
     inferences_.push_back(std::move(inference));
     children_.emplace_back();
-    depths_.push_back(depth);
     refuted_.push_back(false);
     return node;
 }
@@ -61,10 +58,6 @@ std::optional<pud_node_id> pud_module::get_parent(pud_node_id node) const {
     if (node < axioms_.size())
         return std::nullopt;
     return get_inference(node).parent;
-}
-
-size_t pud_module::get_depth(pud_node_id node) const {
-    return depths_.at(node);
 }
 
 const std::vector<pud_node_id>& pud_module::get_children(pud_node_id node) const {

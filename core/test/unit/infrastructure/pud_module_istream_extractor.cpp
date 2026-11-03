@@ -113,7 +113,6 @@ TEST_F(PudModuleIstreamExtractorTest, AxiomsAreReadBeforeInferences) {
     const pud_module module = sut.extract_module(in);
     EXPECT_EQ(module.count_axioms(), 1u);
     EXPECT_EQ(module.count_nodes(), 2u);
-    EXPECT_EQ(module.get_depth(1), 1u);
 }
 
 TEST_F(PudModuleIstreamExtractorTest, RefutedNodeCountMismatchThrows) {

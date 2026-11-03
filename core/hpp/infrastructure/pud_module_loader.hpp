@@ -8,6 +8,7 @@ template<
     typename IModule,
     typename ILinkFunctorNames,
     typename IRegisterModule,
+    typename ISeedNodeDepths,
     typename ISeedFocus,
     typename IActivateModule,
     typename IApplyRegister,
@@ -17,6 +18,7 @@ struct pud_module_loader {
     pud_module_loader(
         ILinkFunctorNames& link_functor_names,
         IRegisterModule& register_module,
+        ISeedNodeDepths& seed_node_depths,
         ISeedFocus& seed_focus,
         IActivateModule& activate_module,
         IApplyRegister& apply_register,
@@ -26,6 +28,7 @@ struct pud_module_loader {
 private:
     ILinkFunctorNames& link_functor_names_;
     IRegisterModule& register_module_;
+    ISeedNodeDepths& seed_node_depths_;
     ISeedFocus& seed_focus_;
     IActivateModule& activate_module_;
     IApplyRegister& apply_register_;
@@ -35,16 +38,17 @@ private:
 
 #define PUD_MODULE_LOADER_TEMPLATE                                                     \
     template<typename IModule, typename ILinkFunctorNames, typename IRegisterModule,              \
-             typename ISeedFocus, typename IActivateModule, typename IApplyRegister,              \
+             typename ISeedNodeDepths, typename ISeedFocus, typename IActivateModule, typename IApplyRegister,              \
              typename IAddPendingConflicts, typename IDropStoredSolutions>
 #define PUD_MODULE_LOADER                                                              \
-    pud_module_loader<IModule, ILinkFunctorNames, IRegisterModule, ISeedFocus,        \
+    pud_module_loader<IModule, ILinkFunctorNames, IRegisterModule, ISeedNodeDepths, ISeedFocus, \
         IActivateModule, IApplyRegister, IAddPendingConflicts, IDropStoredSolutions>
 
 PUD_MODULE_LOADER_TEMPLATE
 PUD_MODULE_LOADER::pud_module_loader(
     ILinkFunctorNames& link_functor_names,
     IRegisterModule& register_module,
+    ISeedNodeDepths& seed_node_depths,
     ISeedFocus& seed_focus,
     IActivateModule& activate_module,
     IApplyRegister& apply_register,
@@ -52,6 +56,7 @@ PUD_MODULE_LOADER::pud_module_loader(
     IDropStoredSolutions& drop_stored_solutions)
     : link_functor_names_(link_functor_names)
     , register_module_(register_module)
+    , seed_node_depths_(seed_node_depths)
     , seed_focus_(seed_focus)
     , activate_module_(activate_module)
     , apply_register_(apply_register)
@@ -62,6 +67,7 @@ PUD_MODULE_LOADER_TEMPLATE
 void PUD_MODULE_LOADER::load(IModule& module) {
     link_functor_names_.link(module);
     register_module_.register_module(module);
+    seed_node_depths_.seed(module.get_module_id());
     seed_focus_.seed(module.get_module_id());
     const pud_frontier_change change = activate_module_.activate_module(module.get_module_id());
     apply_register_.apply_register(change);

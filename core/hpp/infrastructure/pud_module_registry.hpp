@@ -26,7 +26,6 @@ struct pud_module_registry {
     const pud_inference& get_inference(pud_global_node_id inference) const;
     uint32_t append_functor_name(pud_module_id module, const std::string& name);
     std::optional<pud_global_node_id> get_parent(pud_global_node_id node) const;
-    size_t get_depth(pud_global_node_id node) const;
     const std::vector<pud_node_id>& get_children(pud_global_node_id node) const;
     bool is_leaf(pud_global_node_id node) const;
     bool is_refuted(pud_global_node_id node) const;
@@ -111,11 +110,6 @@ std::optional<pud_global_node_id> pud_module_registry<IModule>::get_parent(pud_g
     if (!parent.has_value())
         return std::nullopt;
     return pud_global_node_id{.module = node.module, .node = parent.value()};
-}
-
-template<typename IModule>
-size_t pud_module_registry<IModule>::get_depth(pud_global_node_id node) const {
-    return modules_.at(node.module).data->get_depth(node.node);
 }
 
 template<typename IModule>
