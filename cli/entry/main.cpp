@@ -101,6 +101,7 @@ int main(int argc, char** argv) {
         bool id_only = false;
         bool deps_only = false;
         bool detailed = false;
+        bool show_inferences = false;
     } module_inspect_opts;
 
     auto* module_inspect_sub = module_app->add_subcommand(
@@ -119,15 +120,21 @@ int main(int argc, char** argv) {
     auto* module_inspect_detailed_flag = module_inspect_sub->add_flag(
         "--detailed",
         module_inspect_opts.detailed,
-        "After the summary, print each node id and its stored clause or inference");
+        "After the summary, print each axiom node id and its stored clause");
     module_inspect_detailed_flag->excludes(module_inspect_id_flag);
     module_inspect_detailed_flag->excludes(module_inspect_deps_flag);
+    auto* module_inspect_inferences_flag = module_inspect_sub->add_flag(
+        "--show-inferences",
+        module_inspect_opts.show_inferences,
+        "With --detailed, also print each inference node (parent and call site)");
+    module_inspect_inferences_flag->needs(module_inspect_detailed_flag);
     module_inspect_sub->callback([&]() {
         pud_module_inspect_command_handler handler{
             module_inspect_opts.input_path,
             module_inspect_opts.id_only,
             module_inspect_opts.deps_only,
-            module_inspect_opts.detailed};
+            module_inspect_opts.detailed,
+            module_inspect_opts.show_inferences};
         handler();
     });
 

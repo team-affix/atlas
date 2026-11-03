@@ -8,7 +8,8 @@ struct pud_module_inspect_command_handler {
         const std::string& input_path,
         bool id_only,
         bool deps_only,
-        bool detailed);
+        bool detailed,
+        bool show_inferences);
 
     void operator()();
 
@@ -17,6 +18,7 @@ private:
     bool id_only_;
     bool deps_only_;
     bool detailed_;
+    bool show_inferences_;
 };
 
 #endif
