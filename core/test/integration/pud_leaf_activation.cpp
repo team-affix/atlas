@@ -208,7 +208,7 @@ TEST_F(PudLeafActivationIntegrationTest, ChildAdmitsAQueryForEachNewGoal) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     EXPECT_TRUE(node_queries.get(child).find(2) != nullptr);
-    EXPECT_EQ(query_holders.get_holders(node_queries.get(child).at(2)).front(), child);
+    EXPECT_EQ(*query_holders.get_holders(node_queries.get(child).at(2)).begin(), child);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, FactChildWithNoGoalsOpensNothingNew) {

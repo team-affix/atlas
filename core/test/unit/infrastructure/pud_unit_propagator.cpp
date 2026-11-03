@@ -21,7 +21,7 @@ struct MockFindQueryHolder {
     MOCK_METHOD(std::optional<pud_unfold>, find_holder, (pud_mhq_head_id), (const));
 };
 struct MockGetQueryHolders {
-    MOCK_METHOD(std::vector<pud_global_node_id>, get_holders, (pud_mhq_head_id), (const));
+    MOCK_METHOD(const std::set<pud_global_node_id>&, get_holders, (pud_mhq_head_id), (const));
 };
 struct MockGetQueryCandidates {
     MOCK_METHOD(std::vector<pud_mhcs_head_id>, candidates, (pud_mhq_head_id), (const));
@@ -56,11 +56,11 @@ struct PudUnitPropagatorTest : public ::testing::Test {
     NiceMock<MockUnfoldLeaf> unfolder;
     test_propagator_t propagator{unit_queries, holder, holders, candidates, frontier, refuted, allower, unfolder};
     std::set<pud_global_node_id> live{pud_test_node(7), pud_test_node(8)};
+    std::set<pud_global_node_id> held{pud_test_node(7), pud_test_node(8)};
 
     void SetUp() override {
         ON_CALL(holder, find_holder(40)).WillByDefault(Return(pud_unfold{.leaf = pud_test_node(7), .goal = 2}));
-        ON_CALL(holders, get_holders(40))
-            .WillByDefault(Return(std::vector<pud_global_node_id>{pud_test_node(7), pud_test_node(8)}));
+        ON_CALL(holders, get_holders(40)).WillByDefault(ReturnRef(held));
         ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30}));
         ON_CALL(frontier, live()).WillByDefault(ReturnRef(live));
         ON_CALL(refuted, is_refuted(_)).WillByDefault(Return(false));
@@ -89,7 +89,7 @@ TEST_F(PudUnitPropagatorTest, AQueryWithMoreReadyHoldersReturnsToTheFrontOfTheQu
 }
 
 TEST_F(PudUnitPropagatorTest, AQueryWithOneReadyHolderLeavesTheQueue) {
-    ON_CALL(holders, get_holders(40)).WillByDefault(Return(std::vector<pud_global_node_id>{pud_test_node(7)}));
+    held.erase(pud_test_node(8));
     propagator.propagate();
     EXPECT_THAT(unit_queries, IsEmpty());
 }
@@ -124,4 +124,12 @@ TEST_F(PudUnitPropagatorTest, AQueryWithNoReadyHolderIsDropped) {
     EXPECT_CALL(unfolder, unfold(_, _)).Times(0);
     EXPECT_EQ(propagator.propagate(), pud_unfold_outcome::none);
     EXPECT_THAT(unit_queries, IsEmpty());
+}
+
+TEST_F(PudUnitPropagatorTest, TheHoldersAreReadOnlyAsFarAsTheSecondReadyLeaf) {
+    held.insert(pud_test_node(9));
+    EXPECT_CALL(allower, allow(_)).Times(::testing::AnyNumber());
+    EXPECT_CALL(allower, allow(pud_test_node(9))).Times(0);
+    propagator.propagate();
+    EXPECT_THAT(unit_queries, ElementsAre(40));
 }

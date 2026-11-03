@@ -9,7 +9,8 @@
 #include "value_objects/pud_unfold.hpp"
 
 // Drains the queue of queries that went unit and unfolds the first held leaf that can be unfolded. A
-// query held by more ready leaves goes back to the front of the queue for the next call.
+// query held by more ready leaves goes back to the front of the queue for the next call; the holders are
+// read only as far as the second ready leaf.
 template<
     typename IUnitQueries,
     typename IFindQueryHolder,
@@ -78,7 +79,8 @@ pud_unfold_outcome PUD_UNIT_PROPAGATOR::propagate() {
             continue;
         if (get_query_candidates_.candidates(head).size() != 1)
             continue;
-        std::vector<pud_global_node_id> ready;
+        std::optional<pud_global_node_id> first_ready;
+        bool more_ready = false;
         for (const pud_global_node_id leaf : get_query_holders_.get_holders(head)) {
             if (!get_live_nodes_.live().contains(leaf))
                 continue;
@@ -86,12 +88,16 @@ pud_unfold_outcome PUD_UNIT_PROPAGATOR::propagate() {
                 continue;
             if (!allow_unfold_.allow(leaf))
                 continue;
-            ready.push_back(leaf);
+            if (first_ready.has_value()) {
+                more_ready = true;
+                break;
+            }
+            first_ready = leaf;
         }
-        if (ready.empty())
+        if (!first_ready.has_value())
             continue;
-        const pud_unfold_outcome outcome = unfold_leaf_.unfold(ready.front(), held->goal);
-        if (ready.size() > 1)
+        const pud_unfold_outcome outcome = unfold_leaf_.unfold(first_ready.value(), held->goal);
+        if (more_ready)
             unit_queries_.push_front(head);
         return outcome;
     }

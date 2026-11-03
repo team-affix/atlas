@@ -10,7 +10,6 @@
 #include "infrastructure/pud_pending_conflict_store.hpp"
 #include "infrastructure/pud_solution_store.hpp"
 #include "value_objects/pud_goal_list.hpp"
-#include "value_objects/pud_leaf_goal_query.hpp"
 
 using ::testing::Return;
 
@@ -32,39 +31,29 @@ struct MockTakeSolution {
     MOCK_METHOD(bool, take, ());
 };
 
-struct MockRefuteBlocked {
-    MOCK_METHOD(bool, refute_blocked, ((const std::vector<pud_leaf_goal_query>&)));
-};
-
 struct MockUnfoldOne {
-    MOCK_METHOD(pud_unfold_outcome, unfold_one, ((const std::vector<pud_leaf_goal_query>&)));
-};
-
-struct MockListQueries {
-    MOCK_METHOD(std::vector<pud_leaf_goal_query>, list, (), (const));
+    MOCK_METHOD(pud_unfold_outcome, unfold_one, ());
 };
 
 struct PudSearchTickIntegrationTest : public ::testing::Test {
     pud_focus_set focus;
     pud_frontier all_leaves;
-    pud_focus_frontier<pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set>
-        frontier{all_leaves, all_leaves, all_leaves, all_leaves, focus};
-    MockIsNodeRefuted refuted;
     MockGetNodeGoals goals;
+    pud_focus_frontier<pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set, MockGetNodeGoals>
+        frontier{all_leaves, all_leaves, all_leaves, all_leaves, focus, goals};
+    MockIsNodeRefuted refuted;
     pud_solved_leaf_finder<
-        pud_focus_frontier<pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set>,
-        MockIsNodeRefuted, MockGetNodeGoals>
-        finder{frontier, refuted, goals};
+        pud_focus_frontier<pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set, MockGetNodeGoals>,
+        MockIsNodeRefuted>
+        finder{frontier, refuted};
     pud_solution_store solutions;
     pud_pending_conflict_store conflicts;
     MockTakeSolution take;
-    MockRefuteBlocked refute;
     MockUnfoldOne unfold;
-    MockListQueries queries;
     pud_searcher<
-        pud_solution_store, pud_pending_conflict_store, MockTakeSolution, MockRefuteBlocked,
-        MockUnfoldOne, MockListQueries>
-        searcher{solutions, conflicts, take, refute, unfold, queries, 1};
+        pud_solution_store, pud_pending_conflict_store, MockTakeSolution, MockUnfoldOne,
+        pud_focus_frontier<pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set, MockGetNodeGoals>>
+        searcher{solutions, conflicts, take, unfold, frontier, 1};
     pud_search_driver search{searcher.search()};
     pud_goal_list empty;
 };
@@ -74,9 +63,9 @@ struct PudSearchTickIntegrationTest : public ::testing::Test {
 TEST_F(PudSearchTickIntegrationTest, TheFinderReturnsTheSmallestSolvedFocusLeaf) {
     focus.insert(node(0));
     focus.insert(node(2));
-    frontier.apply_register(pud_frontier_change{.offspring = {node(2), node(0), node(1)}, .refuted = {}});
     EXPECT_CALL(refuted, is_refuted).WillRepeatedly(Return(false));
     EXPECT_CALL(goals, get).WillRepeatedly(::testing::ReturnRef(empty));
+    frontier.apply_register(pud_frontier_change{.offspring = {node(2), node(0), node(1)}, .refuted = {}});
     const std::optional<pud_global_node_id> found = finder.find();
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(found.value(), node(0));
@@ -85,9 +74,9 @@ TEST_F(PudSearchTickIntegrationTest, TheFinderReturnsTheSmallestSolvedFocusLeaf)
 TEST_F(PudSearchTickIntegrationTest, ErasingAReturnedLeafMakesTheNextSolvedLeafVisible) {
     focus.insert(node(0));
     focus.insert(node(2));
-    frontier.apply_register(pud_frontier_change{.offspring = {node(0), node(2)}, .refuted = {}});
     EXPECT_CALL(refuted, is_refuted).WillRepeatedly(Return(false));
     EXPECT_CALL(goals, get).WillRepeatedly(::testing::ReturnRef(empty));
+    frontier.apply_register(pud_frontier_change{.offspring = {node(0), node(2)}, .refuted = {}});
     frontier.erase(finder.find().value());
     const std::optional<pud_global_node_id> next = finder.find();
     ASSERT_TRUE(next.has_value());
@@ -110,8 +99,7 @@ TEST_F(PudSearchTickIntegrationTest, SpendingTheBudgetStopsTheSessionAndLeavesNo
     const expr stored{expr::functor{4, {}}};
     solutions.set(&stored, 2);
     EXPECT_CALL(take, take()).WillOnce(Return(false)).WillOnce(Return(false));
-    EXPECT_CALL(refute, refute_blocked(::testing::_)).WillOnce(Return(false)).WillOnce(Return(false));
-    EXPECT_CALL(unfold, unfold_one(::testing::_)).WillOnce(Return(pud_unfold_outcome::off_focus));
+    EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_unfold_outcome::off_focus));
     ASSERT_TRUE(search.next());
     EXPECT_EQ(search.last_step(), pud_search_step::unfolded);
     EXPECT_FALSE(search.next());

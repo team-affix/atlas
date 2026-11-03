@@ -4,7 +4,6 @@
 #include <optional>
 #include <set>
 #include <unordered_map>
-#include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
@@ -15,7 +14,7 @@ struct pud_query_holders {
     void hold(pud_mhq_head_id head_id, pud_global_node_id leaf, pud_body_goal_id goal);
     bool release(pud_mhq_head_id head_id, pud_global_node_id leaf);
     std::optional<pud_unfold> find_holder(pud_mhq_head_id head_id) const;
-    std::vector<pud_global_node_id> get_holders(pud_mhq_head_id head_id) const;
+    const std::set<pud_global_node_id>& get_holders(pud_mhq_head_id head_id) const;
 private:
     struct holding {
         pud_body_goal_id goal;
@@ -23,6 +22,7 @@ private:
     };
 
     std::unordered_map<pud_mhq_head_id, holding> holdings_;
+    std::set<pud_global_node_id> no_holders_;
 };
 
 #endif

@@ -1,3 +1,4 @@
+#include <set>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -30,7 +31,7 @@ struct MockInvalidateQueryLeaf {
     MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_global_node_id));
 };
 struct MockGetQueryHolders {
-    MOCK_METHOD(std::vector<pud_global_node_id>, get_holders, (pud_mhq_head_id));
+    MOCK_METHOD(const std::set<pud_global_node_id>&, get_holders, (pud_mhq_head_id));
 };
 
 using test_node_deactivator_t = pud_node_deactivator<
@@ -94,7 +95,9 @@ TEST_F(PudNodeDeactivatorTest, EveryQueryIsReleasedBeforeTheQueriesAreErased) {
 
 TEST_F(PudNodeDeactivatorTest, EveryHolderOfAQueryLeftWithoutACandidateIsReturned) {
     ON_CALL(invalidate, invalidate_leaf(pud_test_node(5))).WillByDefault(Return(std::vector<pud_mhq_head_id>{40, 41}));
-    ON_CALL(get_holders, get_holders(40u)).WillByDefault(Return(std::vector<pud_global_node_id>{pud_test_node(7), pud_test_node(8)}));
-    ON_CALL(get_holders, get_holders(41u)).WillByDefault(Return(std::vector<pud_global_node_id>{pud_test_node(9)}));
+    const std::set<pud_global_node_id> first_holders{pud_test_node(7), pud_test_node(8)};
+    const std::set<pud_global_node_id> second_holders{pud_test_node(9)};
+    ON_CALL(get_holders, get_holders(40u)).WillByDefault(ReturnRef(first_holders));
+    ON_CALL(get_holders, get_holders(41u)).WillByDefault(ReturnRef(second_holders));
     EXPECT_THAT(deactivator.deactivate(pud_test_node(5)), ElementsAre(pud_test_node(7), pud_test_node(8), pud_test_node(9)));
 }

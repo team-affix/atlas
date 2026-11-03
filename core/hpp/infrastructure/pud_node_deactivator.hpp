@@ -1,6 +1,7 @@
 #ifndef PUD_NODE_DEACTIVATOR_HPP
 #define PUD_NODE_DEACTIVATOR_HPP
 
+#include <set>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
@@ -83,7 +84,7 @@ std::vector<pud_global_node_id> PUD_NODE_DEACTIVATOR::deactivate(pud_global_node
     erase_node_lvc_.erase(node);
     std::vector<pud_global_node_id> stranded;
     for (pud_mhq_head_id exhausted : invalidate_query_leaf_.invalidate_leaf(node)) {
-        const std::vector<pud_global_node_id> holders = get_query_holders_.get_holders(exhausted);
+        const std::set<pud_global_node_id>& holders = get_query_holders_.get_holders(exhausted);
         stranded.insert(stranded.end(), holders.begin(), holders.end());
     }
     return stranded;

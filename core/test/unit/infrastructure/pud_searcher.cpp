@@ -1,15 +1,14 @@
 #include <optional>
-#include <vector>
+#include <set>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_searcher.hpp"
-#include "value_objects/pud_leaf_goal_query.hpp"
 #include "pud_test_node.hpp"
 
-using ::testing::_;
 using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
+using ::testing::ReturnRef;
 
 namespace {
 
@@ -22,41 +21,35 @@ struct MockTakePendingConflict {
 struct MockTakeSolution {
     MOCK_METHOD(bool, take, ());
 };
-struct MockRefuteBlocked {
-    MOCK_METHOD(bool, refute_blocked, ((const std::vector<pud_leaf_goal_query>&)));
-};
 struct MockUnfoldOne {
-    MOCK_METHOD(pud_unfold_outcome, unfold_one, ((const std::vector<pud_leaf_goal_query>&)));
+    MOCK_METHOD(pud_unfold_outcome, unfold_one, ());
 };
-struct MockListQueries {
-    MOCK_METHOD(std::vector<pud_leaf_goal_query>, list, (), (const));
+struct MockGetLiveFocusLeaves {
+    MOCK_METHOD(const std::set<pud_global_node_id>&, live, (), (const));
 };
 
 using test_searcher_t = pud_searcher<
     NiceMock<MockClearSolution>, NiceMock<MockTakePendingConflict>, NiceMock<MockTakeSolution>,
-    NiceMock<MockRefuteBlocked>, NiceMock<MockUnfoldOne>, NiceMock<MockListQueries>>;
+    NiceMock<MockUnfoldOne>, NiceMock<MockGetLiveFocusLeaves>>;
 
-// By default nothing is pending, solved or blocked, and every unfold succeeds off the focus.
+// By default nothing is pending or solved, no focus leaf is live, and every unfold succeeds off the focus.
 struct PudSearcherTest : public ::testing::Test {
     NiceMock<MockClearSolution> solutions;
     NiceMock<MockTakePendingConflict> conflicts;
     NiceMock<MockTakeSolution> taker;
-    NiceMock<MockRefuteBlocked> refuter;
     NiceMock<MockUnfoldOne> driver;
-    NiceMock<MockListQueries> queries;
-    std::vector<pud_leaf_goal_query> open_query{
-        pud_leaf_goal_query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true}};
+    NiceMock<MockGetLiveFocusLeaves> focus_leaves;
+    std::set<pud_global_node_id> live;
 
     void SetUp() override {
         ON_CALL(conflicts, try_take()).WillByDefault(Return(false));
         ON_CALL(taker, take()).WillByDefault(Return(false));
-        ON_CALL(refuter, refute_blocked(_)).WillByDefault(Return(false));
-        ON_CALL(driver, unfold_one(_)).WillByDefault(Return(pud_unfold_outcome::off_focus));
-        ON_CALL(queries, list()).WillByDefault(Return(std::vector<pud_leaf_goal_query>{}));
+        ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_unfold_outcome::off_focus));
+        ON_CALL(focus_leaves, live()).WillByDefault(ReturnRef(live));
     }
 
     test_searcher_t make_searcher(size_t max_unfolds) {
-        return test_searcher_t{solutions, conflicts, taker, refuter, driver, queries, max_unfolds};
+        return test_searcher_t{solutions, conflicts, taker, driver, focus_leaves, max_unfolds};
     }
 };
 
@@ -71,17 +64,17 @@ TEST_F(PudSearcherTest, ANewSessionIsRunningWithNoUnfolds) {
 TEST_F(PudSearcherTest, NothingRunsUntilTheFirstStepIsAskedFor) {
     test_searcher_t searcher = make_searcher(4);
     EXPECT_CALL(solutions, clear()).Times(0);
-    EXPECT_CALL(driver, unfold_one(_)).Times(0);
+    EXPECT_CALL(driver, unfold_one()).Times(0);
     coroutine<pud_search_step, void> steps = searcher.search();
 }
 
 TEST_F(PudSearcherTest, EachUnfoldIsItsOwnStep) {
     test_searcher_t searcher = make_searcher(4);
     coroutine<pud_search_step, void> steps = searcher.search();
-    EXPECT_CALL(driver, unfold_one(_)).Times(1);
+    EXPECT_CALL(driver, unfold_one()).Times(1);
     EXPECT_EQ(steps.next(), pud_search_step::unfolded);
     EXPECT_EQ(searcher.unfold_count(), 1u);
-    EXPECT_CALL(driver, unfold_one(_)).Times(1);
+    EXPECT_CALL(driver, unfold_one()).Times(1);
     EXPECT_EQ(steps.next(), pud_search_step::unfolded);
     EXPECT_EQ(searcher.unfold_count(), 2u);
 }
@@ -91,9 +84,9 @@ TEST_F(PudSearcherTest, EveryStepFirstClearsTheLastSolution) {
     coroutine<pud_search_step, void> steps = searcher.search();
     InSequence order;
     EXPECT_CALL(solutions, clear());
-    EXPECT_CALL(driver, unfold_one(_));
+    EXPECT_CALL(driver, unfold_one());
     EXPECT_CALL(solutions, clear());
-    EXPECT_CALL(driver, unfold_one(_));
+    EXPECT_CALL(driver, unfold_one());
     steps.next();
     steps.next();
 }
@@ -110,22 +103,14 @@ TEST_F(PudSearcherTest, ATakenSolutionIsAStepBeforeAnyUnfold) {
     test_searcher_t searcher = make_searcher(4);
     EXPECT_CALL(taker, take()).WillOnce(Return(true)).WillRepeatedly(Return(false));
     coroutine<pud_search_step, void> steps = searcher.search();
-    EXPECT_CALL(driver, unfold_one(_)).Times(0);
+    EXPECT_CALL(driver, unfold_one()).Times(0);
     EXPECT_EQ(steps.next(), pud_search_step::solved);
     EXPECT_EQ(searcher.unfold_count(), 0u);
 }
 
-TEST_F(PudSearcherTest, ABlockedRefutationIsAStepBeforeAnyUnfold) {
-    test_searcher_t searcher = make_searcher(4);
-    EXPECT_CALL(refuter, refute_blocked(_)).WillOnce(Return(true)).WillRepeatedly(Return(false));
-    coroutine<pud_search_step, void> steps = searcher.search();
-    EXPECT_CALL(driver, unfold_one(_)).Times(0);
-    EXPECT_EQ(steps.next(), pud_search_step::refuted);
-}
-
 TEST_F(PudSearcherTest, EveryUnfoldOnOrOffTheFocusSpendsTheBudget) {
     test_searcher_t searcher = make_searcher(2);
-    EXPECT_CALL(driver, unfold_one(_))
+    EXPECT_CALL(driver, unfold_one())
         .WillOnce(Return(pud_unfold_outcome::off_focus))
         .WillOnce(Return(pud_unfold_outcome::on_focus));
     coroutine<pud_search_step, void> steps = searcher.search();
@@ -138,7 +123,7 @@ TEST_F(PudSearcherTest, EveryUnfoldOnOrOffTheFocusSpendsTheBudget) {
 
 TEST_F(PudSearcherTest, ABudgetOfZeroUnfoldsNothing) {
     test_searcher_t searcher = make_searcher(0);
-    EXPECT_CALL(driver, unfold_one(_)).Times(0);
+    EXPECT_CALL(driver, unfold_one()).Times(0);
     coroutine<pud_search_step, void> steps = searcher.search();
     EXPECT_EQ(steps.next(), std::nullopt);
     EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::budget_spent);
@@ -146,7 +131,7 @@ TEST_F(PudSearcherTest, ABudgetOfZeroUnfoldsNothing) {
 
 TEST_F(PudSearcherTest, NoUnfoldWithNoOpenFocusLeafIsARefutation) {
     test_searcher_t searcher = make_searcher(4);
-    ON_CALL(driver, unfold_one(_)).WillByDefault(Return(pud_unfold_outcome::none));
+    ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_unfold_outcome::none));
     coroutine<pud_search_step, void> steps = searcher.search();
     EXPECT_EQ(steps.next(), std::nullopt);
     EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::refuted);
@@ -154,27 +139,8 @@ TEST_F(PudSearcherTest, NoUnfoldWithNoOpenFocusLeafIsARefutation) {
 
 TEST_F(PudSearcherTest, NoUnfoldWhileAFocusLeafIsStillOpenIsExhaustion) {
     test_searcher_t searcher = make_searcher(4);
-    ON_CALL(driver, unfold_one(_)).WillByDefault(Return(pud_unfold_outcome::none));
-    ON_CALL(queries, list()).WillByDefault(Return(open_query));
-    coroutine<pud_search_step, void> steps = searcher.search();
-    EXPECT_EQ(steps.next(), std::nullopt);
-    EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::exhausted);
-}
-
-TEST_F(PudSearcherTest, TheFocusQueriesAreListedOnceAStepForTheRefuterAndTheUnfold) {
-    test_searcher_t searcher = make_searcher(4);
-    coroutine<pud_search_step, void> steps = searcher.search();
-    InSequence order;
-    EXPECT_CALL(queries, list()).WillOnce(Return(open_query));
-    EXPECT_CALL(refuter, refute_blocked(open_query)).WillOnce(Return(false));
-    EXPECT_CALL(driver, unfold_one(open_query)).WillOnce(Return(pud_unfold_outcome::off_focus));
-    EXPECT_EQ(steps.next(), pud_search_step::unfolded);
-}
-
-TEST_F(PudSearcherTest, TheStopReasonReadsTheQueriesListedForTheFailedUnfold) {
-    test_searcher_t searcher = make_searcher(4);
-    EXPECT_CALL(queries, list()).Times(1).WillOnce(Return(open_query));
-    ON_CALL(driver, unfold_one(_)).WillByDefault(Return(pud_unfold_outcome::none));
+    ON_CALL(driver, unfold_one()).WillByDefault(Return(pud_unfold_outcome::none));
+    live.insert(pud_test_node(3));
     coroutine<pud_search_step, void> steps = searcher.search();
     EXPECT_EQ(steps.next(), std::nullopt);
     EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::exhausted);

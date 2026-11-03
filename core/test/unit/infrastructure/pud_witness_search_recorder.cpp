@@ -68,3 +68,31 @@ TEST_F(PudWitnessSearchRecorderTest, AddsAndForksAreRecordedOnlyBetweenBeginAndT
     log.begin_recording_adds();
     EXPECT_THAT(log.take_recorded_adds(), IsEmpty());
 }
+
+TEST_F(PudWitnessSearchRecorderTest, NothingIsUnsettledAtFirst) {
+    EXPECT_THAT(log.take_unsettled_leaves(), IsEmpty());
+    EXPECT_THAT(log.take_unsettled_searches(), IsEmpty());
+}
+
+TEST_F(PudWitnessSearchRecorderTest, AnInvalidatedLeafIsUnsettled) {
+    log.invalidate_leaf(pud_test_node(3));
+    log.invalidate_leaf(pud_test_node(4));
+    EXPECT_THAT(log.take_unsettled_leaves(), ElementsAre(pud_test_node(3), pud_test_node(4)));
+    EXPECT_THAT(log.take_unsettled_searches(), IsEmpty());
+}
+
+TEST_F(PudWitnessSearchRecorderTest, AnAdvancedOrRemovedSearchIsUnsettled) {
+    log.advance(40);
+    log.remove(41);
+    EXPECT_THAT(log.take_unsettled_searches(), ElementsAre(40, 41));
+    EXPECT_THAT(log.take_unsettled_leaves(), IsEmpty());
+}
+
+TEST_F(PudWitnessSearchRecorderTest, TakingTheUnsettledLeavesAndSearchesEmptiesTheLogs) {
+    log.invalidate_leaf(pud_test_node(3));
+    log.remove(41);
+    log.take_unsettled_leaves();
+    log.take_unsettled_searches();
+    EXPECT_THAT(log.take_unsettled_leaves(), IsEmpty());
+    EXPECT_THAT(log.take_unsettled_searches(), IsEmpty());
+}

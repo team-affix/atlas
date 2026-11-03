@@ -11,7 +11,9 @@
 
 // Forwards the witness search capabilities mhcs uses, recording which searches an add or fork created
 // so the candidate watch can tell what a candidate rests on. A search's witness leaf is the one the
-// witness search itself rests on.
+// witness search itself rests on. It also logs what may have moved: each invalidated leaf, whose searches all
+// move on, and each search advanced or removed, which may have ended. Readers that cache where a search rests
+// look again only at those instead of rereading every search.
 template<typename IMhws>
 struct pud_witness_search_recorder {
     pud_witness_search_recorder(IMhws& inner);
@@ -22,6 +24,8 @@ struct pud_witness_search_recorder {
     std::vector<pud_mhws_head_id> invalidate_leaf(pud_global_node_id leaf);
     void begin_recording_adds();
     std::vector<pud_mhws_head_id> take_recorded_adds();
+    std::vector<pud_global_node_id> take_unsettled_leaves();
+    std::vector<pud_mhws_head_id> take_unsettled_searches();
     std::optional<pud_global_node_id> node_of(pud_mhws_head_id head_id) const;
 private:
     void record(std::optional<pud_mhws_head_id> head_id);
@@ -29,13 +33,17 @@ private:
     IMhws& inner_;
     std::vector<pud_mhws_head_id> recorded_adds_;
     bool recording_;
+    std::vector<pud_global_node_id> unsettled_leaves_;
+    std::vector<pud_mhws_head_id> unsettled_searches_;
 };
 
 template<typename IMhws>
 pud_witness_search_recorder<IMhws>::pud_witness_search_recorder(IMhws& inner)
     : inner_(inner)
     , recorded_adds_()
-    , recording_(false) {}
+    , recording_(false)
+    , unsettled_leaves_()
+    , unsettled_searches_() {}
 
 template<typename IMhws>
 void pud_witness_search_recorder<IMhws>::record(std::optional<pud_mhws_head_id> head_id) {
@@ -61,16 +69,19 @@ std::optional<pud_mhws_head_id> pud_witness_search_recorder<IMhws>::try_fork(
 
 template<typename IMhws>
 std::optional<pud_witness_advance> pud_witness_search_recorder<IMhws>::advance(pud_mhws_head_id head_id) {
+    unsettled_searches_.push_back(head_id);
     return inner_.advance(head_id);
 }
 
 template<typename IMhws>
 void pud_witness_search_recorder<IMhws>::remove(pud_mhws_head_id head_id) {
+    unsettled_searches_.push_back(head_id);
     inner_.remove(head_id);
 }
 
 template<typename IMhws>
 std::vector<pud_mhws_head_id> pud_witness_search_recorder<IMhws>::invalidate_leaf(pud_global_node_id leaf) {
+    unsettled_leaves_.push_back(leaf);
     return inner_.invalidate_leaf(leaf);
 }
 
@@ -84,6 +95,16 @@ template<typename IMhws>
 std::vector<pud_mhws_head_id> pud_witness_search_recorder<IMhws>::take_recorded_adds() {
     recording_ = false;
     return std::move(recorded_adds_);
+}
+
+template<typename IMhws>
+std::vector<pud_global_node_id> pud_witness_search_recorder<IMhws>::take_unsettled_leaves() {
+    return std::exchange(unsettled_leaves_, {});
+}
+
+template<typename IMhws>
+std::vector<pud_mhws_head_id> pud_witness_search_recorder<IMhws>::take_unsettled_searches() {
+    return std::exchange(unsettled_searches_, {});
 }
 
 template<typename IMhws>

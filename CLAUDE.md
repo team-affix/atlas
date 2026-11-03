@@ -56,7 +56,7 @@ cli/entry/main.cpp            CLI11 subcommand → options struct → handler(..
   instead of changing an existing one. Duplicate wiring across manifests if needed.
 - Solver policy types take capabilities like everything else. `docs/pud-solver-architecture.md`
   (decision 3) still allows a heuristic to read its own manifest's internals, but Lodestar no longer needs to:
-  its driver is a small orchestrator over injected parts (query lister, choice lister, round-robins,
+  its driver is a small orchestrator over injected parts (slot index, round-robins,
   unit propagator, unfold applier).
 
 ### Sim-based engine (`docs/solving-loop.md`, `docs/lifecycle.md`)

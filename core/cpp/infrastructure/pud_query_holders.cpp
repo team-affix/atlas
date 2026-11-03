@@ -2,7 +2,8 @@
 #include "debug_assert.hpp"
 
 pud_query_holders::pud_query_holders()
-    : holdings_() {}
+    : holdings_()
+    , no_holders_() {}
 
 void pud_query_holders::hold(pud_mhq_head_id head_id, pud_global_node_id leaf, pud_body_goal_id goal) {
     holding& held = holdings_.try_emplace(head_id, holding{.goal = goal, .leaves = {}}).first->second;
@@ -28,10 +29,9 @@ std::optional<pud_unfold> pud_query_holders::find_holder(pud_mhq_head_id head_id
     return pud_unfold{.leaf = *held->second.leaves.begin(), .goal = held->second.goal};
 }
 
-std::vector<pud_global_node_id> pud_query_holders::get_holders(pud_mhq_head_id head_id) const {
+const std::set<pud_global_node_id>& pud_query_holders::get_holders(pud_mhq_head_id head_id) const {
     const auto held = holdings_.find(head_id);
     if (held == holdings_.end())
-        return {};
-    const std::set<pud_global_node_id>& leaves = held->second.leaves;
-    return std::vector<pud_global_node_id>(leaves.begin(), leaves.end());
+        return no_holders_;
+    return held->second.leaves;
 }
