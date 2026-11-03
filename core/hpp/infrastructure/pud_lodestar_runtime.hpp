@@ -9,6 +9,7 @@
 #include "infrastructure/pud_module.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_global_node_id.hpp"
+#include "value_objects/pud_search_step.hpp"
 #include "value_objects/pud_search_stop_reason.hpp"
 
 struct pud_lodestar_runtime {
@@ -22,6 +23,7 @@ struct pud_lodestar_runtime {
         bool report_stored_solutions);
     void register_module(pud_module& module);
     bool next();
+    pud_search_step last_step() const;
     const expr* solution() const;
     size_t solution_depth() const;
     pud_search_stop_reason stop_reason() const;

@@ -1,13 +1,15 @@
-#ifndef PUD_SEARCH_STEPPER_HPP
-#define PUD_SEARCH_STEPPER_HPP
+#ifndef PUD_SEARCHER_HPP
+#define PUD_SEARCHER_HPP
 
 #include <cstddef>
+#include "infrastructure/coroutine.hpp"
+#include "value_objects/pud_search_step.hpp"
 #include "value_objects/pud_search_stop_reason.hpp"
 #include "value_objects/pud_unfold_outcome.hpp"
 
-// One tick of a PUD search session: report a pending registration conflict, else unfold until a solution
-// is taken or a blocked leaf is refuted. Every unfold counts against the session's budget. When no tick
-// is left the stepper stops and remembers why.
+// A PUD search session as a coroutine that yields after every step: each unfold, each reported solution,
+// each reported refutation. Every unfold counts against the session's budget. When no step is left the
+// coroutine finishes and the searcher remembers why.
 template<
     typename IClearSolution,
     typename ITakePendingConflict,
@@ -15,8 +17,8 @@ template<
     typename IRefuteBlocked,
     typename IUnfoldOne,
     typename IListQueries>
-struct pud_search_stepper {
-    pud_search_stepper(
+struct pud_searcher {
+    pud_searcher(
         IClearSolution& clear_solution,
         ITakePendingConflict& take_pending_conflict,
         ITakeSolution& take_solution,
@@ -24,7 +26,7 @@ struct pud_search_stepper {
         IUnfoldOne& unfold_one,
         IListQueries& list_queries,
         size_t max_unfolds);
-    bool step();
+    coroutine<pud_search_step, void> search();
     pud_search_stop_reason stop_reason() const;
     size_t unfold_count() const;
 private:
@@ -39,15 +41,14 @@ private:
     pud_search_stop_reason stop_reason_;
 };
 
-#define PUD_SEARCH_STEPPER_TEMPLATE                                                        \
+#define PUD_SEARCHER_TEMPLATE                                                                       \
     template<typename IClearSolution, typename ITakePendingConflict, typename ITakeSolution,       \
              typename IRefuteBlocked, typename IUnfoldOne, typename IListQueries>
-#define PUD_SEARCH_STEPPER                                                                 \
-    pud_search_stepper<IClearSolution, ITakePendingConflict, ITakeSolution, IRefuteBlocked, \
-        IUnfoldOne, IListQueries>
+#define PUD_SEARCHER                                                                                \
+    pud_searcher<IClearSolution, ITakePendingConflict, ITakeSolution, IRefuteBlocked, IUnfoldOne, IListQueries>
 
-PUD_SEARCH_STEPPER_TEMPLATE
-PUD_SEARCH_STEPPER::pud_search_stepper(
+PUD_SEARCHER_TEMPLATE
+PUD_SEARCHER::pud_searcher(
     IClearSolution& clear_solution,
     ITakePendingConflict& take_pending_conflict,
     ITakeSolution& take_solution,
@@ -65,42 +66,47 @@ PUD_SEARCH_STEPPER::pud_search_stepper(
     , unfolds_(0)
     , stop_reason_(pud_search_stop_reason::running) {}
 
-PUD_SEARCH_STEPPER_TEMPLATE
-bool PUD_SEARCH_STEPPER::step() {
-    clear_solution_.clear();
-    if (stop_reason_ != pud_search_stop_reason::running)
-        return false;
-    if (take_pending_conflict_.try_take())
-        return true;
+PUD_SEARCHER_TEMPLATE
+coroutine<pud_search_step, void> PUD_SEARCHER::search() {
     for (;;) {
-        if (take_solution_.take())
-            return true;
-        if (refute_blocked_.refute_blocked())
-            return true;
+        clear_solution_.clear();
+        if (take_pending_conflict_.try_take()) {
+            co_yield pud_search_step::refuted;
+            continue;
+        }
+        if (take_solution_.take()) {
+            co_yield pud_search_step::solved;
+            continue;
+        }
+        if (refute_blocked_.refute_blocked()) {
+            co_yield pud_search_step::refuted;
+            continue;
+        }
         if (unfolds_ >= max_unfolds_) {
             stop_reason_ = pud_search_stop_reason::budget_spent;
-            return false;
+            co_return;
         }
         if (unfold_one_.unfold_one() == pud_unfold_outcome::none) {
             const bool focus_open = !list_queries_.list().empty();
             stop_reason_ = focus_open ? pud_search_stop_reason::exhausted : pud_search_stop_reason::refuted;
-            return false;
+            co_return;
         }
         ++unfolds_;
+        co_yield pud_search_step::unfolded;
     }
 }
 
-PUD_SEARCH_STEPPER_TEMPLATE
-pud_search_stop_reason PUD_SEARCH_STEPPER::stop_reason() const {
+PUD_SEARCHER_TEMPLATE
+pud_search_stop_reason PUD_SEARCHER::stop_reason() const {
     return stop_reason_;
 }
 
-PUD_SEARCH_STEPPER_TEMPLATE
-size_t PUD_SEARCH_STEPPER::unfold_count() const {
+PUD_SEARCHER_TEMPLATE
+size_t PUD_SEARCHER::unfold_count() const {
     return unfolds_;
 }
 
-#undef PUD_SEARCH_STEPPER
-#undef PUD_SEARCH_STEPPER_TEMPLATE
+#undef PUD_SEARCHER
+#undef PUD_SEARCHER_TEMPLATE
 
 #endif

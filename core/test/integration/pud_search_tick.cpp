@@ -5,7 +5,8 @@
 #include "infrastructure/pud_focus_seeder.hpp"
 #include "infrastructure/pud_focus_set.hpp"
 #include "infrastructure/pud_frontier.hpp"
-#include "infrastructure/pud_search_stepper.hpp"
+#include "infrastructure/pud_search_driver.hpp"
+#include "infrastructure/pud_searcher.hpp"
 #include "infrastructure/pud_solved_leaf_finder.hpp"
 #include "infrastructure/pud_node_depth_counter.hpp"
 #include "infrastructure/pud_pending_conflict_store.hpp"
@@ -73,10 +74,11 @@ struct PudSearchTickIntegrationTest : public ::testing::Test {
     MockRefuteBlocked refute;
     MockUnfoldOne unfold;
     MockListQueries queries;
-    pud_search_stepper<
+    pud_searcher<
         pud_solution_store, pud_pending_conflict_store, MockTakeSolution, MockRefuteBlocked,
         MockUnfoldOne, MockListQueries>
-        stepper{solutions, conflicts, take, refute, unfold, queries, 1};
+        searcher{solutions, conflicts, take, refute, unfold, queries, 1};
+    pud_search_driver search{searcher.search()};
     pud_goal_list empty;
     std::vector<pud_node_id> axiom_children{1};
     std::vector<pud_node_id> none;
@@ -119,11 +121,12 @@ TEST_F(PudSearchTickIntegrationTest, ErasingAReturnedLeafMakesTheNextSolvedLeafV
     EXPECT_EQ(next.value(), node(2));
 }
 
-TEST_F(PudSearchTickIntegrationTest, AConflictTickClearsThePreviousSolution) {
+TEST_F(PudSearchTickIntegrationTest, AConflictStepClearsThePreviousSolution) {
     const expr stored{expr::functor{4, {}}};
     solutions.set(&stored, 2);
     conflicts.add(1);
-    EXPECT_TRUE(stepper.step());
+    ASSERT_TRUE(search.next());
+    EXPECT_EQ(search.last_step(), pud_search_step::refuted);
     EXPECT_EQ(solutions.solution(), nullptr);
     EXPECT_EQ(solutions.solution_depth(), 0u);
     EXPECT_EQ(solutions.solution_count(), 1u);
@@ -136,10 +139,12 @@ TEST_F(PudSearchTickIntegrationTest, SpendingTheBudgetStopsTheSessionAndLeavesNo
     EXPECT_CALL(take, take()).WillOnce(Return(false)).WillOnce(Return(false));
     EXPECT_CALL(refute, refute_blocked()).WillOnce(Return(false)).WillOnce(Return(false));
     EXPECT_CALL(unfold, unfold_one()).WillOnce(Return(pud_unfold_outcome::off_focus));
-    EXPECT_FALSE(stepper.step());
-    EXPECT_EQ(stepper.stop_reason(), pud_search_stop_reason::budget_spent);
+    ASSERT_TRUE(search.next());
+    EXPECT_EQ(search.last_step(), pud_search_step::unfolded);
+    EXPECT_FALSE(search.next());
+    EXPECT_EQ(searcher.stop_reason(), pud_search_stop_reason::budget_spent);
     EXPECT_EQ(solutions.solution(), nullptr);
-    EXPECT_FALSE(stepper.step());
+    EXPECT_FALSE(search.next());
 }
 
 TEST_F(PudSearchTickIntegrationTest, DepthFollowsTheRealParentChain) {

@@ -80,9 +80,10 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , solution_taker_(
           solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depth_counter_, solution_store_,
           frontier_)
-    , search_stepper_(
+    , searcher_(
           solution_store_, pending_conflict_store_, solution_taker_, blocked_refuter_, driver_, query_lister_,
           max_unfolds)
+    , search_driver_(searcher_.search())
     , module_loader_(
           functor_linker_, modules_, focus_seeder_, module_activator_, frontier_, pending_conflict_store_,
           stored_solution_dropper_) {
