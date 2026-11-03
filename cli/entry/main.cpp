@@ -148,6 +148,7 @@ int main(int argc, char** argv) {
         size_t sim_progress_interval = 1000;
         size_t save_every = 0;
         bool report_stored_solutions = false;
+        bool quiet = false;
     } lodestar_opts;
 
     auto* lodestar_sub = app.add_subcommand("lodestar", "Run the Lodestar PUD solver");
@@ -170,6 +171,10 @@ int main(int argc, char** argv) {
         "--report-stored-solutions",
         lodestar_opts.report_stored_solutions,
         "Also report solutions an earlier run already derived and saved in the modules");
+    lodestar_sub->add_flag(
+        "-q,--quiet",
+        lodestar_opts.quiet,
+        "Do not print runtime initialization and module loading; progress lines still follow --sim-progress-interval");
     lodestar_sub->callback([&]() {
         lodestar_command_handler handler{
             lodestar_opts.modules,
@@ -180,7 +185,8 @@ int main(int argc, char** argv) {
             lodestar_opts.max_open_goals,
             lodestar_opts.sim_progress_interval,
             lodestar_opts.save_every,
-            lodestar_opts.report_stored_solutions};
+            lodestar_opts.report_stored_solutions,
+            lodestar_opts.quiet};
         handler();
     });
 

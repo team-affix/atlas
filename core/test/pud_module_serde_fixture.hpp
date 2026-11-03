@@ -25,6 +25,7 @@
 #include "infrastructure/ostream_uint64_inserter.hpp"
 #include "infrastructure/pud_inference_istream_extractor.hpp"
 #include "infrastructure/pud_inference_ostream_inserter.hpp"
+#include "infrastructure/pud_module_id_istream_extractor.hpp"
 #include "infrastructure/pud_module_istream_extractor.hpp"
 #include "infrastructure/pud_module_ostream_inserter.hpp"
 #include "infrastructure/rule_istream_extractor.hpp"
@@ -278,7 +279,9 @@ struct pud_module_serde_decode_wiring {
     expr_extractor_t extract_expr_;
     rule_extractor_t extract_rule_;
     inference_extractor_t extract_inference_;
+    pud_module_id_istream_extractor<istream_fixed_bytes_extractor, istream_uint64_extractor> extract_module_id_;
     pud_module_istream_extractor<
+        pud_module_id_istream_extractor<istream_fixed_bytes_extractor, istream_uint64_extractor>,
         istream_fixed_bytes_extractor,
         istream_uint64_extractor,
         rule_extractor_t,
@@ -289,7 +292,9 @@ struct pud_module_serde_decode_wiring {
         : extract_expr_(make_var, make_functor, extract_uint8_, extract_uint32_)
         , extract_rule_(extract_expr_, extract_uint64_, extract_uint32_)
         , extract_inference_(extract_expr_, extract_uint64_, extract_uint32_)
+        , extract_module_id_(extract_fixed_bytes_, extract_uint64_)
         , extract_module_(
+            extract_module_id_,
             extract_fixed_bytes_,
             extract_uint64_,
             extract_rule_,

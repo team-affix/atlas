@@ -1,7 +1,6 @@
 #ifndef PUD_MODULE_ISTREAM_EXTRACTOR_HPP
 #define PUD_MODULE_ISTREAM_EXTRACTOR_HPP
 
-#include <cstring>
 #include <istream>
 #include <stdexcept>
 #include <string>
@@ -11,6 +10,7 @@
 #include "value_objects/rule.hpp"
 
 template<
+    typename IExtractModuleId,
     typename IExtractFixedBytes,
     typename IExtractUint64,
     typename IExtractRule,
@@ -18,6 +18,7 @@ template<
     typename IExtractUint8>
 struct pud_module_istream_extractor {
     pud_module_istream_extractor(
+        IExtractModuleId& extract_module_id,
         IExtractFixedBytes& extract_fixed_bytes,
         IExtractUint64& extract_uint64,
         IExtractRule& extract_rule,
@@ -25,6 +26,7 @@ struct pud_module_istream_extractor {
         IExtractUint8& extract_uint8);
     pud_module extract_module(std::istream& in) const;
 private:
+    IExtractModuleId& extract_module_id_;
     IExtractFixedBytes& extract_fixed_bytes_;
     IExtractUint64& extract_uint64_;
     IExtractRule& extract_rule_;
@@ -34,12 +36,14 @@ private:
 
 #define PUD_MODULE_ISTREAM_EXTRACTOR_TEMPLATE \
     template< \
+        typename IExtractModuleId, \
         typename IExtractFixedBytes, \
         typename IExtractUint64, \
         typename IExtractRule, \
         typename IExtractInference, \
         typename IExtractUint8>
 #define PUD_MODULE_ISTREAM_EXTRACTOR pud_module_istream_extractor< \
+    IExtractModuleId, \
     IExtractFixedBytes, \
     IExtractUint64, \
     IExtractRule, \
@@ -48,12 +52,14 @@ private:
 
 PUD_MODULE_ISTREAM_EXTRACTOR_TEMPLATE
 PUD_MODULE_ISTREAM_EXTRACTOR::pud_module_istream_extractor(
+    IExtractModuleId& extract_module_id,
     IExtractFixedBytes& extract_fixed_bytes,
     IExtractUint64& extract_uint64,
     IExtractRule& extract_rule,
     IExtractInference& extract_inference,
     IExtractUint8& extract_uint8)
-    : extract_fixed_bytes_(extract_fixed_bytes)
+    : extract_module_id_(extract_module_id)
+    , extract_fixed_bytes_(extract_fixed_bytes)
     , extract_uint64_(extract_uint64)
     , extract_rule_(extract_rule)
     , extract_inference_(extract_inference)
@@ -61,11 +67,7 @@ PUD_MODULE_ISTREAM_EXTRACTOR::pud_module_istream_extractor(
 
 PUD_MODULE_ISTREAM_EXTRACTOR_TEMPLATE
 pud_module PUD_MODULE_ISTREAM_EXTRACTOR::extract_module(std::istream& in) const {
-    char magic[4] = {};
-    extract_fixed_bytes_.extract_fixed_bytes(in, magic, 4);
-    if (std::memcmp(magic, k_pud_module_blob_magic, 4) != 0)
-        throw std::runtime_error("invalid pud module magic");
-    const pud_module_id module_id = extract_uint64_.extract_uint64(in);
+    const pud_module_id module_id = extract_module_id_.extract_module_id(in);
     const uint64_t dependency_count = extract_uint64_.extract_uint64(in);
     std::vector<pud_module_id> dependencies;
     for (uint64_t dependency = 0; dependency < dependency_count; ++dependency)

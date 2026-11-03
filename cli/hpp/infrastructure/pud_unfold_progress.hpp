@@ -11,16 +11,22 @@
 
 // Counts the session's unfolds and prints a progress line: total unfolds, unfolds per second and average
 // unfold depth since the previous line, total nodes in the loaded modules, live and blocked leaves under
-// the focus, and how long the solve has run. On a terminal each line overwrites the previous one in
-// place, like print_progress for the sim solvers; otherwise each goes on its own line. finish_line()
-// ends an in-place line so other output starts on a fresh one.
-template<typename IGetTimeSinceStart, typename IGetUnfoldDepthSum, typename ICountNodes, typename ICountFocusLeaves>
+// the focus, how long ago the modules were last saved, and how long the solve has run. On a terminal
+// each line overwrites the previous one in place, like print_progress for the sim solvers; otherwise
+// each goes on its own line. finish_line() ends an in-place line so other output starts on a fresh one.
+template<
+    typename IGetTimeSinceStart,
+    typename IGetUnfoldDepthSum,
+    typename ICountNodes,
+    typename ICountFocusLeaves,
+    typename IGetTimeSinceLastSave>
 struct pud_unfold_progress {
     pud_unfold_progress(
         IGetTimeSinceStart& get_time_since_start,
         IGetUnfoldDepthSum& get_unfold_depth_sum,
         ICountNodes& count_nodes,
         ICountFocusLeaves& count_focus_leaves,
+        IGetTimeSinceLastSave& get_time_since_last_save,
         bool overwrite_line);
     void on_unfold();
     void print();
@@ -30,6 +36,7 @@ private:
     IGetUnfoldDepthSum& get_unfold_depth_sum_;
     ICountNodes& count_nodes_;
     ICountFocusLeaves& count_focus_leaves_;
+    IGetTimeSinceLastSave& get_time_since_last_save_;
     bool overwrite_line_;
     size_t total_unfolds_;
     size_t unfolds_since_last_;
@@ -39,10 +46,12 @@ private:
     bool line_active_;
 };
 
-#define PUD_UNFOLD_PROGRESS_TEMPLATE \
-    template<typename IGetTimeSinceStart, typename IGetUnfoldDepthSum, typename ICountNodes, typename ICountFocusLeaves>
-#define PUD_UNFOLD_PROGRESS \
-    pud_unfold_progress<IGetTimeSinceStart, IGetUnfoldDepthSum, ICountNodes, ICountFocusLeaves>
+#define PUD_UNFOLD_PROGRESS_TEMPLATE                                                                \
+    template<typename IGetTimeSinceStart, typename IGetUnfoldDepthSum, typename ICountNodes,       \
+             typename ICountFocusLeaves, typename IGetTimeSinceLastSave>
+#define PUD_UNFOLD_PROGRESS                                                                         \
+    pud_unfold_progress<IGetTimeSinceStart, IGetUnfoldDepthSum, ICountNodes, ICountFocusLeaves,    \
+        IGetTimeSinceLastSave>
 
 PUD_UNFOLD_PROGRESS_TEMPLATE
 PUD_UNFOLD_PROGRESS::pud_unfold_progress(
@@ -50,11 +59,13 @@ PUD_UNFOLD_PROGRESS::pud_unfold_progress(
     IGetUnfoldDepthSum& get_unfold_depth_sum,
     ICountNodes& count_nodes,
     ICountFocusLeaves& count_focus_leaves,
+    IGetTimeSinceLastSave& get_time_since_last_save,
     bool overwrite_line)
     : get_time_since_start_(get_time_since_start)
     , get_unfold_depth_sum_(get_unfold_depth_sum)
     , count_nodes_(count_nodes)
     , count_focus_leaves_(count_focus_leaves)
+    , get_time_since_last_save_(get_time_since_last_save)
     , overwrite_line_(overwrite_line)
     , total_unfolds_(0)
     , unfolds_since_last_(0)
@@ -89,8 +100,14 @@ void PUD_UNFOLD_PROGRESS::print() {
          << " | " << static_cast<size_t>(unfolds_per_second) << " unfolds/s"
          << " | avg depth " << average_depth
          << " | " << count_nodes_.count_nodes() << " nodes"
-         << " | focus leaves: " << focus_leaves.live << " live, " << focus_leaves.blocked << " blocked"
-         << " | TSS: " << seconds << "s";
+         << " | focus leaves: " << focus_leaves.live << " live, " << focus_leaves.blocked << " blocked";
+    const auto since_save = get_time_since_last_save_.time_since_last_save();
+    line << " | last saved: ";
+    if (since_save.has_value())
+        line << std::chrono::duration_cast<std::chrono::seconds>(since_save.value()).count() << "s ago";
+    else
+        line << "never";
+    line << " | TSS: " << seconds << "s";
     const std::string text = line.str();
     if (!overwrite_line_) {
         std::cout << text << '\n' << std::flush;

@@ -12,8 +12,13 @@
 #include "infrastructure/pud_module_serializer_stack.hpp"
 #include "value_objects/pud_module_id.hpp"
 
+// Reads module files into memory one at a time, puts them in dependency order, and writes them back. The
+// expression pool exists from construction, so a runtime can be built before any file is read.
 struct pud_loaded_modules {
-    pud_loaded_modules(const std::vector<std::string>& paths);
+    pud_loaded_modules();
+    pud_module_id read_module_id(const std::string& path) const;
+    const pud_module& read(const std::string& path);
+    void sort_by_dependencies();
     expr_pool& exprs();
     std::deque<pud_module>& modules();
     void save_all() const;
