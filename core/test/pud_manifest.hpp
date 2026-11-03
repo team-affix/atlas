@@ -5,7 +5,6 @@
 #include "infrastructure/globalizer.hpp"
 #include "infrastructure/pud_inference_builder.hpp"
 #include "infrastructure/pud_activity_mover.hpp"
-#include "infrastructure/pud_active_states.hpp"
 #include "infrastructure/pud_binder.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_child_activator.hpp"
@@ -37,6 +36,9 @@
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
+#include "value_objects/pud_node_queries.hpp"
+#include "value_objects/pud_structure_watch.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
 template<typename IModule, typename IExprPool>
 struct pud_manifest {
@@ -45,6 +47,18 @@ struct pud_manifest {
     };
     struct node_axioms_t : pud_node_table<pud_global_node_id> {
         using pud_node_table<pud_global_node_id>::pud_node_table;
+    };
+    struct node_lvcs_t : pud_node_table<uint32_t> {
+        using pud_node_table<uint32_t>::pud_node_table;
+    };
+    struct node_bindings_t : pud_node_table<pud_ubs_state> {
+        using pud_node_table<pud_ubs_state>::pud_node_table;
+    };
+    struct node_watches_t : pud_node_table<pud_structure_watch> {
+        using pud_node_table<pud_structure_watch>::pud_node_table;
+    };
+    struct node_queries_t : pud_node_table<pud_node_queries> {
+        using pud_node_table<pud_node_queries>::pud_node_table;
     };
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
@@ -111,25 +125,25 @@ struct pud_manifest {
         using pud_structure_watcher<bind_map_factory_t, module_registry_t, IExprPool>::pud_structure_watcher;
     };
     struct root_activator_t : pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
+        module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
         structure_watcher_t, mhq_t, pud_query_holders> {
         using pud_root_activator<
-            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, pud_active_states,
+            module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
             structure_watcher_t, mhq_t, pud_query_holders>::pud_root_activator;
     };
     struct child_activator_t : pud_child_activator<
-        pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+        node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, module_registry_t, node_goals_t, node_axioms_t,
         pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
         structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t> {
         using pud_child_activator<
-            pud_active_states, pud_active_states, module_registry_t, node_goals_t, node_axioms_t,
+            node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, module_registry_t, node_goals_t, node_axioms_t,
             pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
             structure_watcher_t, mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
     };
     struct node_deactivator_t : pud_node_deactivator<
-        pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t, pud_query_holders> {
+        node_queries_t, node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, pud_query_holders, mhq_t, mhq_t, pud_query_holders> {
         using pud_node_deactivator<
-            pud_active_states, pud_active_states, pud_query_holders, mhq_t, mhq_t,
+            node_queries_t, node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, pud_query_holders, mhq_t, mhq_t,
             pud_query_holders>::pud_node_deactivator;
     };
     struct leaf_refuter_t : pud_leaf_refuter<
@@ -145,8 +159,8 @@ struct pud_manifest {
             node_goals_t, module_registry_t, module_registry_t, IExprPool, IExprPool, bind_map_factory_t,
             cycle_detector_factory_t, unifier_factory_t, term_exporter_factory_t>::pud_inference_builder;
     };
-    struct resolver_t : pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t> {
-        using pud_resolver<pud_active_states, node_goals_t, mhq_t, mhcs_t, inference_builder_t>::pud_resolver;
+    struct resolver_t : pud_resolver<node_queries_t, node_bindings_t, node_lvcs_t, node_goals_t, mhq_t, mhcs_t, inference_builder_t> {
+        using pud_resolver<node_queries_t, node_bindings_t, node_lvcs_t, node_goals_t, mhq_t, mhcs_t, inference_builder_t>::pud_resolver;
     };
     struct activity_mover_t : pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t> {
         using pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
@@ -187,7 +201,10 @@ struct pud_manifest {
     mhcs_t                     mhcs_;
     mhq_t                      mhq_;
 
-    pud_active_states          active_states_;
+    node_lvcs_t                node_lvcs_;
+    node_bindings_t            node_bindings_;
+    node_watches_t             node_watches_;
+    node_queries_t             node_queries_;
     pud_query_holders          query_holders_;
     binder_t                   binder_;
     structure_watcher_t        structure_watcher_;
@@ -227,23 +244,26 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , mhws_(replayer_, modules_, modules_, modules_)
     , mhcs_(replayer_, mhws_, mhws_, mhws_, mhws_, mhws_, modules_, modules_, modules_)
     , mhq_(replayer_, modules_, mhcs_, mhcs_, mhcs_, mhcs_, unit_queries_)
-    , active_states_()
+    , node_lvcs_()
+    , node_bindings_()
+    , node_watches_()
+    , node_queries_()
     , query_holders_()
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_lvcs_, node_bindings_, node_watches_, node_queries_, structure_watcher_, mhq_,
           query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
+          node_lvcs_, node_bindings_, node_watches_, node_queries_, node_lvcs_, node_bindings_, node_watches_, node_queries_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
           node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
-    , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
+    , node_deactivator_(node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_, mhq_, query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
           unifier_factory_, term_exporter_factory_)
-    , resolver_(active_states_, node_goals_, mhq_, mhcs_, inference_builder_)
+    , resolver_(node_queries_, node_bindings_, node_lvcs_, node_goals_, mhq_, mhcs_, inference_builder_)
     , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_) {}

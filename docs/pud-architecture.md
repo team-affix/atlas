@@ -17,7 +17,7 @@ flowchart LR
     NG[node goals + axioms]
   end
   subgraph live [Frontier]
-    AS[pud_active_states]
+    AS[active field tables]
     QH[pud_query_holders]
   end
   subgraph search [Per query head]
@@ -36,7 +36,7 @@ flowchart LR
 
 **Stored:** `pud_module_registry` registers `pud_module` instances. Each node has its body goals and its root axiom (both `pud_node_table`s, filled on activation), and inferences are appended when unfold succeeds. Nodes are never deleted; refutation is a flag on the tree.
 
-**Live:** Only leaves (and the transient parent during an unfold step) have `pud_active_state`: a binding snapshot (`pud_ubs_state`), a structure watch, and a map from `pud_body_goal_id` to an MHQ head. `pud_query_holders` records which leaves hold which heads so admitting or refuting a query can find every dependent leaf.
+**Live:** Only leaves (and the transient parent during an unfold step) have active fields, each in its own `pud_node_table`: the local variable count, a binding snapshot (`pud_ubs_state`), a structure watch, and the node's queries (`pud_node_queries`, a map from `pud_body_goal_id` to an MHQ head). The root and child activators store them; the node deactivator erases them when the node is retired. Fields that outlive activation (body goals, root axiom, and in Lodestar the node depth) stay. Each reader injects only the field tables it reads. `pud_query_holders` records which leaves hold which heads so admitting or refuting a query can find every dependent leaf.
 
 **Search:** For one body goal’s query head, `pud_mhq` coordinates heads; `pud_mhcs` chooses among axiom-level candidates; `pud_mhws` DFS-es witness paths along one edge; `pud_replayer` walks the stored inference chain inside a single `ubs_bind_map`, unifying substitutions. Resolver and inference builder use the same stack when materializing a chosen candidate into a `pud_inference`.
 
@@ -126,7 +126,7 @@ sequenceDiagram
   UF-->>Caller: frontier_change
 ```
 
-The resolver reads the leaf’s active state and goal expression, iterates candidates from the goal’s MHQ head, and delegates each to the **inference builder**: build bind map from caller bindings, unify call site with candidate head, replay the witness path, export callee body goals into the caller frame, and produce substitutions for the child binder. **Child activator** merges parent `pud_ubs_state` with those substitutions, installs structure watch, inherits/forks/opens queries, and registers holds.
+The resolver reads the leaf’s queries, bindings, variable count and goal expression, iterates candidates from the goal’s MHQ head, and delegates each to the **inference builder**: build bind map from caller bindings, unify call site with candidate head, replay the witness path, export callee body goals into the caller frame, and produce substitutions for the child binder. **Child activator** merges parent `pud_ubs_state` with those substitutions, installs structure watch, inherits/forks/opens queries, and registers holds.
 
 ---
 

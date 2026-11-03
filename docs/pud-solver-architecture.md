@@ -50,7 +50,7 @@ Adding accessors to a shared runtime for each new heuristic (witness counts, que
 
 - Each **automated PUD solver** (and each distinct **manual driver**, if any) gets its own **`pud_<name>_manifest`** as the **entry point**, same pattern as `horizon_manifest` vs `ridge_manifest`.
 - Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_module_registry`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
-- Heuristic code may read **manifest internals directly** (query holders, MHQ, active states, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
+- Heuristic code may read **manifest internals directly** (query holders, MHQ, node tables, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
 
 ### 4. Manual stack vs solver stacks (planned naming)
 
@@ -78,7 +78,7 @@ Integration tests that keep a `live` set and call `unfold` are the model for man
 - Downstream components use **capability-style DI**; production usually passes the **same `modules_` registry** in many template slots.
 - **Future reactive behavior** (e.g. intercept writes): provide an alternate **`IModule`** (or wrapper) that delegates to real storage and hooks `store_inference` / `mark_refuted`, without changing the unfolder's public shape.
 
-Serde and CLI use **concrete `pud_module`**; the live engine uses the registry plus side tables (`pud_node_goals`, `pud_active_states`, etc.).
+Serde and CLI use **concrete `pud_module`**; the live engine uses the registry plus side tables (`pud_node_table`s for goals, axioms and the active fields, etc.).
 
 ## What we explicitly rejected
 

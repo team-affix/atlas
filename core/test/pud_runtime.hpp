@@ -39,7 +39,7 @@ pud_unnormalized_rule_information pud_runtime<IModule, IExprPool>::get_rule_info
     return pud_unnormalized_rule_information{
         .head = manifest_.modules_.get_axiom(manifest_.node_axioms_.get(node)).head,
         .body = manifest_.node_goals_.get(node).goals,
-        .bindings = ubs_bind_map{manifest_.active_states_.get(node).bindings},
+        .bindings = ubs_bind_map{manifest_.node_bindings_.get(node)},
     };
 }
 

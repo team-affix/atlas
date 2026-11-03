@@ -70,7 +70,8 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
 
 - **Stored plane:** `pud_module_registry` → `pud_module` trees (node goals, axioms, appended inferences).
   Nodes are never deleted, and refutation is a flag. This plane is what gets serialized.
-- **Live plane:** frontier leaves with `pud_active_state` (binding snapshot, structure watch, body goal → MHQ head),
+- **Live plane:** frontier leaves with active fields, one `pud_node_table` each (lvc, bindings, structure watch,
+  `pud_node_queries`), erased on deactivation; goals/axiom tables outlive it,
   plus `pud_query_holders`. This plane is rebuilt by activation on load and never persisted.
 - **Search stack per query head:** `pud_mhq` → `pud_mhcs` → `pud_mhws` → `pud_replayer`, which walks stored inferences.
 - `unfold(leaf, body_goal)` materializes a child via the resolver and inference builder, moves activity to the
@@ -148,6 +149,12 @@ no overloads, no default args, no default member initializers. Paired operations
   Duplicating kernel wiring across manifests is acceptable. Heuristics may read their own manifest's internals.
 - When a solver needs variant behavior, prefer `pud_<solver>_*` forwarding types. A small read-only query on a
   kernel type is fine when re-deriving the answer outside it would be wrong (e.g. `pud_mhws::find_witness`).
+- **One activation pass.** Loading walks from the axioms down to the leaves exactly once: activation. Any other
+  per-node field built alongside it (e.g. Lodestar's node depth, focus membership) is a wrapper injected into the
+  activate-root / activate-child slots (`pud_root_depth_recorder`, `pud_child_focus_recorder`), never a second walk.
+  Such fields are optional: a runtime that doesn't need one leaves its wrapper out.
+- One `pud_node_table` per per-node field. Active fields (lvc, bindings, watch, queries) are erased on
+  deactivation; fields like goals, root axiom and depth outlive it. Readers inject only the tables they read.
 - A recent direction: break big manifests into small single-purpose infra types (`*_taker`, `*_finder`,
   `*_store`, `*_seeder`, `*_stepper`), each with its own unit test.
 

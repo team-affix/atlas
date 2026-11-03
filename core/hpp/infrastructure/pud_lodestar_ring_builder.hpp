@@ -6,12 +6,12 @@
 #include <optional>
 #include <vector>
 #include "value_objects/pud_body_goal_id.hpp"
+#include "value_objects/pud_candidate_witnesses.hpp"
 #include "value_objects/pud_global_node_id.hpp"
-#include "value_objects/pud_lodestar_choice.hpp"
 #include "value_objects/pud_leaf_goal_query.hpp"
+#include "value_objects/pud_lodestar_choice.hpp"
 #include "value_objects/pud_lodestar_side.hpp"
 #include "value_objects/pud_lodestar_slot_id.hpp"
-#include "value_objects/pud_candidate_witnesses.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 
@@ -27,7 +27,7 @@ template<
     typename IContainsFocusNode,
     typename IGetLiveNodes,
     typename IIsNodeRefuted,
-    typename IGetActiveState,
+    typename IGetNodeQueries,
     typename IIsQueryExhausted,
     typename IAllowUnfold>
 struct pud_lodestar_ring_builder {
@@ -38,7 +38,7 @@ struct pud_lodestar_ring_builder {
         IContainsFocusNode& contains_focus_node,
         IGetLiveNodes& get_live_nodes,
         IIsNodeRefuted& is_node_refuted,
-        IGetActiveState& get_active_state,
+        IGetNodeQueries& get_node_queries,
         IIsQueryExhausted& is_query_exhausted,
         IAllowUnfold& allow_unfold);
     std::vector<pud_lodestar_choice> build(const std::vector<pud_leaf_goal_query>& queries, bool focus_ring) const;
@@ -56,7 +56,7 @@ private:
     IContainsFocusNode& contains_focus_node_;
     IGetLiveNodes& get_live_nodes_;
     IIsNodeRefuted& is_node_refuted_;
-    IGetActiveState& get_active_state_;
+    IGetNodeQueries& get_node_queries_;
     IIsQueryExhausted& is_query_exhausted_;
     IAllowUnfold& allow_unfold_;
 };
@@ -64,10 +64,10 @@ private:
 #define PUD_LODESTAR_RING_BUILDER_TEMPLATE                                                          \
     template<typename IGetQueryCandidates, typename IFindCandidateWitnesses, typename IFindWitnessNode, \
              typename IContainsFocusNode, typename IGetLiveNodes, typename IIsNodeRefuted,          \
-             typename IGetActiveState, typename IIsQueryExhausted, typename IAllowUnfold>
+             typename IGetNodeQueries, typename IIsQueryExhausted, typename IAllowUnfold>
 #define PUD_LODESTAR_RING_BUILDER                                                                   \
     pud_lodestar_ring_builder<IGetQueryCandidates, IFindCandidateWitnesses, IFindWitnessNode,        \
-        IContainsFocusNode, IGetLiveNodes, IIsNodeRefuted, IGetActiveState, IIsQueryExhausted, IAllowUnfold>
+        IContainsFocusNode, IGetLiveNodes, IIsNodeRefuted, IGetNodeQueries, IIsQueryExhausted, IAllowUnfold>
 
 PUD_LODESTAR_RING_BUILDER_TEMPLATE
 PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
@@ -77,7 +77,7 @@ PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
     IContainsFocusNode& contains_focus_node,
     IGetLiveNodes& get_live_nodes,
     IIsNodeRefuted& is_node_refuted,
-    IGetActiveState& get_active_state,
+    IGetNodeQueries& get_node_queries,
     IIsQueryExhausted& is_query_exhausted,
     IAllowUnfold& allow_unfold)
     : get_query_candidates_(get_query_candidates)
@@ -86,7 +86,7 @@ PUD_LODESTAR_RING_BUILDER::pud_lodestar_ring_builder(
     , contains_focus_node_(contains_focus_node)
     , get_live_nodes_(get_live_nodes)
     , is_node_refuted_(is_node_refuted)
-    , get_active_state_(get_active_state)
+    , get_node_queries_(get_node_queries)
     , is_query_exhausted_(is_query_exhausted)
     , allow_unfold_(allow_unfold) {}
 
@@ -145,7 +145,7 @@ void PUD_LODESTAR_RING_BUILDER::push_witness_slot(
     if (is_node_refuted_.is_refuted(leaf))
         return;
     std::optional<pud_body_goal_id> smallest_ready_goal;
-    for (const auto& [goal, head] : get_active_state_.get(leaf).queries) {
+    for (const auto& [goal, head] : get_node_queries_.get(leaf)) {
         if (is_query_exhausted_.is_exhausted(head))
             continue;
         if (smallest_ready_goal.has_value() && goal >= smallest_ready_goal.value())

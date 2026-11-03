@@ -2,21 +2,22 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_node_deactivator.hpp"
-#include "value_objects/pud_active_state.hpp"
+#include "value_objects/pud_node_queries.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetActiveState {
-    MOCK_METHOD(const pud_active_state&, get, (pud_global_node_id));
+struct MockGetNodeQueries {
+    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id));
 };
-struct MockEraseActiveState {
+struct MockEraseNodeField {
     MOCK_METHOD(void, erase, (pud_global_node_id));
 };
 struct MockReleaseQuery {
@@ -33,22 +34,26 @@ struct MockGetQueryHolders {
 };
 
 using test_node_deactivator_t = pud_node_deactivator<
-    NiceMock<MockGetActiveState>, NiceMock<MockEraseActiveState>, NiceMock<MockReleaseQuery>,
+    NiceMock<MockGetNodeQueries>, NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>,
+    NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>, NiceMock<MockReleaseQuery>,
     NiceMock<MockRemoveQuery>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>>;
 
 struct PudNodeDeactivatorTest : public ::testing::Test {
-    NiceMock<MockGetActiveState> states;
-    NiceMock<MockEraseActiveState> erase_states;
+    NiceMock<MockGetNodeQueries> node_queries;
+    NiceMock<MockEraseNodeField> erase_queries;
+    NiceMock<MockEraseNodeField> erase_watches;
+    NiceMock<MockEraseNodeField> erase_bindings;
+    NiceMock<MockEraseNodeField> erase_lvcs;
     NiceMock<MockReleaseQuery> holders;
     NiceMock<MockRemoveQuery> queries;
     NiceMock<MockInvalidateQueryLeaf> invalidate;
     NiceMock<MockGetQueryHolders> get_holders;
-    test_node_deactivator_t deactivator{states, erase_states, holders, queries, invalidate, get_holders};
-    pud_active_state state{
-        .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(0, 30).set(1, 31)};
+    test_node_deactivator_t deactivator{
+        node_queries, erase_queries, erase_watches, erase_bindings, erase_lvcs, holders, queries, invalidate, get_holders};
+    pud_node_queries held{pud_node_queries{}.set(0, 30).set(1, 31)};
 
     void SetUp() override {
-        ON_CALL(states, get(pud_test_node(5))).WillByDefault(ReturnRef(state));
+        ON_CALL(node_queries, get(pud_test_node(5))).WillByDefault(ReturnRef(held));
         ON_CALL(invalidate, invalidate_leaf(pud_test_node(5))).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
     }
 };
@@ -69,9 +74,21 @@ TEST_F(PudNodeDeactivatorTest, OnlyAQueryLeftWithoutHoldersIsRemoved) {
     deactivator.deactivate(pud_test_node(5));
 }
 
-TEST_F(PudNodeDeactivatorTest, TheNodesActiveStateIsErasedAndItStopsWitnessing) {
-    EXPECT_CALL(erase_states, erase(pud_test_node(5)));
+TEST_F(PudNodeDeactivatorTest, TheActiveFieldsAreErasedInReverseOfActivationThenItStopsWitnessing) {
+    InSequence order;
+    EXPECT_CALL(erase_queries, erase(pud_test_node(5)));
+    EXPECT_CALL(erase_watches, erase(pud_test_node(5)));
+    EXPECT_CALL(erase_bindings, erase(pud_test_node(5)));
+    EXPECT_CALL(erase_lvcs, erase(pud_test_node(5)));
     EXPECT_CALL(invalidate, invalidate_leaf(pud_test_node(5)));
+    deactivator.deactivate(pud_test_node(5));
+}
+
+TEST_F(PudNodeDeactivatorTest, EveryQueryIsReleasedBeforeTheQueriesAreErased) {
+    InSequence order;
+    EXPECT_CALL(holders, release(30u, pud_test_node(5)));
+    EXPECT_CALL(holders, release(31u, pud_test_node(5)));
+    EXPECT_CALL(erase_queries, erase(pud_test_node(5)));
     deactivator.deactivate(pud_test_node(5));
 }
 
