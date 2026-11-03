@@ -26,6 +26,7 @@
 #include "infrastructure/pud_blocked_leaf_refuter.hpp"
 #include "infrastructure/pud_candidate_witness_index.hpp"
 #include "infrastructure/pud_lodestar_driver.hpp"
+#include "infrastructure/pud_focus_leaf_tally.hpp"
 #include "infrastructure/pud_focus_set.hpp"
 #include "infrastructure/pud_frontier.hpp"
 #include "infrastructure/pud_module_loader.hpp"
@@ -62,6 +63,7 @@
 #include "infrastructure/pud_solution_term_reader.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_unfold_allower.hpp"
+#include "infrastructure/pud_unfold_depth_recorder.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_global_node_id.hpp"
@@ -223,6 +225,12 @@ struct pud_lodestar_manifest {
     struct unfold_allower_t : pud_unfold_allower<node_depths_t, node_goals_t> {
         using pud_unfold_allower<node_depths_t, node_goals_t>::pud_unfold_allower;
     };
+    struct focus_leaf_tally_t : pud_focus_leaf_tally<
+        pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set, unfold_allower_t> {
+        using pud_focus_leaf_tally<
+            pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_frontier, pud_focus_set,
+            unfold_allower_t>::pud_focus_leaf_tally;
+    };
     struct query_lister_t : pud_focus_query_lister<
         pud_frontier, pud_focus_set, module_registry_t, node_queries_t, node_goals_t, mhq_t> {
         using pud_focus_query_lister<
@@ -237,27 +245,30 @@ struct pud_lodestar_manifest {
             node_queries_t, mhq_t, unfold_allower_t>::pud_lodestar_ring_builder;
     };
     struct unfold_applier_t : pud_unfold_applier<
-        unfolder_t, pud_frontier, pud_focus_set> {
+        unfolder_t, focus_leaf_tally_t, pud_focus_set> {
         using pud_unfold_applier<
-            unfolder_t, pud_frontier, pud_focus_set>::pud_unfold_applier;
+            unfolder_t, focus_leaf_tally_t, pud_focus_set>::pud_unfold_applier;
+    };
+    struct unfold_depth_recorder_t : pud_unfold_depth_recorder<node_depths_t, unfold_applier_t> {
+        using pud_unfold_depth_recorder<node_depths_t, unfold_applier_t>::pud_unfold_depth_recorder;
     };
     struct unit_propagator_t : pud_unit_propagator<
         unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_frontier, module_registry_t,
-        unfold_allower_t, unfold_applier_t> {
+        unfold_allower_t, unfold_depth_recorder_t> {
         using pud_unit_propagator<
             unit_queries_t, pud_query_holders, pud_query_holders, mhq_t, pud_frontier, module_registry_t,
-            unfold_allower_t, unfold_applier_t>::pud_unit_propagator;
+            unfold_allower_t, unfold_depth_recorder_t>::pud_unit_propagator;
     };
-    struct blocked_refuter_t : pud_blocked_leaf_refuter<query_lister_t, leaf_refuter_t, pud_frontier> {
+    struct blocked_refuter_t : pud_blocked_leaf_refuter<query_lister_t, leaf_refuter_t, focus_leaf_tally_t> {
         using pud_blocked_leaf_refuter<
-            query_lister_t, leaf_refuter_t, pud_frontier>::pud_blocked_leaf_refuter;
+            query_lister_t, leaf_refuter_t, focus_leaf_tally_t>::pud_blocked_leaf_refuter;
     };
     struct driver_t : pud_lodestar_driver<
         unit_propagator_t, query_lister_t, ring_builder_t, pud_lodestar_round_robin, pud_lodestar_round_robin,
-        unfold_applier_t> {
+        unfold_depth_recorder_t> {
         using pud_lodestar_driver<
             unit_propagator_t, query_lister_t, ring_builder_t, pud_lodestar_round_robin, pud_lodestar_round_robin,
-            unfold_applier_t>::pud_lodestar_driver;
+            unfold_depth_recorder_t>::pud_lodestar_driver;
     };
     struct solved_leaf_finder_t : pud_solved_leaf_finder<
         pud_frontier, pud_focus_set, module_registry_t, node_goals_t> {
@@ -275,10 +286,10 @@ struct pud_lodestar_manifest {
     };
     struct solution_taker_t : pud_solution_taker<
         solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depths_t, pud_solution_store,
-        pud_frontier> {
+        focus_leaf_tally_t> {
         using pud_solution_taker<
             solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depths_t,
-            pud_solution_store, pud_frontier>::pud_solution_taker;
+            pud_solution_store, focus_leaf_tally_t>::pud_solution_taker;
     };
     struct searcher_t : pud_searcher<
         pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t, driver_t,
@@ -288,15 +299,15 @@ struct pud_lodestar_manifest {
             driver_t, query_lister_t>::pud_searcher;
     };
     struct stored_solution_dropper_t : pud_stored_solution_dropper<
-        solved_leaf_finder_t, module_registry_t, pud_frontier> {
+        solved_leaf_finder_t, module_registry_t, focus_leaf_tally_t> {
         using pud_stored_solution_dropper<
-            solved_leaf_finder_t, module_registry_t, pud_frontier>::pud_stored_solution_dropper;
+            solved_leaf_finder_t, module_registry_t, focus_leaf_tally_t>::pud_stored_solution_dropper;
     };
     struct module_loader_t : pud_module_loader<
-        pud_module, functor_linker_t, module_registry_t, module_activator_t, pud_frontier,
+        pud_module, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
         pud_pending_conflict_store, stored_solution_dropper_t> {
         using pud_module_loader<
-            pud_module, functor_linker_t, module_registry_t, module_activator_t, pud_frontier,
+            pud_module, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
             pud_pending_conflict_store, stored_solution_dropper_t>::pud_module_loader;
     };
 
@@ -363,11 +374,13 @@ struct pud_lodestar_manifest {
     pud_frontier               frontier_;
 
     unfold_allower_t                 unfold_allower_;
+    focus_leaf_tally_t               focus_leaf_tally_;
     query_lister_t                   query_lister_;
     ring_builder_t                   ring_builder_;
     pud_lodestar_round_robin         non_conjecture_round_robin_;
     pud_lodestar_round_robin         conjecture_round_robin_;
     unfold_applier_t                 unfold_applier_;
+    unfold_depth_recorder_t          unfold_depth_recorder_;
     unit_propagator_t                unit_propagator_;
     blocked_refuter_t                blocked_refuter_;
     driver_t                         driver_;

@@ -40,6 +40,18 @@ size_t pud_lodestar_runtime::unfold_count() const {
     return manifest_.searcher_.unfold_count();
 }
 
+size_t pud_lodestar_runtime::unfold_depth_sum() const {
+    return manifest_.unfold_depth_recorder_.depth_sum();
+}
+
+size_t pud_lodestar_runtime::count_nodes() const {
+    return manifest_.modules_.count_nodes();
+}
+
+pud_focus_leaf_counts pud_lodestar_runtime::count_focus_leaves() const {
+    return manifest_.focus_leaf_tally_.count();
+}
+
 bool pud_lodestar_runtime::has_pending_solution() const {
     return manifest_.solved_leaf_finder_.find().has_value();
 }

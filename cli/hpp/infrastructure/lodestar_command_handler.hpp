@@ -33,7 +33,7 @@ private:
     using functor_printer_t = global_functor_name_printer<pud_lodestar_runtime>;
     using printer_t = expr_printer<id_var_printer, functor_printer_t>;
     using timer_t = solve_timer<steady_now>;
-    using progress_t = pud_unfold_progress<timer_t>;
+    using progress_t = pud_unfold_progress<timer_t, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime>;
     using autosaver_t = pud_module_autosaver<pud_lodestar_runtime, pud_loaded_modules, pud_lodestar_runtime>;
     using loop_t = pud_solve_loop<
         pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime,

@@ -8,6 +8,7 @@
 #include "infrastructure/pud_lodestar_manifest.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "value_objects/expr.hpp"
+#include "value_objects/pud_focus_leaf_counts.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_search_step.hpp"
 #include "value_objects/pud_search_stop_reason.hpp"
@@ -28,6 +29,9 @@ struct pud_lodestar_runtime {
     size_t solution_depth() const;
     pud_search_stop_reason stop_reason() const;
     size_t unfold_count() const;
+    size_t unfold_depth_sum() const;
+    size_t count_nodes() const;
+    pud_focus_leaf_counts count_focus_leaves() const;
     bool has_pending_solution() const;
     const std::string& functor_name(uint32_t global_functor_id) const;
 private:
