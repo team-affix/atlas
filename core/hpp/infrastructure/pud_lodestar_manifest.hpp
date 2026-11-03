@@ -36,6 +36,7 @@
 #include "infrastructure/pud_search_stepper.hpp"
 #include "infrastructure/pud_solution_taker.hpp"
 #include "infrastructure/pud_solved_leaf_finder.hpp"
+#include "infrastructure/pud_stored_solution_dropper.hpp"
 #include "infrastructure/pud_unfold_applier.hpp"
 #include "infrastructure/pud_unit_propagator.hpp"
 #include "infrastructure/pud_witness_search_recorder.hpp"
@@ -260,12 +261,17 @@ struct pud_lodestar_manifest {
             pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t,
             driver_t, query_lister_t>::pud_search_stepper;
     };
+    struct stored_solution_dropper_t : pud_stored_solution_dropper<
+        solved_leaf_finder_t, module_registry_t, pud_frontier> {
+        using pud_stored_solution_dropper<
+            solved_leaf_finder_t, module_registry_t, pud_frontier>::pud_stored_solution_dropper;
+    };
     struct module_loader_t : pud_module_loader<
         pud_module, functor_linker_t, module_registry_t, focus_seeder_t, module_activator_t, pud_frontier,
-        pud_pending_conflict_store> {
+        pud_pending_conflict_store, stored_solution_dropper_t> {
         using pud_module_loader<
             pud_module, functor_linker_t, module_registry_t, focus_seeder_t, module_activator_t, pud_frontier,
-            pud_pending_conflict_store>::pud_module_loader;
+            pud_pending_conflict_store, stored_solution_dropper_t>::pud_module_loader;
     };
 
     pud_lodestar_manifest(
@@ -274,7 +280,8 @@ struct pud_lodestar_manifest {
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
         size_t max_node_depth,
-        size_t max_open_goals);
+        size_t max_open_goals,
+        bool report_stored_solutions);
 
     pud_symbol_table           symbol_table_;
     pud_link_table             link_table_;
@@ -335,6 +342,7 @@ struct pud_lodestar_manifest {
     blocked_refuter_t                blocked_refuter_;
     driver_t                         driver_;
     solved_leaf_finder_t             solved_leaf_finder_;
+    stored_solution_dropper_t        stored_solution_dropper_;
     solution_term_reader_t           solution_term_reader_;
     normalizer_factory_t             normalizer_factory_;
     solution_normalizer_t            solution_normalizer_;

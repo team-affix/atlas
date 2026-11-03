@@ -1,4 +1,5 @@
 #include <set>
+#include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_solved_leaf_finder.hpp"
@@ -76,4 +77,17 @@ TEST_F(PudSolvedLeafFinderTest, ALeafWithOpenGoalsIsNotSolved) {
     EXPECT_CALL(refuted, is_refuted(node(1, 1))).WillOnce(Return(false));
     EXPECT_CALL(goals, get(node(1, 1))).WillOnce(ReturnRef(open));
     EXPECT_FALSE(finder.find().has_value());
+}
+
+TEST_F(PudSolvedLeafFinderTest, ListingReturnsEverySolvedFocusLeafInFrontierOrder) {
+    EXPECT_CALL(live_nodes, live()).WillOnce(ReturnRef(live));
+    EXPECT_CALL(focus, contains(node(1, 1))).WillOnce(Return(true));
+    EXPECT_CALL(refuted, is_refuted(node(1, 1))).WillOnce(Return(false));
+    EXPECT_CALL(goals, get(node(1, 1))).WillOnce(ReturnRef(empty));
+    EXPECT_CALL(focus, contains(node(1, 5))).WillOnce(Return(true));
+    EXPECT_CALL(refuted, is_refuted(node(1, 5))).WillOnce(Return(true));
+    EXPECT_CALL(focus, contains(node(2, 0))).WillOnce(Return(true));
+    EXPECT_CALL(refuted, is_refuted(node(2, 0))).WillOnce(Return(false));
+    EXPECT_CALL(goals, get(node(2, 0))).WillOnce(ReturnRef(empty));
+    EXPECT_EQ(finder.list(), (std::vector<pud_global_node_id>{node(1, 1), node(2, 0)}));
 }

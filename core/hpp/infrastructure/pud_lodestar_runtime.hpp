@@ -18,13 +18,15 @@ struct pud_lodestar_runtime {
         size_t max_unfolds,
         size_t non_conjecture_unfolds_per_conjecture_unfold,
         size_t max_node_depth,
-        size_t max_open_goals);
+        size_t max_open_goals,
+        bool report_stored_solutions);
     void register_module(pud_module& module);
     bool next();
     const expr* solution() const;
     size_t solution_depth() const;
     pud_search_stop_reason stop_reason() const;
     size_t unfold_count() const;
+    bool has_pending_solution() const;
     const std::string& functor_name(uint32_t global_functor_id) const;
 private:
     pud_lodestar_manifest manifest_;

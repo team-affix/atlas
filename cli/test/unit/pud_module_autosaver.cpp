@@ -14,15 +14,20 @@ struct MockGetUnfoldCount {
 struct MockSaveAllModules {
     MOCK_METHOD(void, save_all, (), (const));
 };
+struct MockHasPendingSolution {
+    MOCK_METHOD(bool, has_pending_solution, (), (const));
+};
 
-using test_autosaver_t = pud_module_autosaver<NiceMock<MockGetUnfoldCount>, NiceMock<MockSaveAllModules>>;
+using test_autosaver_t = pud_module_autosaver<
+    NiceMock<MockGetUnfoldCount>, NiceMock<MockSaveAllModules>, NiceMock<MockHasPendingSolution>>;
 
 struct PudModuleAutosaverTest : public ::testing::Test {
     NiceMock<MockGetUnfoldCount> runtime;
     NiceMock<MockSaveAllModules> modules;
+    NiceMock<MockHasPendingSolution> pending;
 
     test_autosaver_t make_autosaver(size_t unfolds_per_save) {
-        return test_autosaver_t{runtime, modules, unfolds_per_save};
+        return test_autosaver_t{runtime, modules, pending, unfolds_per_save};
     }
 };
 
@@ -64,4 +69,13 @@ TEST_F(PudModuleAutosaverTest, TheFinalSaveAlwaysWritesWhenSavingIsOn) {
     ON_CALL(runtime, unfold_count()).WillByDefault(Return(0));
     EXPECT_CALL(modules, save_all()).Times(1);
     autosaver.try_save_final();
+}
+
+TEST_F(PudModuleAutosaverTest, ADueSaveWaitsWhileASolutionIsPendingAndHappensOnceItIsReported) {
+    test_autosaver_t autosaver = make_autosaver(5);
+    ON_CALL(runtime, unfold_count()).WillByDefault(Return(6));
+    EXPECT_CALL(pending, has_pending_solution()).WillOnce(Return(true)).WillOnce(Return(false));
+    EXPECT_CALL(modules, save_all()).Times(1);
+    autosaver.try_save();
+    autosaver.try_save();
 }

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <deque>
+#include <set>
 #include <gtest/gtest.h>
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
@@ -26,7 +27,7 @@ TEST_F(PudLodestarManifestTest, EmptyConjectureFactIsDepthZero) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(atom("lodestar_query"), {}, 0),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64, false);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
@@ -47,7 +48,7 @@ TEST_F(PudLodestarManifestTest, FactInDependencyNormalizesTheConjectureHead) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(functor("lodestar_query", {exprs.make_var(0)}), {functor("f", {exprs.make_var(0)})}, 1),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64, false);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
@@ -67,7 +68,7 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
     modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(atom("lodestar_query"), {atom("missing")}, 0),
     });
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 32, 10, 64, 64, false);
     for (pud_module& module : modules) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
@@ -102,7 +103,7 @@ struct PudLodestarSessionLimitTest : public PudLodestarManifestTest {
 };
 
 TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesTheConjectureUnrefuted) {
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64, false);
     register_into(runtime);
     size_t ticks = 0;
     while (runtime.next())
@@ -113,7 +114,7 @@ TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesThe
 }
 
 TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt) {
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1, 10, 64, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1, 10, 64, 64, false);
     register_into(runtime);
     while (runtime.next()) {
     }
@@ -122,7 +123,7 @@ TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt)
 }
 
 TEST_F(PudLodestarSessionLimitTest, ASessionRunsUntilItStops) {
-    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 64, 64);
+    pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 64, 64, false);
     EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::running);
 }
 
@@ -131,7 +132,7 @@ TEST_F(PudLodestarSessionLimitTest, ASessionRunsUntilItStops) {
 TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromTheBlockedLeaves) {
     size_t shallow_solutions = 0;
     {
-        pud_lodestar_runtime shallow(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64);
+        pud_lodestar_runtime shallow(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64, false);
         register_into(shallow);
         while (shallow.next())
             shallow_solutions += shallow.solution() != nullptr ? 1 : 0;
@@ -143,7 +144,7 @@ TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromT
     EXPECT_EQ(refuted_nodes, 0u);
     EXPECT_GT(shallow_solutions, 0u);
     const size_t stored_nodes = modules[1].count_nodes();
-    pud_lodestar_runtime deeper(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64);
+    pud_lodestar_runtime deeper(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64, false);
     for (pud_module& module : modules)
         deeper.register_module(module);
     size_t deepest = 0;
@@ -154,4 +155,42 @@ TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromT
     }
     EXPECT_GT(modules[1].count_nodes(), stored_nodes);
     EXPECT_GT(deepest, 2u);
+}
+
+// A session over modules an earlier session already unfolded reports only the solutions it derives
+// itself, unless it is asked to report the stored ones again.
+TEST_F(PudLodestarSessionLimitTest, AResumedSessionReportsOnlyNewSolutionsUnlessAskedForStoredOnes) {
+    std::set<const expr*> first_run;
+    {
+        pud_lodestar_runtime first(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64, false);
+        register_into(first);
+        while (first.next()) {
+            if (first.solution() != nullptr)
+                first_run.insert(first.solution());
+        }
+    }
+    ASSERT_FALSE(first_run.empty());
+    std::set<const expr*> resumed_run;
+    {
+        pud_lodestar_runtime resumed(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64, false);
+        for (pud_module& module : modules)
+            resumed.register_module(module);
+        while (resumed.next()) {
+            if (resumed.solution() != nullptr)
+                resumed_run.insert(resumed.solution());
+        }
+    }
+    EXPECT_FALSE(resumed_run.empty());
+    for (const expr* solution : resumed_run)
+        EXPECT_FALSE(first_run.contains(solution));
+    std::set<const expr*> reported_again;
+    pud_lodestar_runtime again(exprs, pud_global_node_id{.module = 2, .node = 0}, 0, 10, 64, 64, true);
+    for (pud_module& module : modules)
+        again.register_module(module);
+    while (again.next()) {
+        if (again.solution() != nullptr)
+            reported_again.insert(again.solution());
+    }
+    for (const expr* solution : first_run)
+        EXPECT_TRUE(reported_again.contains(solution));
 }

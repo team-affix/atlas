@@ -11,7 +11,8 @@ lodestar_command_handler::lodestar_command_handler(
     size_t max_node_depth,
     size_t max_open_goals,
     size_t sim_progress_interval,
-    size_t unfolds_per_save)
+    size_t unfolds_per_save,
+    bool report_stored_solutions)
     : loaded_(module_paths)
     , focus_(pud_focus_parser{}.parse(focus_text))
     , runtime_(
@@ -20,14 +21,15 @@ lodestar_command_handler::lodestar_command_handler(
           max_unfolds,
           non_conjecture_unfolds_per_conjecture_unfold,
           max_node_depth,
-          max_open_goals)
+          max_open_goals,
+          report_stored_solutions)
     , print_var_()
     , print_functor_(runtime_)
     , printer_(std::cout, print_var_, print_functor_)
     , clock_()
     , solve_timer_(clock_)
-    , progress_(solve_timer_)
-    , autosaver_(runtime_, loaded_, unfolds_per_save)
+    , progress_(solve_timer_, runtime_)
+    , autosaver_(runtime_, loaded_, runtime_, unfolds_per_save)
     , solve_loop_(
           runtime_, runtime_, runtime_, runtime_, printer_, progress_, progress_, solve_timer_, solve_timer_,
           autosaver_, autosaver_, sim_progress_interval) {
