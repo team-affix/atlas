@@ -8,26 +8,25 @@
 
 // Refutes the first listed leaf that has a goal without candidates, and takes what that refutes
 // off the frontier.
-template<typename IListQueries, typename IRefuteLeaf, typename IEraseRefuted>
+template<typename IRefuteLeaf, typename IEraseRefuted>
 struct pud_blocked_leaf_refuter {
-    pud_blocked_leaf_refuter(IListQueries& list_queries, IRefuteLeaf& refute_leaf, IEraseRefuted& erase_refuted);
-    bool refute_blocked();
+    pud_blocked_leaf_refuter(IRefuteLeaf& refute_leaf, IEraseRefuted& erase_refuted);
+    bool refute_blocked(const std::vector<pud_leaf_goal_query>& queries);
 private:
-    IListQueries& list_queries_;
     IRefuteLeaf& refute_leaf_;
     IEraseRefuted& erase_refuted_;
 };
 
-template<typename IListQueries, typename IRefuteLeaf, typename IEraseRefuted>
-pud_blocked_leaf_refuter<IListQueries, IRefuteLeaf, IEraseRefuted>::pud_blocked_leaf_refuter(
-    IListQueries& list_queries, IRefuteLeaf& refute_leaf, IEraseRefuted& erase_refuted)
-    : list_queries_(list_queries)
-    , refute_leaf_(refute_leaf)
+template<typename IRefuteLeaf, typename IEraseRefuted>
+pud_blocked_leaf_refuter<IRefuteLeaf, IEraseRefuted>::pud_blocked_leaf_refuter(
+    IRefuteLeaf& refute_leaf, IEraseRefuted& erase_refuted)
+    : refute_leaf_(refute_leaf)
     , erase_refuted_(erase_refuted) {}
 
-template<typename IListQueries, typename IRefuteLeaf, typename IEraseRefuted>
-bool pud_blocked_leaf_refuter<IListQueries, IRefuteLeaf, IEraseRefuted>::refute_blocked() {
-    for (const pud_leaf_goal_query& query : list_queries_.list()) {
+template<typename IRefuteLeaf, typename IEraseRefuted>
+bool pud_blocked_leaf_refuter<IRefuteLeaf, IEraseRefuted>::refute_blocked(
+    const std::vector<pud_leaf_goal_query>& queries) {
+    for (const pud_leaf_goal_query& query : queries) {
         if (query.has_candidates)
             continue;
         const std::vector<pud_global_node_id> refuted = refute_leaf_.refute(query.node);

@@ -2,13 +2,16 @@
 #define PUD_SEARCHER_HPP
 
 #include <cstddef>
+#include <vector>
 #include "infrastructure/coroutine.hpp"
+#include "value_objects/pud_leaf_goal_query.hpp"
 #include "value_objects/pud_search_step.hpp"
 #include "value_objects/pud_search_stop_reason.hpp"
 #include "value_objects/pud_unfold_outcome.hpp"
 
 // A PUD search session as a coroutine that yields after every step: each unfold, each reported solution,
-// each reported refutation. Every unfold counts against the session's budget. When no step is left the
+// each reported refutation. The focus queries are listed once per step and shared by the blocked refuter,
+// the unfold and the stop reason. Every unfold counts against the session's budget. When no step is left the
 // coroutine finishes and the searcher remembers why.
 template<
     typename IClearSolution,
@@ -78,7 +81,8 @@ coroutine<pud_search_step, void> PUD_SEARCHER::search() {
             co_yield pud_search_step::solved;
             continue;
         }
-        if (refute_blocked_.refute_blocked()) {
+        const std::vector<pud_leaf_goal_query> queries = list_queries_.list();
+        if (refute_blocked_.refute_blocked(queries)) {
             co_yield pud_search_step::refuted;
             continue;
         }
@@ -86,8 +90,8 @@ coroutine<pud_search_step, void> PUD_SEARCHER::search() {
             stop_reason_ = pud_search_stop_reason::budget_spent;
             co_return;
         }
-        if (unfold_one_.unfold_one() == pud_unfold_outcome::none) {
-            const bool focus_open = !list_queries_.list().empty();
+        if (unfold_one_.unfold_one(queries) == pud_unfold_outcome::none) {
+            const bool focus_open = !queries.empty();
             stop_reason_ = focus_open ? pud_search_stop_reason::exhausted : pud_search_stop_reason::refuted;
             co_return;
         }

@@ -16,9 +16,6 @@ namespace {
 struct MockPropagateUnit {
     MOCK_METHOD(pud_unfold_outcome, propagate, ());
 };
-struct MockListQueries {
-    MOCK_METHOD(std::vector<pud_leaf_goal_query>, list, (), (const));
-};
 struct MockBuildRing {
     MOCK_METHOD(std::vector<pud_lodestar_choice>, build, ((const std::vector<pud_leaf_goal_query>&), bool), (const));
 };
@@ -30,8 +27,8 @@ struct MockUnfoldLeaf {
 };
 
 using test_driver_t = pud_lodestar_driver<
-    NiceMock<MockPropagateUnit>, NiceMock<MockListQueries>, NiceMock<MockBuildRing>, NiceMock<MockNextChoice>,
-    NiceMock<MockNextChoice>, NiceMock<MockUnfoldLeaf>>;
+    NiceMock<MockPropagateUnit>, NiceMock<MockBuildRing>, NiceMock<MockNextChoice>, NiceMock<MockNextChoice>,
+    NiceMock<MockUnfoldLeaf>>;
 
 pud_lodestar_choice choice_on(pud_global_node_id leaf, pud_body_goal_id goal) {
     return pud_lodestar_choice{
@@ -45,7 +42,6 @@ pud_lodestar_choice choice_on(pud_global_node_id leaf, pud_body_goal_id goal) {
 // The outer ring holds one choice on leaf 7 goal 1, the conjecture ring one on leaf 8 goal 2.
 struct PudLodestarDriverTest : public ::testing::Test {
     NiceMock<MockPropagateUnit> units;
-    NiceMock<MockListQueries> queries;
     NiceMock<MockBuildRing> rings;
     NiceMock<MockNextChoice> next_outer;
     NiceMock<MockNextChoice> next_inner;
@@ -59,7 +55,6 @@ struct PudLodestarDriverTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(units, propagate()).WillByDefault(Return(pud_unfold_outcome::none));
-        ON_CALL(queries, list()).WillByDefault(Return(listed));
         ON_CALL(rings, build(listed, false)).WillByDefault(Return(outer_ring));
         ON_CALL(rings, build(listed, true)).WillByDefault(Return(inner_ring));
         ON_CALL(next_outer, next(outer_ring)).WillByDefault(Return(outer));
@@ -69,7 +64,7 @@ struct PudLodestarDriverTest : public ::testing::Test {
     }
 
     test_driver_t make_driver(size_t ratio) {
-        return test_driver_t{units, queries, rings, next_outer, next_inner, unfolder, ratio};
+        return test_driver_t{units, rings, next_outer, next_inner, unfolder, ratio};
     }
 };
 
@@ -78,9 +73,8 @@ struct PudLodestarDriverTest : public ::testing::Test {
 TEST_F(PudLodestarDriverTest, AUnitUnfoldComesFirstAndBuildsNoRing) {
     test_driver_t driver = make_driver(1);
     EXPECT_CALL(units, propagate()).WillOnce(Return(pud_unfold_outcome::on_focus));
-    EXPECT_CALL(queries, list()).Times(0);
     EXPECT_CALL(rings, build(_, _)).Times(0);
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::on_focus);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::on_focus);
 }
 
 TEST_F(PudLodestarDriverTest, OnTheOuterTurnTheOuterRingIsDealtFirst) {
@@ -88,7 +82,7 @@ TEST_F(PudLodestarDriverTest, OnTheOuterTurnTheOuterRingIsDealtFirst) {
     EXPECT_CALL(rings, build(_, _)).Times(AnyNumber());
     EXPECT_CALL(rings, build(listed, true)).Times(0);
     EXPECT_CALL(unfolder, unfold(pud_test_node(7), 1));
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::off_focus);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::off_focus);
 }
 
 TEST_F(PudLodestarDriverTest, ARatioOfZeroDealsTheConjectureRingFirst) {
@@ -96,14 +90,14 @@ TEST_F(PudLodestarDriverTest, ARatioOfZeroDealsTheConjectureRingFirst) {
     EXPECT_CALL(rings, build(_, _)).Times(AnyNumber());
     EXPECT_CALL(rings, build(listed, false)).Times(0);
     EXPECT_CALL(unfolder, unfold(pud_test_node(8), 2));
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::on_focus);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::on_focus);
 }
 
 TEST_F(PudLodestarDriverTest, AnEmptyOuterRingOnItsTurnFallsThroughToTheConjectureRing) {
     test_driver_t driver = make_driver(1);
     ON_CALL(next_outer, next(_)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(unfolder, unfold(pud_test_node(8), 2));
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::on_focus);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::on_focus);
 }
 
 TEST_F(PudLodestarDriverTest, AnEmptyConjectureRingOffTheOuterTurnFallsBackToTheOuterRing) {
@@ -113,7 +107,7 @@ TEST_F(PudLodestarDriverTest, AnEmptyConjectureRingOffTheOuterTurnFallsBackToThe
     EXPECT_CALL(rings, build(listed, true));
     EXPECT_CALL(rings, build(listed, false));
     EXPECT_CALL(unfolder, unfold(pud_test_node(7), 1));
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::off_focus);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::off_focus);
 }
 
 TEST_F(PudLodestarDriverTest, BothRingsEmptyMakesNoUnfoldAndBuildsTheOuterRingOnce) {
@@ -123,7 +117,7 @@ TEST_F(PudLodestarDriverTest, BothRingsEmptyMakesNoUnfoldAndBuildsTheOuterRingOn
     EXPECT_CALL(rings, build(_, _)).Times(AnyNumber());
     EXPECT_CALL(rings, build(listed, false)).Times(1);
     EXPECT_CALL(unfolder, unfold(_, _)).Times(0);
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::none);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::none);
 }
 
 TEST_F(PudLodestarDriverTest, OuterUnfoldsUseUpTheRatioAndAConjectureUnfoldRestoresIt) {
@@ -133,10 +127,10 @@ TEST_F(PudLodestarDriverTest, OuterUnfoldsUseUpTheRatioAndAConjectureUnfoldResto
     EXPECT_CALL(unfolder, unfold(pud_test_node(7), 1));
     EXPECT_CALL(unfolder, unfold(pud_test_node(8), 2));
     EXPECT_CALL(unfolder, unfold(pud_test_node(7), 1));
-    driver.unfold_one();
-    driver.unfold_one();
-    driver.unfold_one();
-    driver.unfold_one();
+    driver.unfold_one(listed);
+    driver.unfold_one(listed);
+    driver.unfold_one(listed);
+    driver.unfold_one(listed);
 }
 
 TEST_F(PudLodestarDriverTest, AnOffFocusUnitUnfoldCountsAgainstTheRatio) {
@@ -145,6 +139,6 @@ TEST_F(PudLodestarDriverTest, AnOffFocusUnitUnfoldCountsAgainstTheRatio) {
         .WillOnce(Return(pud_unfold_outcome::off_focus))
         .WillOnce(Return(pud_unfold_outcome::none));
     EXPECT_CALL(unfolder, unfold(pud_test_node(8), 2));
-    driver.unfold_one();
-    EXPECT_EQ(driver.unfold_one(), pud_unfold_outcome::on_focus);
+    driver.unfold_one(listed);
+    EXPECT_EQ(driver.unfold_one(listed), pud_unfold_outcome::on_focus);
 }
