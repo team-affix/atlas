@@ -21,6 +21,7 @@ template<
     typename IPrintExpr,
     typename IOnUnfold,
     typename IPrintStats,
+    typename IFinishPrintingLine,
     typename IPauseTimer,
     typename IResumeTimer,
     typename ITrySaveModules,
@@ -35,6 +36,7 @@ struct pud_solve_loop {
         IPrintExpr& print_expr,
         IOnUnfold& on_unfold,
         IPrintStats& print_stats,
+        IFinishPrintingLine& finish_printing_line,
         IPauseTimer& pause_timer,
         IResumeTimer& resume_timer,
         ITrySaveModules& try_save_modules,
@@ -50,6 +52,7 @@ private:
     IPrintExpr& print_expr_;
     IOnUnfold& on_unfold_;
     IPrintStats& print_stats_;
+    IFinishPrintingLine& finish_printing_line_;
     IPauseTimer& pause_timer_;
     IResumeTimer& resume_timer_;
     ITrySaveModules& try_save_modules_;
@@ -60,11 +63,11 @@ private:
 #define PUD_SOLVE_LOOP_TEMPLATE                                                                     \
     template<typename INextStep, typename IGetLastStep, typename IGetSolution, typename IGetSolutionDepth, \
              typename IGetStopReason, typename IPrintExpr, typename IOnUnfold, typename IPrintStats,  \
-             typename IPauseTimer, typename IResumeTimer, typename ITrySaveModules,                 \
+             typename IFinishPrintingLine, typename IPauseTimer, typename IResumeTimer, typename ITrySaveModules,                 \
              typename ITrySaveModulesFinal>
 #define PUD_SOLVE_LOOP                                                                              \
     pud_solve_loop<INextStep, IGetLastStep, IGetSolution, IGetSolutionDepth, IGetStopReason, IPrintExpr, \
-        IOnUnfold, IPrintStats, IPauseTimer, IResumeTimer, ITrySaveModules, ITrySaveModulesFinal>
+        IOnUnfold, IPrintStats, IFinishPrintingLine, IPauseTimer, IResumeTimer, ITrySaveModules, ITrySaveModulesFinal>
 
 PUD_SOLVE_LOOP_TEMPLATE
 PUD_SOLVE_LOOP::pud_solve_loop(
@@ -76,6 +79,7 @@ PUD_SOLVE_LOOP::pud_solve_loop(
     IPrintExpr& print_expr,
     IOnUnfold& on_unfold,
     IPrintStats& print_stats,
+    IFinishPrintingLine& finish_printing_line,
     IPauseTimer& pause_timer,
     IResumeTimer& resume_timer,
     ITrySaveModules& try_save_modules,
@@ -89,6 +93,7 @@ PUD_SOLVE_LOOP::pud_solve_loop(
     , print_expr_(print_expr)
     , on_unfold_(on_unfold)
     , print_stats_(print_stats)
+    , finish_printing_line_(finish_printing_line)
     , pause_timer_(pause_timer)
     , resume_timer_(resume_timer)
     , try_save_modules_(try_save_modules)
@@ -114,6 +119,7 @@ void PUD_SOLVE_LOOP::run() {
         }
         if (step != pud_search_step::solved)
             continue;
+        finish_printing_line_.finish_line();
         std::cout << "SOLVED\n";
         print_expr_.print(get_solution_.solution());
         std::cout << '\n';
@@ -125,6 +131,7 @@ void PUD_SOLVE_LOOP::run() {
     }
     if (interval_ > 0 && total_unfolds > 0)
         print_stats_.print();
+    finish_printing_line_.finish_line();
     try_save_modules_final_.try_save_final();
     const pud_search_stop_reason reason = get_stop_reason_.stop_reason();
     if (reason == pud_search_stop_reason::refuted)

@@ -27,6 +27,9 @@ struct MockPudOnUnfold {
 struct MockPudPrintStats {
     MOCK_METHOD(void, print, ());
 };
+struct MockPudFinishPrintingLine {
+    MOCK_METHOD(void, finish_line, ());
+};
 struct MockPudPauseTimer {
     MOCK_METHOD(void, pause, ());
 };
@@ -43,7 +46,7 @@ struct MockPudTrySaveModulesFinal {
 using runtime_t = NiceMock<MockPudRuntime>;
 using test_loop_t = pud_solve_loop<
     runtime_t, runtime_t, runtime_t, runtime_t, runtime_t, NiceMock<MockPudExprPrinter>, NiceMock<MockPudOnUnfold>,
-    NiceMock<MockPudPrintStats>, NiceMock<MockPudPauseTimer>, NiceMock<MockPudResumeTimer>,
+    NiceMock<MockPudPrintStats>, NiceMock<MockPudFinishPrintingLine>, NiceMock<MockPudPauseTimer>, NiceMock<MockPudResumeTimer>,
     NiceMock<MockPudTrySaveModules>, NiceMock<MockPudTrySaveModulesFinal>>;
 
 // Captures std::cout and feeds std::cin for the duration of each test.
@@ -54,6 +57,7 @@ struct PudSolveLoopTest : public ::testing::Test {
     NiceMock<MockPudExprPrinter> printer;
     NiceMock<MockPudOnUnfold> on_unfold;
     NiceMock<MockPudPrintStats> print_stats;
+    NiceMock<MockPudFinishPrintingLine> finish_line;
     NiceMock<MockPudPauseTimer> pause_timer;
     NiceMock<MockPudResumeTimer> resume_timer;
     NiceMock<MockPudTrySaveModules> saver;
@@ -62,7 +66,8 @@ struct PudSolveLoopTest : public ::testing::Test {
 
     std::string run_loop(size_t interval) {
         test_loop_t loop{
-            runtime, runtime, runtime, runtime, runtime, printer, on_unfold, print_stats, pause_timer, resume_timer,
+            runtime, runtime, runtime, runtime, runtime, printer, on_unfold, print_stats, finish_line, pause_timer,
+            resume_timer,
             saver, final_saver, interval};
         loop.run();
         return captured_out_.str();
@@ -164,4 +169,19 @@ TEST_F(PudSolveLoopTest, TheFinalSaveChanceComesOnceBeforeTheLastLine) {
     EXPECT_CALL(saver, try_save()).Times(0);
     EXPECT_CALL(final_saver, try_save_final()).Times(1);
     EXPECT_EQ(run_loop(0), "REFUTED\n");
+}
+
+TEST_F(PudSolveLoopTest, TheProgressLineIsFinishedBeforeASolutionAndAtTheEnd) {
+    EXPECT_CALL(runtime, next()).WillOnce(Return(true)).WillOnce(Return(true)).WillOnce(Return(false));
+    EXPECT_CALL(runtime, last_step())
+        .WillOnce(Return(pud_search_step::unfolded))
+        .WillOnce(Return(pud_search_step::solved));
+    InSequence order;
+    EXPECT_CALL(print_stats, print());
+    EXPECT_CALL(finish_line, finish_line());
+    EXPECT_CALL(printer, print(&fact));
+    EXPECT_CALL(print_stats, print());
+    EXPECT_CALL(finish_line, finish_line());
+    EXPECT_CALL(final_saver, try_save_final());
+    run_loop(1);
 }

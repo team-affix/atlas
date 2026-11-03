@@ -37,7 +37,7 @@ private:
     using autosaver_t = pud_module_autosaver<pud_lodestar_runtime, pud_loaded_modules, pud_lodestar_runtime>;
     using loop_t = pud_solve_loop<
         pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime, pud_lodestar_runtime,
-        printer_t, progress_t, progress_t, timer_t, timer_t, autosaver_t, autosaver_t>;
+        printer_t, progress_t, progress_t, progress_t, timer_t, timer_t, autosaver_t, autosaver_t>;
 
     pud_loaded_modules loaded_;
     pud_global_node_id focus_;

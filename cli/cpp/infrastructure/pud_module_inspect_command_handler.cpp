@@ -20,11 +20,13 @@ pud_module_inspect_command_handler::pud_module_inspect_command_handler(
     const std::string& input_path,
     bool id_only,
     bool deps_only,
-    bool detailed)
+    bool detailed,
+    bool show_inferences)
     : input_path_(input_path)
     , id_only_(id_only)
     , deps_only_(deps_only)
-    , detailed_(detailed) {}
+    , detailed_(detailed)
+    , show_inferences_(show_inferences) {}
 
 void pud_module_inspect_command_handler::operator()() {
     std::ifstream in(input_path_, std::ios::binary);
@@ -74,7 +76,8 @@ void pud_module_inspect_command_handler::operator()() {
     named_functor_printer<functor_names> print_functor{names};
     expr_printer<id_var_printer, named_functor_printer<functor_names>> print_expr{std::cout, print_var, print_functor};
     rule_printer<expr_printer<id_var_printer, named_functor_printer<functor_names>>> print_rule{std::cout, print_expr};
-    for (pud_node_id node = 0; node < node_count; ++node) {
+    const size_t listed_count = show_inferences_ ? node_count : axiom_count;
+    for (pud_node_id node = 0; node < listed_count; ++node) {
         std::cout << "node " << node << ' ';
         if (node < axiom_count) {
             std::cout << "axiom ";
