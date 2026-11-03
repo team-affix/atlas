@@ -4,6 +4,9 @@
 #include "infrastructure/pud_root_activator.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/pud_node_queries.hpp"
+#include "value_objects/pud_structure_watch.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/rule.hpp"
 #include "pud_test_node.hpp"
 
@@ -14,8 +17,6 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 
 namespace {
-
-using queries_t = immer::map<pud_body_goal_id, pud_mhq_head_id>;
 
 struct MockGetAxiom {
     MOCK_METHOD(const rule&, get_axiom, (pud_global_node_id));
@@ -29,8 +30,17 @@ struct MockStoreNodeGoals {
 struct MockStoreNodeAxiom {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_global_node_id));
 };
-struct MockStoreActiveState {
-    MOCK_METHOD(void, store, (pud_global_node_id, pud_active_state));
+struct MockStoreNodeLvc {
+    MOCK_METHOD(void, store, (pud_global_node_id, uint32_t));
+};
+struct MockStoreNodeBindings {
+    MOCK_METHOD(void, store, (pud_global_node_id, pud_ubs_state));
+};
+struct MockStoreNodeWatch {
+    MOCK_METHOD(void, store, (pud_global_node_id, pud_structure_watch));
+};
+struct MockStoreNodeQueries {
+    MOCK_METHOD(void, store, (pud_global_node_id, pud_node_queries));
 };
 struct MockWatchRoot {
     MOCK_METHOD(pud_structure_watch, watch_root, (const pud_ubs_state&, const pud_goal_list&, pud_module_id));
@@ -44,7 +54,8 @@ struct MockHoldQuery {
 
 using test_root_activator_t = pud_root_activator<
     NiceMock<MockGetAxiom>, NiceMock<MockBuildRootGoalList>, NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>,
-    NiceMock<MockStoreActiveState>, NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
+    NiceMock<MockStoreNodeLvc>, NiceMock<MockStoreNodeBindings>, NiceMock<MockStoreNodeWatch>, NiceMock<MockStoreNodeQueries>,
+    NiceMock<MockWatchRoot>, NiceMock<MockOpenQuery>, NiceMock<MockHoldQuery>>;
 
 // The axiom at node 2 has the body a, b and three variables.
 struct PudRootActivatorTest : public ::testing::Test {
@@ -52,12 +63,16 @@ struct PudRootActivatorTest : public ::testing::Test {
     NiceMock<MockBuildRootGoalList> root_goal_lists;
     NiceMock<MockStoreNodeGoals> goals;
     NiceMock<MockStoreNodeAxiom> store_node_axiom;
-    NiceMock<MockStoreActiveState> store_states;
+    NiceMock<MockStoreNodeLvc> store_lvcs;
+    NiceMock<MockStoreNodeBindings> store_bindings;
+    NiceMock<MockStoreNodeWatch> store_watches;
+    NiceMock<MockStoreNodeQueries> store_queries;
     NiceMock<MockWatchRoot> watcher;
     NiceMock<MockOpenQuery> queries;
     NiceMock<MockHoldQuery> holders;
     test_root_activator_t activator{
-        axioms, root_goal_lists, goals, store_node_axiom, store_states, watcher, queries, holders};
+        axioms, root_goal_lists, goals, store_node_axiom, store_lvcs, store_bindings, store_watches, store_queries,
+        watcher, queries, holders};
     expr head{expr::functor{9, {}}};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
@@ -102,19 +117,30 @@ TEST_F(PudRootActivatorTest, TheWatchCoversTheAxiomsGoals) {
     activator.activate_root(pud_test_node(2));
 }
 
-TEST_F(PudRootActivatorTest, AnAxiomHoldsAQueryPerGoalAndStoresItsStateAtItsLvc) {
+TEST_F(PudRootActivatorTest, AnAxiomHoldsAQueryPerGoalAndStoresItsActiveFieldsAtItsLvc) {
     EXPECT_CALL(holders, hold(50u, pud_test_node(2), 0u));
     EXPECT_CALL(holders, hold(51u, pud_test_node(2), 1u));
-    EXPECT_CALL(store_states, store(pud_test_node(2), pud_active_state{
-        .lvc = 3, .bindings = {}, .watch = root_watch, .queries = queries_t{}.set(0, 50).set(1, 51)}));
+    EXPECT_CALL(store_lvcs, store(pud_test_node(2), 3u));
+    EXPECT_CALL(store_bindings, store(pud_test_node(2), pud_ubs_state{}));
+    EXPECT_CALL(store_watches, store(pud_test_node(2), root_watch));
+    EXPECT_CALL(store_queries, store(pud_test_node(2), pud_node_queries{}.set(0, 50).set(1, 51)));
     EXPECT_FALSE(activator.activate_root(pud_test_node(2)));
+}
+
+TEST_F(PudRootActivatorTest, TheActiveFieldsAreStoredInOrderAfterTheQueriesAreHeld) {
+    InSequence order;
+    EXPECT_CALL(holders, hold(_, _, _)).Times(2);
+    EXPECT_CALL(store_lvcs, store(pud_test_node(2), _));
+    EXPECT_CALL(store_bindings, store(pud_test_node(2), _));
+    EXPECT_CALL(store_watches, store(pud_test_node(2), _));
+    EXPECT_CALL(store_queries, store(pud_test_node(2), _));
+    activator.activate_root(pud_test_node(2));
 }
 
 TEST_F(PudRootActivatorTest, AGoalWithoutCandidatesRefutesTheAxiomButTheOtherQueriesAreStillHeld) {
     ON_CALL(queries, try_open(_, _, &goal_a, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(holders, hold(51u, pud_test_node(2), 1u));
-    EXPECT_CALL(store_states, store(pud_test_node(2), pud_active_state{
-        .lvc = 3, .bindings = {}, .watch = root_watch, .queries = queries_t{}.set(1, 51)}));
+    EXPECT_CALL(store_queries, store(pud_test_node(2), pud_node_queries{}.set(1, 51)));
     EXPECT_TRUE(activator.activate_root(pud_test_node(2)));
 }
 

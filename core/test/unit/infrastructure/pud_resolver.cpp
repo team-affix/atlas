@@ -2,6 +2,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_resolver.hpp"
+#include "value_objects/pud_node_queries.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "pud_test_node.hpp"
 
@@ -13,8 +15,14 @@ using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetActiveState {
-    MOCK_METHOD(const pud_active_state&, get, (pud_global_node_id));
+struct MockGetNodeQueries {
+    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id));
+};
+struct MockGetNodeBindings {
+    MOCK_METHOD(const pud_ubs_state&, get, (pud_global_node_id));
+};
+struct MockGetNodeLvc {
+    MOCK_METHOD(uint32_t, get, (pud_global_node_id));
 };
 struct MockGetNodeGoals {
     MOCK_METHOD(const pud_goal_list&, get, (pud_global_node_id), (const));
@@ -38,27 +46,31 @@ struct MockBuildInference {
 };
 
 using test_resolver_t = pud_resolver<
-    NiceMock<MockGetActiveState>, NiceMock<MockGetNodeGoals>, NiceMock<MockGetQueryCandidates>,
+    NiceMock<MockGetNodeQueries>, NiceMock<MockGetNodeBindings>, NiceMock<MockGetNodeLvc>, NiceMock<MockGetNodeGoals>, NiceMock<MockGetQueryCandidates>,
     NiceMock<MockGetCandidatePath>, NiceMock<MockBuildInference>>;
 
 struct PudResolverTest : public ::testing::Test {
-    NiceMock<MockGetActiveState> states;
+    NiceMock<MockGetNodeQueries> node_queries;
+    NiceMock<MockGetNodeBindings> node_bindings;
+    NiceMock<MockGetNodeLvc> node_lvcs;
     NiceMock<MockGetNodeGoals> goals;
     NiceMock<MockGetQueryCandidates> candidates;
     NiceMock<MockGetCandidatePath> paths;
     NiceMock<MockBuildInference> inference_builder;
-    test_resolver_t resolver{states, goals, candidates, paths, inference_builder};
+    test_resolver_t resolver{node_queries, node_bindings, node_lvcs, goals, candidates, paths, inference_builder};
     expr goal{expr::functor{1, {}}};
     pud_goal_list leaf_goals{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(2, &goal), .next_id = 3};
-    pud_active_state state{
-        .lvc = 8, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(2, 40)};
+    pud_node_queries leaf_queries{pud_node_queries{}.set(2, 40)};
+    pud_ubs_state leaf_bindings;
     std::vector<pud_global_node_id> first_path{pud_test_node(0), pud_test_node(3)};
     std::vector<pud_global_node_id> second_path{pud_test_node(1)};
     pud_inference first_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 1};
     pud_inference second_delta{.parent = 5, .call_site = 2, .substitutions = {}, .body_goals = {}, .var_count = 2};
 
     void SetUp() override {
-        ON_CALL(states, get(pud_test_node(5))).WillByDefault(ReturnRef(state));
+        ON_CALL(node_queries, get(pud_test_node(5))).WillByDefault(ReturnRef(leaf_queries));
+        ON_CALL(node_bindings, get(pud_test_node(5))).WillByDefault(ReturnRef(leaf_bindings));
+        ON_CALL(node_lvcs, get(pud_test_node(5))).WillByDefault(Return(8u));
         ON_CALL(goals, get(pud_test_node(5))).WillByDefault(ReturnRef(leaf_goals));
         ON_CALL(candidates, candidates(40)).WillByDefault(Return(std::vector<pud_mhcs_head_id>{30, 31}));
         ON_CALL(paths, path(30)).WillByDefault(ReturnRef(first_path));
@@ -70,9 +82,9 @@ struct PudResolverTest : public ::testing::Test {
 
 TEST_F(PudResolverTest, TheLeafsGoalIsAcceptedAgainstEveryCandidateInOrderAtTheLeafsLvc) {
     InSequence in_order;
-    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, first_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, leaf_bindings, 8u, &goal, first_path))
         .WillOnce(Return(first_delta));
-    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, state.bindings, 8u, &goal, second_path))
+    EXPECT_CALL(inference_builder, build(pud_test_node(5), 2u, leaf_bindings, 8u, &goal, second_path))
         .WillOnce(Return(second_delta));
     EXPECT_EQ(resolver.resolve(pud_test_node(5), 2), (std::vector<pud_inference>{first_delta, second_delta}));
 }

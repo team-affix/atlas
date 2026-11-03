@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_lodestar_ring_builder.hpp"
-#include "value_objects/pud_active_state.hpp"
+#include "value_objects/pud_node_queries.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
@@ -34,8 +34,8 @@ struct MockGetLiveNodes {
 struct MockIsNodeRefuted {
     MOCK_METHOD(bool, is_refuted, (pud_global_node_id), (const));
 };
-struct MockGetActiveState {
-    MOCK_METHOD(const pud_active_state&, get, (pud_global_node_id), (const));
+struct MockGetNodeQueries {
+    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id), (const));
 };
 struct MockIsQueryExhausted {
     MOCK_METHOD(bool, is_exhausted, (pud_mhq_head_id), (const));
@@ -47,7 +47,7 @@ struct MockAllowUnfold {
 using test_ring_builder_t = pud_lodestar_ring_builder<
     NiceMock<MockGetQueryCandidates>, NiceMock<MockFindCandidateWitnesses>, NiceMock<MockFindWitnessNode>,
     NiceMock<MockContainsFocusNode>, NiceMock<MockGetLiveNodes>, NiceMock<MockIsNodeRefuted>,
-    NiceMock<MockGetActiveState>, NiceMock<MockIsQueryExhausted>, NiceMock<MockAllowUnfold>>;
+    NiceMock<MockGetNodeQueries>, NiceMock<MockIsQueryExhausted>, NiceMock<MockAllowUnfold>>;
 
 pud_lodestar_choice choice(
     pud_leaf_goal_query query,
@@ -73,18 +73,17 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
     NiceMock<MockContainsFocusNode> focus;
     NiceMock<MockGetLiveNodes> frontier;
     NiceMock<MockIsNodeRefuted> refuted;
-    NiceMock<MockGetActiveState> states;
+    NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockIsQueryExhausted> exhausted;
     NiceMock<MockAllowUnfold> allower;
-    test_ring_builder_t builder{candidates, witness_index, witnesses, focus, frontier, refuted, states, exhausted, allower};
+    test_ring_builder_t builder{candidates, witness_index, witnesses, focus, frontier, refuted, node_queries, exhausted, allower};
     pud_leaf_goal_query query{.node = pud_test_node(3), .goal = 0, .head = 40, .has_candidates = true};
     pud_candidate_witnesses witnessed{
         .self_witness = false, .self_leaf = {}, .witnesses = {50, 51}};
     pud_candidate_witnesses self_witnessed{
         .self_witness = true, .self_leaf = pud_test_node(12), .witnesses = {}};
     std::set<pud_global_node_id> live{pud_test_node(3), pud_test_node(10), pud_test_node(11), pud_test_node(12)};
-    pud_active_state ready_on_goal_five{
-        .lvc = 0, .bindings = {}, .watch = {}, .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(5, 60)};
+    pud_node_queries ready_on_goal_five{pud_node_queries{}.set(5, 60)};
     pud_lodestar_choice caller = choice(
         query, std::numeric_limits<pud_mhcs_head_id>::max(), pud_lodestar_side::caller, pud_test_node(3), 0);
 
@@ -99,7 +98,7 @@ struct PudLodestarRingBuilderTest : public ::testing::Test {
         ON_CALL(focus, contains(pud_test_node(12))).WillByDefault(Return(true));
         ON_CALL(frontier, live()).WillByDefault(ReturnRef(live));
         ON_CALL(refuted, is_refuted(_)).WillByDefault(Return(false));
-        ON_CALL(states, get(_)).WillByDefault(ReturnRef(ready_on_goal_five));
+        ON_CALL(node_queries, get(_)).WillByDefault(ReturnRef(ready_on_goal_five));
         ON_CALL(exhausted, is_exhausted(_)).WillByDefault(Return(false));
         ON_CALL(allower, allow(_)).WillByDefault(Return(true));
     }
@@ -159,12 +158,8 @@ TEST_F(PudLodestarRingBuilderTest, AWitnessLeafWithoutAGoalThatHasCandidatesIsLe
 }
 
 TEST_F(PudLodestarRingBuilderTest, AWitnessLeafIsUnfoldedOnItsSmallestGoalThatHasCandidates) {
-    pud_active_state three_goals{
-        .lvc = 0,
-        .bindings = {},
-        .watch = {},
-        .queries = immer::map<pud_body_goal_id, pud_mhq_head_id>{}.set(7, 62).set(4, 61).set(6, 63)};
-    ON_CALL(states, get(pud_test_node(10))).WillByDefault(ReturnRef(three_goals));
+    pud_node_queries three_goals{pud_node_queries{}.set(7, 62).set(4, 61).set(6, 63)};
+    ON_CALL(node_queries, get(pud_test_node(10))).WillByDefault(ReturnRef(three_goals));
     ON_CALL(exhausted, is_exhausted(61)).WillByDefault(Return(true));
     const std::vector<pud_lodestar_choice> ring = builder.build({query}, false);
     ASSERT_EQ(ring.size(), 2u);

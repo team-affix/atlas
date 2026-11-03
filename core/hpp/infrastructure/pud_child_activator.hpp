@@ -6,19 +6,25 @@
 #include <utility>
 #include <immer/map.hpp>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
+#include "value_objects/pud_node_queries.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 #include "debug_assert.hpp"
 
 template<
-    typename IGetActiveState,
-    typename IStoreActiveState,
+    typename IGetNodeLvc,
+    typename IGetNodeBindings,
+    typename IGetNodeWatch,
+    typename IGetNodeQueries,
+    typename IStoreNodeLvc,
+    typename IStoreNodeBindings,
+    typename IStoreNodeWatch,
+    typename IStoreNodeQueries,
     typename IGetInference,
     typename IGetNodeGoals,
     typename IGetNodeAxiom,
@@ -34,8 +40,14 @@ template<
     typename IIsQueryExhausted>
 struct pud_child_activator {
     pud_child_activator(
-        IGetActiveState& get_active_state,
-        IStoreActiveState& store_active_state,
+        IGetNodeLvc& get_node_lvc,
+        IGetNodeBindings& get_node_bindings,
+        IGetNodeWatch& get_node_watch,
+        IGetNodeQueries& get_node_queries,
+        IStoreNodeLvc& store_node_lvc,
+        IStoreNodeBindings& store_node_bindings,
+        IStoreNodeWatch& store_node_watch,
+        IStoreNodeQueries& store_node_queries,
         IGetInference& get_inference,
         IGetNodeGoals& get_node_goals,
         IGetNodeAxiom& get_node_axiom,
@@ -51,8 +63,14 @@ struct pud_child_activator {
         IIsQueryExhausted& is_query_exhausted);
     bool activate_child(pud_global_node_id parent, pud_global_node_id child);
 private:
-    IGetActiveState& get_active_state_;
-    IStoreActiveState& store_active_state_;
+    IGetNodeLvc& get_node_lvc_;
+    IGetNodeBindings& get_node_bindings_;
+    IGetNodeWatch& get_node_watch_;
+    IGetNodeQueries& get_node_queries_;
+    IStoreNodeLvc& store_node_lvc_;
+    IStoreNodeBindings& store_node_bindings_;
+    IStoreNodeWatch& store_node_watch_;
+    IStoreNodeQueries& store_node_queries_;
     IGetInference& get_inference_;
     IGetNodeGoals& get_node_goals_;
     IGetNodeAxiom& get_node_axiom_;
@@ -69,22 +87,31 @@ private:
 };
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
-    template<typename IGetActiveState, typename IStoreActiveState, typename IGetInference,     \
+    template<typename IGetNodeLvc, typename IGetNodeBindings, typename IGetNodeWatch, typename IGetNodeQueries, \
+             typename IStoreNodeLvc, typename IStoreNodeBindings, typename IStoreNodeWatch,             \
+             typename IStoreNodeQueries, typename IGetInference,                                     \
              typename IGetNodeGoals, typename IGetNodeAxiom, typename IBuildChildGoalList,           \
              typename IStoreNodeGoals, typename IStoreNodeAxiom,                               \
              typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
              typename IForkQuery, typename IOpenQuery, typename IHoldQuery,                    \
              typename IIsQueryExhausted>
 #define PUD_CHILD_ACTIVATOR                                                                    \
-    pud_child_activator<IGetActiveState, IStoreActiveState, IGetInference, IGetNodeGoals,      \
+    pud_child_activator<IGetNodeLvc, IGetNodeBindings, IGetNodeWatch, IGetNodeQueries, IStoreNodeLvc,  \
+        IStoreNodeBindings, IStoreNodeWatch, IStoreNodeQueries, IGetInference, IGetNodeGoals,          \
         IGetNodeAxiom, IBuildChildGoalList, IStoreNodeGoals, IStoreNodeAxiom,        \
         IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IHoldQuery,    \
         IIsQueryExhausted>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
-    IGetActiveState& get_active_state,
-    IStoreActiveState& store_active_state,
+    IGetNodeLvc& get_node_lvc,
+    IGetNodeBindings& get_node_bindings,
+    IGetNodeWatch& get_node_watch,
+    IGetNodeQueries& get_node_queries,
+    IStoreNodeLvc& store_node_lvc,
+    IStoreNodeBindings& store_node_bindings,
+    IStoreNodeWatch& store_node_watch,
+    IStoreNodeQueries& store_node_queries,
     IGetInference& get_inference,
     IGetNodeGoals& get_node_goals,
     IGetNodeAxiom& get_node_axiom,
@@ -98,8 +125,14 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IOpenQuery& open_query,
     IHoldQuery& hold_query,
     IIsQueryExhausted& is_query_exhausted)
-    : get_active_state_(get_active_state)
-    , store_active_state_(store_active_state)
+    : get_node_lvc_(get_node_lvc)
+    , get_node_bindings_(get_node_bindings)
+    , get_node_watch_(get_node_watch)
+    , get_node_queries_(get_node_queries)
+    , store_node_lvc_(store_node_lvc)
+    , store_node_bindings_(store_node_bindings)
+    , store_node_watch_(store_node_watch)
+    , store_node_queries_(store_node_queries)
     , get_inference_(get_inference)
     , get_node_goals_(get_node_goals)
     , get_node_axiom_(get_node_axiom)
@@ -116,17 +149,18 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
-    const pud_active_state& parent_state = get_active_state_.get(parent);
+    const pud_node_queries& parent_queries = get_node_queries_.get(parent);
     const pud_inference& inference = get_inference_.get_inference(child);
     const pud_goal_list& parent_goals = get_node_goals_.get(parent);
     const pud_goal_list goals = build_child_goal_list_.build(parent_goals, inference.call_site, inference.body_goals);
     store_node_goals_.store(child, goals);
     store_node_axiom_.store(child, get_node_axiom_.get(parent));
     increment_live_child_count_.increment(parent);
-    const uint32_t lvc = parent_state.lvc + inference.var_count;
-    pud_ubs_state bindings = bind_.bind(parent_state.bindings, child);
-    pud_structure_watch_change watched = watch_descend_.descend(parent_state.watch, bindings, child, inference.call_site, goals);
-    immer::map<pud_body_goal_id, pud_mhq_head_id> queries = parent_state.queries.erase(inference.call_site);
+    const uint32_t lvc = get_node_lvc_.get(parent) + inference.var_count;
+    pud_ubs_state bindings = bind_.bind(get_node_bindings_.get(parent), child);
+    pud_structure_watch_change watched =
+        watch_descend_.descend(get_node_watch_.get(parent), bindings, child, inference.call_site, goals);
+    pud_node_queries queries = parent_queries.erase(inference.call_site);
     bool refuted = false;
     for (pud_body_goal_id goal : watched.changed_goals) {
         const pud_mhq_head_id* head = queries.find(goal);
@@ -141,7 +175,7 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
         queries = queries.set(goal, forked.value());
     }
     for (const auto& [id, goal] : goals.goals) {
-        if (parent_state.queries.find(id) != nullptr)
+        if (parent_queries.find(id) != nullptr)
             continue;
         DEBUG_ASSERT(id >= parent_goals.next_id);
         const std::optional<pud_mhq_head_id> opened = open_query_.try_open(child.module, bindings, goal, lvc);
@@ -155,12 +189,10 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
         hold_query_.hold(head_id, child, goal);
         refuted = refuted || is_query_exhausted_.is_exhausted(head_id);
     }
-    store_active_state_.store(child, pud_active_state{
-        .lvc = lvc,
-        .bindings = std::move(bindings),
-        .watch = std::move(watched.watch),
-        .queries = std::move(queries),
-    });
+    store_node_lvc_.store(child, lvc);
+    store_node_bindings_.store(child, std::move(bindings));
+    store_node_watch_.store(child, std::move(watched.watch));
+    store_node_queries_.store(child, std::move(queries));
     return refuted;
 }
 

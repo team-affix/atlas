@@ -56,10 +56,10 @@ Node lifecycle
 - Made (pud_node_maker): tree tables written. make_root(rule, group) also makes
   the root an axiom of its group; make_child(parent, call_site, delta) puts the
   child in its parent's group. A node is a leaf from birth.
-- Active: has pud_active_state { bindings, watch, queries } and holds its
+- Active: has active fields { lvc, bindings, watch, queries }, one node table each, and holds its
   queries. Active leaves are the frontier. An interior node is active only while
   its children are being activated: the leaf just unfolded by expand, or nodes
-  on the way down while active state is propagated from the roots after a load.
+  on the way down while active fields are propagated from the roots after a load.
 - Interior (pud_unfolder::unfold): call site, children, live-child count.
 - Refuted (pud_leaf_refuter::refute): a leaf marked refuted, propagated up the
   tree, deactivated, and every leaf holding a query that deactivation exhausted

@@ -52,3 +52,22 @@ TEST_F(PudNodeTableTest, StoringTheSameNodeTwiceFails) {
     table.store(pud_test_node(3), {1});
     EXPECT_THROW(table.store(pud_test_node(3), {2}), std::logic_error);
 }
+
+TEST_F(PudNodeTableTest, AnErasedNodeHasNoValueAndOthersKeepTheirs) {
+    table.store(pud_test_node(3), {1});
+    table.store(pud_test_node(4), {2});
+    table.erase(pud_test_node(3));
+    EXPECT_THROW(table.get(pud_test_node(3)), std::out_of_range);
+    EXPECT_EQ(table.get(pud_test_node(4)), (std::vector<pud_node_id>{2}));
+}
+
+TEST_F(PudNodeTableTest, AnErasedNodeCanBeStoredAgain) {
+    table.store(pud_test_node(3), {1});
+    table.erase(pud_test_node(3));
+    table.store(pud_test_node(3), {2});
+    EXPECT_EQ(table.get(pud_test_node(3)), (std::vector<pud_node_id>{2}));
+}
+
+TEST_F(PudNodeTableTest, ErasingANodeWithoutAValueFails) {
+    EXPECT_THROW(table.erase(pud_test_node(3)), std::logic_error);
+}

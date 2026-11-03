@@ -7,24 +7,33 @@
 #include "value_objects/pud_global_node_id.hpp"
 
 template<
-    typename IGetActiveState,
-    typename IEraseActiveState,
+    typename IGetNodeQueries,
+    typename IEraseNodeQueries,
+    typename IEraseNodeWatch,
+    typename IEraseNodeBindings,
+    typename IEraseNodeLvc,
     typename IReleaseQuery,
     typename IRemoveQuery,
     typename IInvalidateQueryLeaf,
     typename IGetQueryHolders>
 struct pud_node_deactivator {
     pud_node_deactivator(
-        IGetActiveState& get_active_state,
-        IEraseActiveState& erase_active_state,
+        IGetNodeQueries& get_node_queries,
+        IEraseNodeQueries& erase_node_queries,
+        IEraseNodeWatch& erase_node_watch,
+        IEraseNodeBindings& erase_node_bindings,
+        IEraseNodeLvc& erase_node_lvc,
         IReleaseQuery& release_query,
         IRemoveQuery& remove_query,
         IInvalidateQueryLeaf& invalidate_query_leaf,
         IGetQueryHolders& get_query_holders);
     std::vector<pud_global_node_id> deactivate(pud_global_node_id node);
 private:
-    IGetActiveState& get_active_state_;
-    IEraseActiveState& erase_active_state_;
+    IGetNodeQueries& get_node_queries_;
+    IEraseNodeQueries& erase_node_queries_;
+    IEraseNodeWatch& erase_node_watch_;
+    IEraseNodeBindings& erase_node_bindings_;
+    IEraseNodeLvc& erase_node_lvc_;
     IReleaseQuery& release_query_;
     IRemoveQuery& remove_query_;
     IInvalidateQueryLeaf& invalidate_query_leaf_;
@@ -32,22 +41,30 @@ private:
 };
 
 #define PUD_NODE_DEACTIVATOR_TEMPLATE                                                      \
-    template<typename IGetActiveState, typename IEraseActiveState, typename IReleaseQuery, \
+    template<typename IGetNodeQueries, typename IEraseNodeQueries, typename IEraseNodeWatch,         \
+             typename IEraseNodeBindings, typename IEraseNodeLvc, typename IReleaseQuery,           \
              typename IRemoveQuery, typename IInvalidateQueryLeaf, typename IGetQueryHolders>
 #define PUD_NODE_DEACTIVATOR                                                               \
-    pud_node_deactivator<IGetActiveState, IEraseActiveState, IReleaseQuery, IRemoveQuery,  \
+    pud_node_deactivator<IGetNodeQueries, IEraseNodeQueries, IEraseNodeWatch, IEraseNodeBindings,    \
+        IEraseNodeLvc, IReleaseQuery, IRemoveQuery,                                                  \
         IInvalidateQueryLeaf, IGetQueryHolders>
 
 PUD_NODE_DEACTIVATOR_TEMPLATE
 PUD_NODE_DEACTIVATOR::pud_node_deactivator(
-    IGetActiveState& get_active_state,
-    IEraseActiveState& erase_active_state,
+    IGetNodeQueries& get_node_queries,
+    IEraseNodeQueries& erase_node_queries,
+    IEraseNodeWatch& erase_node_watch,
+    IEraseNodeBindings& erase_node_bindings,
+    IEraseNodeLvc& erase_node_lvc,
     IReleaseQuery& release_query,
     IRemoveQuery& remove_query,
     IInvalidateQueryLeaf& invalidate_query_leaf,
     IGetQueryHolders& get_query_holders)
-    : get_active_state_(get_active_state)
-    , erase_active_state_(erase_active_state)
+    : get_node_queries_(get_node_queries)
+    , erase_node_queries_(erase_node_queries)
+    , erase_node_watch_(erase_node_watch)
+    , erase_node_bindings_(erase_node_bindings)
+    , erase_node_lvc_(erase_node_lvc)
     , release_query_(release_query)
     , remove_query_(remove_query)
     , invalidate_query_leaf_(invalidate_query_leaf)
@@ -55,12 +72,15 @@ PUD_NODE_DEACTIVATOR::pud_node_deactivator(
 
 PUD_NODE_DEACTIVATOR_TEMPLATE
 std::vector<pud_global_node_id> PUD_NODE_DEACTIVATOR::deactivate(pud_global_node_id node) {
-    for (const auto& [goal, head_id] : get_active_state_.get(node).queries) {
+    for (const auto& [goal, head_id] : get_node_queries_.get(node)) {
         if (!release_query_.release(head_id, node))
             continue;
         remove_query_.remove(head_id);
     }
-    erase_active_state_.erase(node);
+    erase_node_queries_.erase(node);
+    erase_node_watch_.erase(node);
+    erase_node_bindings_.erase(node);
+    erase_node_lvc_.erase(node);
     std::vector<pud_global_node_id> stranded;
     for (pud_mhq_head_id exhausted : invalidate_query_leaf_.invalidate_leaf(node)) {
         const std::vector<pud_global_node_id> holders = get_query_holders_.get_holders(exhausted);

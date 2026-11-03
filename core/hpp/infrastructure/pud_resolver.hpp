@@ -1,30 +1,37 @@
 #ifndef PUD_RESOLVER_HPP
 #define PUD_RESOLVER_HPP
 
+#include <cstdint>
 #include <vector>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
+#include "value_objects/pud_ubs_state.hpp"
 
 template<
-    typename IGetActiveState,
+    typename IGetNodeQueries,
+    typename IGetNodeBindings,
+    typename IGetNodeLvc,
     typename IGetNodeGoals,
     typename IGetQueryCandidates,
     typename IGetCandidatePath,
     typename IBuildInference>
 struct pud_resolver {
     pud_resolver(
-        IGetActiveState& get_active_state,
+        IGetNodeQueries& get_node_queries,
+        IGetNodeBindings& get_node_bindings,
+        IGetNodeLvc& get_node_lvc,
         IGetNodeGoals& get_node_goals,
         IGetQueryCandidates& get_query_candidates,
         IGetCandidatePath& get_candidate_path,
         IBuildInference& build_inference);
     std::vector<pud_inference> resolve(pud_global_node_id leaf, pud_body_goal_id goal);
 private:
-    IGetActiveState& get_active_state_;
+    IGetNodeQueries& get_node_queries_;
+    IGetNodeBindings& get_node_bindings_;
+    IGetNodeLvc& get_node_lvc_;
     IGetNodeGoals& get_node_goals_;
     IGetQueryCandidates& get_query_candidates_;
     IGetCandidatePath& get_candidate_path_;
@@ -32,19 +39,25 @@ private:
 };
 
 #define PUD_RESOLVER_TEMPLATE                                                              \
-    template<typename IGetActiveState, typename IGetNodeGoals, typename IGetQueryCandidates, \
+    template<typename IGetNodeQueries, typename IGetNodeBindings, typename IGetNodeLvc,      \
+             typename IGetNodeGoals, typename IGetQueryCandidates,                           \
              typename IGetCandidatePath, typename IBuildInference>
 #define PUD_RESOLVER                                                                       \
-    pud_resolver<IGetActiveState, IGetNodeGoals, IGetQueryCandidates, IGetCandidatePath, IBuildInference>
+    pud_resolver<IGetNodeQueries, IGetNodeBindings, IGetNodeLvc, IGetNodeGoals, IGetQueryCandidates, \
+        IGetCandidatePath, IBuildInference>
 
 PUD_RESOLVER_TEMPLATE
 PUD_RESOLVER::pud_resolver(
-    IGetActiveState& get_active_state,
+    IGetNodeQueries& get_node_queries,
+    IGetNodeBindings& get_node_bindings,
+    IGetNodeLvc& get_node_lvc,
     IGetNodeGoals& get_node_goals,
     IGetQueryCandidates& get_query_candidates,
     IGetCandidatePath& get_candidate_path,
     IBuildInference& build_inference)
-    : get_active_state_(get_active_state)
+    : get_node_queries_(get_node_queries)
+    , get_node_bindings_(get_node_bindings)
+    , get_node_lvc_(get_node_lvc)
     , get_node_goals_(get_node_goals)
     , get_query_candidates_(get_query_candidates)
     , get_candidate_path_(get_candidate_path)
@@ -52,12 +65,13 @@ PUD_RESOLVER::pud_resolver(
 
 PUD_RESOLVER_TEMPLATE
 std::vector<pud_inference> PUD_RESOLVER::resolve(pud_global_node_id leaf, pud_body_goal_id goal) {
-    const pud_active_state& state = get_active_state_.get(leaf);
+    const pud_ubs_state& bindings = get_node_bindings_.get(leaf);
+    const uint32_t lvc = get_node_lvc_.get(leaf);
     const expr* goal_expr = get_node_goals_.get(leaf).goals.at(goal);
     std::vector<pud_inference> inferences;
-    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(state.queries.at(goal))) {
+    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(get_node_queries_.get(leaf).at(goal))) {
         inferences.push_back(
-            build_inference_.build(leaf, goal, state.bindings, state.lvc, goal_expr, get_candidate_path_.path(candidate)));
+            build_inference_.build(leaf, goal, bindings, lvc, goal_expr, get_candidate_path_.path(candidate)));
     }
     return inferences;
 }

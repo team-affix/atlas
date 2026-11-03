@@ -33,27 +33,33 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , mhcs_(replayer_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, modules_, modules_, modules_)
     , candidate_witness_index_(mhcs_, witness_search_recorder_)
     , mhq_(replayer_, modules_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, unit_queries_)
-    , active_states_()
+    , node_lvcs_()
+    , node_bindings_()
+    , node_watches_()
+    , node_queries_()
     , query_holders_()
     , focus_set_()
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
-          modules_, root_goal_list_builder_, node_goals_, node_axioms_, active_states_, structure_watcher_, mhq_,
-          query_holders_)
+          modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_lvcs_, node_bindings_, node_watches_, node_queries_, structure_watcher_,
+          mhq_, query_holders_)
     , child_activator_(
-          active_states_, active_states_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
+          node_lvcs_, node_bindings_, node_watches_, node_queries_, node_lvcs_, node_bindings_, node_watches_, node_queries_,
+          modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
           node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
           mhq_)
     , root_depth_recorder_(node_depths_, root_activator_)
     , child_depth_recorder_(node_depths_, node_depths_, child_activator_)
     , child_focus_recorder_(focus_set_, focus_set_, child_depth_recorder_)
-    , node_deactivator_(active_states_, active_states_, query_holders_, mhq_, mhq_, query_holders_)
+    , node_deactivator_(
+          node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_, mhq_,
+          query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
           unifier_factory_, term_exporter_factory_)
-    , resolver_(active_states_, node_goals_, mhq_, mhcs_, inference_builder_)
+    , resolver_(node_queries_, node_bindings_, node_lvcs_, node_goals_, mhq_, mhcs_, inference_builder_)
     , activity_mover_(child_focus_recorder_, leaf_refuter_, node_deactivator_)
     , unfolder_(resolver_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_depth_recorder_, leaf_refuter_, activity_mover_)
@@ -61,9 +67,9 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , pending_conflict_store_()
     , frontier_()
     , unfold_allower_(node_depths_, node_goals_, max_node_depth, max_open_goals)
-    , query_lister_(frontier_, focus_set_, modules_, active_states_, node_goals_, mhq_)
+    , query_lister_(frontier_, focus_set_, modules_, node_queries_, node_goals_, mhq_)
     , ring_builder_(
-          mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, active_states_, mhq_, unfold_allower_)
+          mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, node_queries_, mhq_, unfold_allower_)
     , non_conjecture_round_robin_()
     , conjecture_round_robin_()
     , unfold_applier_(unfolder_, frontier_, focus_set_)
@@ -75,7 +81,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           unfold_applier_, non_conjecture_unfolds_per_conjecture_unfold)
     , solved_leaf_finder_(frontier_, focus_set_, modules_, node_goals_)
     , stored_solution_dropper_(solved_leaf_finder_, modules_, frontier_, report_stored_solutions)
-    , solution_term_reader_(node_axioms_, modules_, active_states_)
+    , solution_term_reader_(node_axioms_, modules_, node_bindings_)
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)
     , solution_normalizer_(demoduler_, normalizer_factory_)
     , solution_taker_(

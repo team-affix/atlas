@@ -5,11 +5,11 @@
 #include <utility>
 #include <immer/map.hpp>
 #include "value_objects/expr.hpp"
-#include "value_objects/pud_active_state.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
+#include "value_objects/pud_node_queries.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 #include "value_objects/rule.hpp"
 
@@ -18,7 +18,10 @@ template<
     typename IBuildRootGoalList,
     typename IStoreNodeGoals,
     typename IStoreNodeAxiom,
-    typename IStoreActiveState,
+    typename IStoreNodeLvc,
+    typename IStoreNodeBindings,
+    typename IStoreNodeWatch,
+    typename IStoreNodeQueries,
     typename IWatchRoot,
     typename IOpenQuery,
     typename IHoldQuery>
@@ -28,7 +31,10 @@ struct pud_root_activator {
         IBuildRootGoalList& build_root_goal_list,
         IStoreNodeGoals& store_node_goals,
         IStoreNodeAxiom& store_node_axiom,
-        IStoreActiveState& store_active_state,
+        IStoreNodeLvc& store_node_lvc,
+        IStoreNodeBindings& store_node_bindings,
+        IStoreNodeWatch& store_node_watch,
+        IStoreNodeQueries& store_node_queries,
         IWatchRoot& watch_root,
         IOpenQuery& open_query,
         IHoldQuery& hold_query);
@@ -38,7 +44,10 @@ private:
     IBuildRootGoalList& build_root_goal_list_;
     IStoreNodeGoals& store_node_goals_;
     IStoreNodeAxiom& store_node_axiom_;
-    IStoreActiveState& store_active_state_;
+    IStoreNodeLvc& store_node_lvc_;
+    IStoreNodeBindings& store_node_bindings_;
+    IStoreNodeWatch& store_node_watch_;
+    IStoreNodeQueries& store_node_queries_;
     IWatchRoot& watch_root_;
     IOpenQuery& open_query_;
     IHoldQuery& hold_query_;
@@ -46,11 +55,13 @@ private:
 
 #define PUD_ROOT_ACTIVATOR_TEMPLATE                                                            \
     template<typename IGetAxiom, typename IBuildRootGoalList, typename IStoreNodeGoals,                \
-             typename IStoreNodeAxiom, typename IStoreActiveState, typename IWatchRoot,         \
+             typename IStoreNodeAxiom, typename IStoreNodeLvc, typename IStoreNodeBindings,             \
+             typename IStoreNodeWatch, typename IStoreNodeQueries, typename IWatchRoot,                 \
              typename IOpenQuery, typename IHoldQuery>
 #define PUD_ROOT_ACTIVATOR                                                                       \
     pud_root_activator<IGetAxiom, IBuildRootGoalList, IStoreNodeGoals, IStoreNodeAxiom,                \
-        IStoreActiveState, IWatchRoot, IOpenQuery, IHoldQuery>
+        IStoreNodeLvc, IStoreNodeBindings, IStoreNodeWatch, IStoreNodeQueries, IWatchRoot, IOpenQuery,  \
+        IHoldQuery>
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
 PUD_ROOT_ACTIVATOR::pud_root_activator(
@@ -58,7 +69,10 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     IBuildRootGoalList& build_root_goal_list,
     IStoreNodeGoals& store_node_goals,
     IStoreNodeAxiom& store_node_axiom,
-    IStoreActiveState& store_active_state,
+    IStoreNodeLvc& store_node_lvc,
+    IStoreNodeBindings& store_node_bindings,
+    IStoreNodeWatch& store_node_watch,
+    IStoreNodeQueries& store_node_queries,
     IWatchRoot& watch_root,
     IOpenQuery& open_query,
     IHoldQuery& hold_query)
@@ -66,7 +80,10 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     , build_root_goal_list_(build_root_goal_list)
     , store_node_goals_(store_node_goals)
     , store_node_axiom_(store_node_axiom)
-    , store_active_state_(store_active_state)
+    , store_node_lvc_(store_node_lvc)
+    , store_node_bindings_(store_node_bindings)
+    , store_node_watch_(store_node_watch)
+    , store_node_queries_(store_node_queries)
     , watch_root_(watch_root)
     , open_query_(open_query)
     , hold_query_(hold_query) {}
@@ -78,7 +95,7 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     store_node_goals_.store(root, goals);
     store_node_axiom_.store(root, root);
     const pud_ubs_state bindings{};
-    immer::map<pud_body_goal_id, pud_mhq_head_id> queries;
+    pud_node_queries queries;
     bool refuted = false;
     for (const auto& [id, goal] : goals.goals) {
         const std::optional<pud_mhq_head_id> opened = open_query_.try_open(root.module, bindings, goal, axiom.var_count);
@@ -90,12 +107,10 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
     }
     for (const auto& [goal, head_id] : queries)
         hold_query_.hold(head_id, root, goal);
-    store_active_state_.store(root, pud_active_state{
-        .lvc = axiom.var_count,
-        .bindings = bindings,
-        .watch = watch_root_.watch_root(bindings, goals, root.module),
-        .queries = std::move(queries),
-    });
+    store_node_lvc_.store(root, axiom.var_count);
+    store_node_bindings_.store(root, bindings);
+    store_node_watch_.store(root, watch_root_.watch_root(bindings, goals, root.module));
+    store_node_queries_.store(root, std::move(queries));
     return refuted;
 }
 
