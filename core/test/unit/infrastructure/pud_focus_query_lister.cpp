@@ -16,11 +16,8 @@ using ::testing::ReturnRef;
 
 namespace {
 
-struct MockGetLiveNodes {
+struct MockGetLiveFocusLeaves {
     MOCK_METHOD(const std::set<pud_global_node_id>&, live, (), (const));
-};
-struct MockContainsFocusNode {
-    MOCK_METHOD(bool, contains, (pud_global_node_id), (const));
 };
 struct MockIsNodeRefuted {
     MOCK_METHOD(bool, is_refuted, (pud_global_node_id), (const));
@@ -36,19 +33,18 @@ struct MockIsQueryExhausted {
 };
 
 using test_lister_t = pud_focus_query_lister<
-    NiceMock<MockGetLiveNodes>, NiceMock<MockContainsFocusNode>, NiceMock<MockIsNodeRefuted>,
-    NiceMock<MockGetNodeQueries>, NiceMock<MockGetNodeGoals>, NiceMock<MockIsQueryExhausted>>;
+    NiceMock<MockGetLiveFocusLeaves>, NiceMock<MockIsNodeRefuted>, NiceMock<MockGetNodeQueries>,
+    NiceMock<MockGetNodeGoals>, NiceMock<MockIsQueryExhausted>>;
 
-// Leaf 3 is in the conjecture module with goals 0, 1 and 2. Goals 0 and 1 hold queries 40 and 41,
+// Leaf 3 is a live focus leaf with goals 0, 1 and 2. Goals 0 and 1 hold queries 40 and 41,
 // which have candidates; goal 2 holds query 42, which is exhausted.
 struct PudFocusQueryListerTest : public ::testing::Test {
-    NiceMock<MockGetLiveNodes> frontier;
-    NiceMock<MockContainsFocusNode> focus;
+    NiceMock<MockGetLiveFocusLeaves> frontier;
     NiceMock<MockIsNodeRefuted> refuted;
     NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockGetNodeGoals> goals;
     NiceMock<MockIsQueryExhausted> exhausted;
-    test_lister_t lister{frontier, focus, refuted, node_queries, goals, exhausted};
+    test_lister_t lister{frontier, refuted, node_queries, goals, exhausted};
     std::set<pud_global_node_id> live{pud_test_node(3)};
     expr goal_expr{expr::functor{1, {}}};
     pud_goal_list leaf_goals{
@@ -58,7 +54,6 @@ struct PudFocusQueryListerTest : public ::testing::Test {
 
     void SetUp() override {
         ON_CALL(frontier, live()).WillByDefault(ReturnRef(live));
-        ON_CALL(focus, contains(_)).WillByDefault(Return(true));
         ON_CALL(refuted, is_refuted(_)).WillByDefault(Return(false));
         ON_CALL(node_queries, get(pud_test_node(3))).WillByDefault(ReturnRef(leaf_queries));
         ON_CALL(goals, get(pud_test_node(3))).WillByDefault(ReturnRef(leaf_goals));
@@ -76,11 +71,6 @@ TEST_F(PudFocusQueryListerTest, EveryGoalOfAFocusLeafIsListedInGoalOrderWithWhet
         pud_leaf_goal_query{.node = pud_test_node(3), .goal = 1, .head = 41, .has_candidates = true},
         pud_leaf_goal_query{.node = pud_test_node(3), .goal = 2, .head = 42, .has_candidates = false},
     }));
-}
-
-TEST_F(PudFocusQueryListerTest, ALeafOutsideTheConjectureModuleIsNotListed) {
-    ON_CALL(focus, contains(pud_test_node(3))).WillByDefault(Return(false));
-    EXPECT_THAT(lister.list(), IsEmpty());
 }
 
 TEST_F(PudFocusQueryListerTest, ARefutedLeafIsNotListed) {

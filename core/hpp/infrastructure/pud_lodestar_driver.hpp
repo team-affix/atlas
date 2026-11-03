@@ -8,12 +8,11 @@
 #include "value_objects/pud_leaf_goal_query.hpp"
 #include "value_objects/pud_unfold_outcome.hpp"
 
-// Picks and makes one unfold. A unit query is unfolded first. Otherwise the non-conjecture ring gets
+// Picks and makes one unfold from the listed focus queries. A unit query is unfolded first. Otherwise the non-conjecture ring gets
 // a turn while fewer than the ratio of non-conjecture unfolds have happened since the last conjecture
 // unfold, then the conjecture ring, then the non-conjecture ring if it has not had its turn.
 template<
     typename IPropagateUnit,
-    typename IListQueries,
     typename IBuildRing,
     typename INextNonConjectureChoice,
     typename INextConjectureChoice,
@@ -21,18 +20,16 @@ template<
 struct pud_lodestar_driver {
     pud_lodestar_driver(
         IPropagateUnit& propagate_unit,
-        IListQueries& list_queries,
         IBuildRing& build_ring,
         INextNonConjectureChoice& next_non_conjecture_choice,
         INextConjectureChoice& next_conjecture_choice,
         IUnfoldLeaf& unfold_leaf,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
-    pud_unfold_outcome unfold_one();
+    pud_unfold_outcome unfold_one(const std::vector<pud_leaf_goal_query>& queries);
 private:
     pud_unfold_outcome count(pud_unfold_outcome outcome);
 
     IPropagateUnit& propagate_unit_;
-    IListQueries& list_queries_;
     IBuildRing& build_ring_;
     INextNonConjectureChoice& next_non_conjecture_choice_;
     INextConjectureChoice& next_conjecture_choice_;
@@ -42,23 +39,21 @@ private:
 };
 
 #define PUD_LODESTAR_DRIVER_TEMPLATE                                                                \
-    template<typename IPropagateUnit, typename IListQueries, typename IBuildRing,                  \
-             typename INextNonConjectureChoice, typename INextConjectureChoice, typename IUnfoldLeaf>
+    template<typename IPropagateUnit, typename IBuildRing, typename INextNonConjectureChoice,       \
+             typename INextConjectureChoice, typename IUnfoldLeaf>
 #define PUD_LODESTAR_DRIVER                                                                         \
-    pud_lodestar_driver<IPropagateUnit, IListQueries, IBuildRing, INextNonConjectureChoice,        \
-        INextConjectureChoice, IUnfoldLeaf>
+    pud_lodestar_driver<IPropagateUnit, IBuildRing, INextNonConjectureChoice, INextConjectureChoice, \
+        IUnfoldLeaf>
 
 PUD_LODESTAR_DRIVER_TEMPLATE
 PUD_LODESTAR_DRIVER::pud_lodestar_driver(
     IPropagateUnit& propagate_unit,
-    IListQueries& list_queries,
     IBuildRing& build_ring,
     INextNonConjectureChoice& next_non_conjecture_choice,
     INextConjectureChoice& next_conjecture_choice,
     IUnfoldLeaf& unfold_leaf,
     size_t non_conjecture_unfolds_per_conjecture_unfold)
     : propagate_unit_(propagate_unit)
-    , list_queries_(list_queries)
     , build_ring_(build_ring)
     , next_non_conjecture_choice_(next_non_conjecture_choice)
     , next_conjecture_choice_(next_conjecture_choice)
@@ -67,11 +62,10 @@ PUD_LODESTAR_DRIVER::pud_lodestar_driver(
     , non_conjecture_unfolds_since_conjecture_unfold_(0) {}
 
 PUD_LODESTAR_DRIVER_TEMPLATE
-pud_unfold_outcome PUD_LODESTAR_DRIVER::unfold_one() {
+pud_unfold_outcome PUD_LODESTAR_DRIVER::unfold_one(const std::vector<pud_leaf_goal_query>& queries) {
     const pud_unfold_outcome unit = propagate_unit_.propagate();
     if (unit != pud_unfold_outcome::none)
         return count(unit);
-    const std::vector<pud_leaf_goal_query> queries = list_queries_.list();
     const bool non_conjecture_turn =
         non_conjecture_unfolds_since_conjecture_unfold_ < non_conjecture_unfolds_per_conjecture_unfold_;
     if (non_conjecture_turn) {

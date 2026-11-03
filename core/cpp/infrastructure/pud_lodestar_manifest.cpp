@@ -67,8 +67,10 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , pending_conflict_store_()
     , frontier_()
     , unfold_allower_(node_depths_, node_goals_, max_node_depth, max_open_goals)
-    , focus_leaf_tally_(frontier_, frontier_, frontier_, frontier_, frontier_, focus_set_, unfold_allower_)
-    , query_lister_(frontier_, focus_set_, modules_, node_queries_, node_goals_, mhq_)
+    , focus_frontier_(frontier_, frontier_, frontier_, frontier_, focus_set_)
+    , focus_leaf_tally_(
+          focus_frontier_, focus_frontier_, focus_frontier_, focus_frontier_, frontier_, focus_set_, unfold_allower_)
+    , query_lister_(focus_frontier_, modules_, node_queries_, node_goals_, mhq_)
     , ring_builder_(
           mhq_, candidate_witness_index_, witness_search_recorder_, focus_set_, frontier_, modules_, node_queries_, mhq_, unfold_allower_)
     , non_conjecture_round_robin_()
@@ -78,11 +80,11 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unit_propagator_(
           unit_queries_, query_holders_, query_holders_, mhq_, frontier_, modules_, unfold_allower_,
           unfold_depth_recorder_)
-    , blocked_refuter_(query_lister_, leaf_refuter_, focus_leaf_tally_)
+    , blocked_refuter_(leaf_refuter_, focus_leaf_tally_)
     , driver_(
-          unit_propagator_, query_lister_, ring_builder_, non_conjecture_round_robin_, conjecture_round_robin_,
+          unit_propagator_, ring_builder_, non_conjecture_round_robin_, conjecture_round_robin_,
           unfold_depth_recorder_, non_conjecture_unfolds_per_conjecture_unfold)
-    , solved_leaf_finder_(frontier_, focus_set_, modules_, node_goals_)
+    , solved_leaf_finder_(focus_frontier_, modules_, node_goals_)
     , stored_solution_dropper_(solved_leaf_finder_, modules_, focus_leaf_tally_, report_stored_solutions)
     , solution_term_reader_(node_axioms_, modules_, node_bindings_)
     , normalizer_factory_(globalizer_, expr_pool, expr_pool, demoduler_)

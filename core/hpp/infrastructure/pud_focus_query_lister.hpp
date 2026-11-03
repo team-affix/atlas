@@ -10,28 +10,25 @@
 #include "value_objects/pud_node_queries.hpp"
 #include "debug_assert.hpp"
 
-// Lists every body goal of every live, unrefuted leaf in the focus, in leaf order and then
+// Lists every body goal of every live, unrefuted leaf under the focus, in leaf order and then
 // goal order, with whether its query still has candidates. A live leaf holds a query for every goal.
 // A failed open or fork refutes the leaf, so it is no longer listed.
 template<
-    typename IGetLiveNodes,
-    typename IContainsFocusNode,
+    typename IGetLiveFocusLeaves,
     typename IIsNodeRefuted,
     typename IGetNodeQueries,
     typename IGetNodeGoals,
     typename IIsQueryExhausted>
 struct pud_focus_query_lister {
     pud_focus_query_lister(
-        IGetLiveNodes& get_live_nodes,
-        IContainsFocusNode& contains_focus_node,
+        IGetLiveFocusLeaves& get_live_focus_leaves,
         IIsNodeRefuted& is_node_refuted,
         IGetNodeQueries& get_node_queries,
         IGetNodeGoals& get_node_goals,
         IIsQueryExhausted& is_query_exhausted);
     std::vector<pud_leaf_goal_query> list() const;
 private:
-    IGetLiveNodes& get_live_nodes_;
-    IContainsFocusNode& contains_focus_node_;
+    IGetLiveFocusLeaves& get_live_focus_leaves_;
     IIsNodeRefuted& is_node_refuted_;
     IGetNodeQueries& get_node_queries_;
     IGetNodeGoals& get_node_goals_;
@@ -39,22 +36,20 @@ private:
 };
 
 #define PUD_FOCUS_QUERY_LISTER_TEMPLATE                                                          \
-    template<typename IGetLiveNodes, typename IContainsFocusNode, typename IIsNodeRefuted,         \
-             typename IGetNodeQueries, typename IGetNodeGoals, typename IIsQueryExhausted>
+    template<typename IGetLiveFocusLeaves, typename IIsNodeRefuted, typename IGetNodeQueries,            \
+             typename IGetNodeGoals, typename IIsQueryExhausted>
 #define PUD_FOCUS_QUERY_LISTER                                                                   \
-    pud_focus_query_lister<IGetLiveNodes, IContainsFocusNode, IIsNodeRefuted, IGetNodeQueries, \
-        IGetNodeGoals, IIsQueryExhausted>
+    pud_focus_query_lister<IGetLiveFocusLeaves, IIsNodeRefuted, IGetNodeQueries, IGetNodeGoals,      \
+        IIsQueryExhausted>
 
 PUD_FOCUS_QUERY_LISTER_TEMPLATE
 PUD_FOCUS_QUERY_LISTER::pud_focus_query_lister(
-    IGetLiveNodes& get_live_nodes,
-    IContainsFocusNode& contains_focus_node,
+    IGetLiveFocusLeaves& get_live_focus_leaves,
     IIsNodeRefuted& is_node_refuted,
     IGetNodeQueries& get_node_queries,
     IGetNodeGoals& get_node_goals,
     IIsQueryExhausted& is_query_exhausted)
-    : get_live_nodes_(get_live_nodes)
-    , contains_focus_node_(contains_focus_node)
+    : get_live_focus_leaves_(get_live_focus_leaves)
     , is_node_refuted_(is_node_refuted)
     , get_node_queries_(get_node_queries)
     , get_node_goals_(get_node_goals)
@@ -63,9 +58,7 @@ PUD_FOCUS_QUERY_LISTER::pud_focus_query_lister(
 PUD_FOCUS_QUERY_LISTER_TEMPLATE
 std::vector<pud_leaf_goal_query> PUD_FOCUS_QUERY_LISTER::list() const {
     std::vector<pud_leaf_goal_query> queries;
-    for (const pud_global_node_id node : get_live_nodes_.live()) {
-        if (!contains_focus_node_.contains(node))
-            continue;
+    for (const pud_global_node_id node : get_live_focus_leaves_.live()) {
         if (is_node_refuted_.is_refuted(node))
             continue;
         const pud_node_queries& node_queries = get_node_queries_.get(node);

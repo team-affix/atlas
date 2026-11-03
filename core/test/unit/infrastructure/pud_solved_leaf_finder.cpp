@@ -14,12 +14,8 @@ pud_global_node_id node(pud_module_id module, pud_node_id id) {
     return pud_global_node_id{.module = module, .node = id};
 }
 
-struct MockGetLiveNodes {
+struct MockGetLiveFocusLeaves {
     MOCK_METHOD(const std::set<pud_global_node_id>&, live, ());
-};
-
-struct MockContainsFocusNode {
-    MOCK_METHOD(bool, contains, (pud_global_node_id));
 };
 
 struct MockIsNodeRefuted {
@@ -31,38 +27,37 @@ struct MockGetNodeGoals {
 };
 
 struct PudSolvedLeafFinderTest : public ::testing::Test {
-    MockGetLiveNodes live_nodes;
-    MockContainsFocusNode focus;
+    PudSolvedLeafFinderTest();
+    MockGetLiveFocusLeaves focus_leaves;
     MockIsNodeRefuted refuted;
     MockGetNodeGoals goals;
-    pud_solved_leaf_finder<
-        MockGetLiveNodes, MockContainsFocusNode, MockIsNodeRefuted, MockGetNodeGoals>
-        finder{live_nodes, focus, refuted, goals};
+    pud_solved_leaf_finder<MockGetLiveFocusLeaves, MockIsNodeRefuted, MockGetNodeGoals>
+        finder{focus_leaves, refuted, goals};
     pud_goal_list empty;
-    pud_goal_list open = [] {
-        pud_goal_list goals;
-        goals.goals = goals.goals.set(0, nullptr);
-        return goals;
-    }();
-    std::set<pud_global_node_id> live{
-        node(1, 5),
-        node(1, 1),
-        node(2, 0),
-    };
+    pud_goal_list open;
+    std::set<pud_global_node_id> live;
 };
+
+PudSolvedLeafFinderTest::PudSolvedLeafFinderTest()
+    : focus_leaves()
+    , refuted()
+    , goals()
+    , empty()
+    , open(pud_goal_list{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(0, nullptr), .next_id = 1})
+    , live{node(1, 5), node(1, 1), node(2, 0)} {}
 
 }
 
-TEST_F(PudSolvedLeafFinderTest, AnEmptyFrontierHasNoSolvedLeaf) {
+TEST_F(PudSolvedLeafFinderTest, NoLiveFocusLeafMeansNoSolvedLeaf) {
     std::set<pud_global_node_id> none;
-    EXPECT_CALL(live_nodes, live()).WillOnce(ReturnRef(none));
+    EXPECT_CALL(focus_leaves, live()).WillOnce(ReturnRef(none));
     EXPECT_FALSE(finder.find().has_value());
 }
 
-TEST_F(PudSolvedLeafFinderTest, TheSmallestSolvedFocusLeafIsReturned) {
-    EXPECT_CALL(live_nodes, live()).WillOnce(ReturnRef(live));
-    EXPECT_CALL(focus, contains(node(1, 1))).WillOnce(Return(false));
-    EXPECT_CALL(focus, contains(node(1, 5))).WillOnce(Return(true));
+TEST_F(PudSolvedLeafFinderTest, TheSmallestSolvedLeafIsReturned) {
+    EXPECT_CALL(focus_leaves, live()).WillOnce(ReturnRef(live));
+    EXPECT_CALL(refuted, is_refuted(node(1, 1))).WillOnce(Return(false));
+    EXPECT_CALL(goals, get(node(1, 1))).WillOnce(ReturnRef(open));
     EXPECT_CALL(refuted, is_refuted(node(1, 5))).WillOnce(Return(false));
     EXPECT_CALL(goals, get(node(1, 5))).WillOnce(ReturnRef(empty));
     const std::optional<pud_global_node_id> found = finder.find();
@@ -72,21 +67,17 @@ TEST_F(PudSolvedLeafFinderTest, TheSmallestSolvedFocusLeafIsReturned) {
 
 TEST_F(PudSolvedLeafFinderTest, ALeafWithOpenGoalsIsNotSolved) {
     std::set<pud_global_node_id> only{node(1, 1)};
-    EXPECT_CALL(live_nodes, live()).WillOnce(ReturnRef(only));
-    EXPECT_CALL(focus, contains(node(1, 1))).WillOnce(Return(true));
+    EXPECT_CALL(focus_leaves, live()).WillOnce(ReturnRef(only));
     EXPECT_CALL(refuted, is_refuted(node(1, 1))).WillOnce(Return(false));
     EXPECT_CALL(goals, get(node(1, 1))).WillOnce(ReturnRef(open));
     EXPECT_FALSE(finder.find().has_value());
 }
 
-TEST_F(PudSolvedLeafFinderTest, ListingReturnsEverySolvedFocusLeafInFrontierOrder) {
-    EXPECT_CALL(live_nodes, live()).WillOnce(ReturnRef(live));
-    EXPECT_CALL(focus, contains(node(1, 1))).WillOnce(Return(true));
+TEST_F(PudSolvedLeafFinderTest, ListingReturnsEverySolvedLeafInFrontierOrder) {
+    EXPECT_CALL(focus_leaves, live()).WillOnce(ReturnRef(live));
     EXPECT_CALL(refuted, is_refuted(node(1, 1))).WillOnce(Return(false));
     EXPECT_CALL(goals, get(node(1, 1))).WillOnce(ReturnRef(empty));
-    EXPECT_CALL(focus, contains(node(1, 5))).WillOnce(Return(true));
     EXPECT_CALL(refuted, is_refuted(node(1, 5))).WillOnce(Return(true));
-    EXPECT_CALL(focus, contains(node(2, 0))).WillOnce(Return(true));
     EXPECT_CALL(refuted, is_refuted(node(2, 0))).WillOnce(Return(false));
     EXPECT_CALL(goals, get(node(2, 0))).WillOnce(ReturnRef(empty));
     EXPECT_EQ(finder.list(), (std::vector<pud_global_node_id>{node(1, 1), node(2, 0)}));
