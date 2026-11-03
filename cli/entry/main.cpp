@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     lodestar_sub->add_option(
         "--max-open-goals", lodestar_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
     lodestar_sub->add_option("--sim-progress-interval", lodestar_opts.sim_progress_interval,
-                             "Print progress every N ticks (0 disables)");
+                             "Print progress every N unfolds (0 disables)");
     lodestar_sub->add_option(
         "--save-every",
         lodestar_opts.save_every,

@@ -4,7 +4,7 @@
 
 ## Lodestar
 
-Lodestar is a PUD solver runtime. It exposes `next()`, `solution()`, `solution_depth()`, and `stop_reason()`. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
+Lodestar is a PUD solver runtime. It exposes `next()`, `last_step()`, `solution()`, `solution_depth()`, and `stop_reason()`. Like the sim solvers, the search is a coroutine (`pud_searcher::search`) driven one step per `next()` by `pud_search_driver`. An unfold is the atomic step, the counterpart of a sim: each `next()` makes one unfold, reports one solution, or reports one refutation, and `last_step()` says which (`unfolded`, `solved`, `refuted`). `atlas lodestar --sim-progress-interval N` prints progress every N unfolds. `solution()` is the eagerly normalized head of the conjecture fact just reported. `solution_depth()` is the number of inference edges from that fact's axiom. The runtime does not expose `normalize`, lemmas, or the legacy depth accessors.
 
 The manifest [`pud_lodestar_manifest`](../core/hpp/infrastructure/pud_lodestar_manifest.hpp) wires the same kernel as `pud_manifest`. Component types are nested structs that inherit the template instantiation, so later template arguments stay short. Witness search and candidate slots are Lodestar forwarding types over the kernel's `pud_mhws` and `pud_mhcs`. A witness slot's leaf is the leaf that `pud_mhws::find_witness` reports for the search.
 

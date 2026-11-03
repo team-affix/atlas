@@ -19,6 +19,7 @@
 #include "infrastructure/named_var_printer.hpp"
 #include "infrastructure/initial_goal_exprs.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
+#include "pud_lodestar_steps.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
@@ -38,7 +39,7 @@ inline constexpr uint32_t kSeed = 41;
 
 struct runtime_ref {
     runtime_ref(pud_lodestar_runtime* runtime) : runtime_(runtime) {}
-    bool next() { return runtime_->next(); }
+    bool next() { return advance_to_report(*runtime_); }
     const expr* solution() const { return runtime_->solution(); }
     size_t solution_depth() const { return runtime_->solution_depth(); }
 private:

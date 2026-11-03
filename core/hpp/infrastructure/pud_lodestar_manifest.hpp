@@ -33,7 +33,8 @@
 #include "infrastructure/pud_focus_query_lister.hpp"
 #include "infrastructure/pud_lodestar_ring_builder.hpp"
 #include "infrastructure/pud_lodestar_round_robin.hpp"
-#include "infrastructure/pud_search_stepper.hpp"
+#include "infrastructure/pud_search_driver.hpp"
+#include "infrastructure/pud_searcher.hpp"
 #include "infrastructure/pud_solution_taker.hpp"
 #include "infrastructure/pud_solved_leaf_finder.hpp"
 #include "infrastructure/pud_stored_solution_dropper.hpp"
@@ -254,12 +255,12 @@ struct pud_lodestar_manifest {
             solved_leaf_finder_t, solution_term_reader_t, solution_normalizer_t, node_depth_counter_t,
             pud_solution_store, pud_frontier>::pud_solution_taker;
     };
-    struct search_stepper_t : pud_search_stepper<
+    struct searcher_t : pud_searcher<
         pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t, driver_t,
         query_lister_t> {
-        using pud_search_stepper<
+        using pud_searcher<
             pud_solution_store, pud_pending_conflict_store, solution_taker_t, blocked_refuter_t,
-            driver_t, query_lister_t>::pud_search_stepper;
+            driver_t, query_lister_t>::pud_searcher;
     };
     struct stored_solution_dropper_t : pud_stored_solution_dropper<
         solved_leaf_finder_t, module_registry_t, pud_frontier> {
@@ -347,7 +348,8 @@ struct pud_lodestar_manifest {
     normalizer_factory_t             normalizer_factory_;
     solution_normalizer_t            solution_normalizer_;
     solution_taker_t                 solution_taker_;
-    search_stepper_t                 search_stepper_;
+    searcher_t                       searcher_;
+    pud_search_driver                search_driver_;
     module_loader_t               module_loader_;
 };
 

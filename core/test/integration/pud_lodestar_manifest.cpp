@@ -5,6 +5,7 @@
 #include "functor_fixture.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
+#include "pud_lodestar_steps.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "value_objects/rule.hpp"
 
@@ -32,11 +33,11 @@ TEST_F(PudLodestarManifestTest, EmptyConjectureFactIsDepthZero) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
     }
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     ASSERT_NE(runtime.solution(), nullptr);
     EXPECT_EQ(runtime.solution_depth(), 0u);
     EXPECT_EQ(runtime.solution(), atom("lodestar_query"));
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
 }
 
 TEST_F(PudLodestarManifestTest, FactInDependencyNormalizesTheConjectureHead) {
@@ -53,13 +54,13 @@ TEST_F(PudLodestarManifestTest, FactInDependencyNormalizesTheConjectureHead) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
     }
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     ASSERT_NE(runtime.solution(), nullptr);
     EXPECT_GE(runtime.solution_depth(), 1u);
     const expr::functor& head = std::get<expr::functor>(runtime.solution()->content);
     ASSERT_EQ(head.args.size(), 1u);
     EXPECT_EQ(head.args[0], abc);
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
 }
 
 TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
@@ -73,9 +74,9 @@ TEST_F(PudLodestarManifestTest, GoalWithNoCandidatesRefutes) {
         install_shared_functor_names(module, this->functors);
         runtime.register_module(module);
     }
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), nullptr);
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
     EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::refuted);
 }
 
@@ -106,7 +107,7 @@ TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesThe
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64, false);
     register_into(runtime);
     size_t ticks = 0;
-    while (runtime.next())
+    while (advance_to_report(runtime))
         ++ticks;
     EXPECT_GT(ticks, 0u);
     EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::exhausted);
@@ -116,7 +117,7 @@ TEST_F(PudLodestarSessionLimitTest, ADepthLimitedSearchEndsExhaustedAndLeavesThe
 TEST_F(PudLodestarSessionLimitTest, ASpentBudgetEndsTheSessionWithoutRefutingIt) {
     pud_lodestar_runtime runtime(exprs, pud_global_node_id{.module = 2, .node = 0}, 1, 10, 64, 64, false);
     register_into(runtime);
-    while (runtime.next()) {
+    while (advance_to_report(runtime)) {
     }
     EXPECT_EQ(runtime.stop_reason(), pud_search_stop_reason::budget_spent);
     EXPECT_FALSE(modules[1].is_refuted(0));
@@ -134,7 +135,7 @@ TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromT
     {
         pud_lodestar_runtime shallow(exprs, pud_global_node_id{.module = 2, .node = 0}, 1000, 10, 2, 64, false);
         register_into(shallow);
-        while (shallow.next())
+        while (advance_to_report(shallow))
             shallow_solutions += shallow.solution() != nullptr ? 1 : 0;
         ASSERT_EQ(shallow.stop_reason(), pud_search_stop_reason::exhausted);
     }
@@ -148,7 +149,7 @@ TEST_F(PudLodestarSessionLimitTest, ADeeperSessionOverTheSameModulesResumesFromT
     for (pud_module& module : modules)
         deeper.register_module(module);
     size_t deepest = 0;
-    while (deeper.next()) {
+    while (advance_to_report(deeper)) {
         if (deeper.solution() == nullptr)
             continue;
         deepest = std::max(deepest, deeper.solution_depth());
@@ -164,7 +165,7 @@ TEST_F(PudLodestarSessionLimitTest, AResumedSessionReportsOnlyNewSolutionsUnless
     {
         pud_lodestar_runtime first(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64, false);
         register_into(first);
-        while (first.next()) {
+        while (advance_to_report(first)) {
             if (first.solution() != nullptr)
                 first_run.insert(first.solution());
         }
@@ -175,7 +176,7 @@ TEST_F(PudLodestarSessionLimitTest, AResumedSessionReportsOnlyNewSolutionsUnless
         pud_lodestar_runtime resumed(exprs, pud_global_node_id{.module = 2, .node = 0}, 30, 10, 64, 64, false);
         for (pud_module& module : modules)
             resumed.register_module(module);
-        while (resumed.next()) {
+        while (advance_to_report(resumed)) {
             if (resumed.solution() != nullptr)
                 resumed_run.insert(resumed.solution());
         }
@@ -187,7 +188,7 @@ TEST_F(PudLodestarSessionLimitTest, AResumedSessionReportsOnlyNewSolutionsUnless
     pud_lodestar_runtime again(exprs, pud_global_node_id{.module = 2, .node = 0}, 0, 10, 64, 64, true);
     for (pud_module& module : modules)
         again.register_module(module);
-    while (again.next()) {
+    while (advance_to_report(again)) {
         if (again.solution() != nullptr)
             reported_again.insert(again.solution());
     }

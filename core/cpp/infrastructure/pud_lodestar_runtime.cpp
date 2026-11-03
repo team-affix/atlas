@@ -17,7 +17,11 @@ void pud_lodestar_runtime::register_module(pud_module& module) {
 }
 
 bool pud_lodestar_runtime::next() {
-    return manifest_.search_stepper_.step();
+    return manifest_.search_driver_.next();
+}
+
+pud_search_step pud_lodestar_runtime::last_step() const {
+    return manifest_.search_driver_.last_step();
 }
 
 const expr* pud_lodestar_runtime::solution() const {
@@ -29,11 +33,11 @@ size_t pud_lodestar_runtime::solution_depth() const {
 }
 
 pud_search_stop_reason pud_lodestar_runtime::stop_reason() const {
-    return manifest_.search_stepper_.stop_reason();
+    return manifest_.searcher_.stop_reason();
 }
 
 size_t pud_lodestar_runtime::unfold_count() const {
-    return manifest_.search_stepper_.unfold_count();
+    return manifest_.searcher_.unfold_count();
 }
 
 bool pud_lodestar_runtime::has_pending_solution() const {

@@ -10,6 +10,7 @@
 #include "infrastructure/pud_functor_linker.hpp"
 #include "infrastructure/pud_link_table.hpp"
 #include "infrastructure/pud_lodestar_runtime.hpp"
+#include "pud_lodestar_steps.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_symbol_table.hpp"
 #include "value_objects/expr.hpp"
@@ -62,12 +63,12 @@ TEST_F(PudFunctorDependencyTest, TheSameLocalIdInADiamondDoesNotUnifyDifferentNa
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     const expr* left_c = functor(4, {});
     const expr* query = functor(8, {left_c});
     EXPECT_EQ(runtime.solution(), query);
     EXPECT_GE(runtime.solution_depth(), 1u);
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
 }
 
 TEST_F(PudFunctorDependencyTest, TheSameNameAtDifferentLocalIdsUnifies) {
@@ -83,9 +84,9 @@ TEST_F(PudFunctorDependencyTest, TheSameNameAtDifferentLocalIdsUnifies) {
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), functor(4, {functor(2, {})}));
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
 }
 
 TEST_F(PudFunctorDependencyTest, AFactInTopIsVisibleThroughBothSidesOfTheDiamond) {
@@ -106,15 +107,15 @@ TEST_F(PudFunctorDependencyTest, AFactInTopIsVisibleThroughBothSidesOfTheDiamond
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     ASSERT_NE(runtime.solution(), nullptr);
     const uint32_t first_arg = arg_functor_id(runtime.solution());
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     ASSERT_NE(runtime.solution(), nullptr);
     const uint32_t second_arg = arg_functor_id(runtime.solution());
     EXPECT_EQ(std::min(first_arg, second_arg), 2u);
     EXPECT_EQ(std::max(first_arg, second_arg), 4u);
-    EXPECT_FALSE(runtime.next());
+    EXPECT_FALSE(advance_to_report(runtime));
 }
 
 TEST_F(PudFunctorDependencyTest, AMiddleModulePermutesLocalIdsAndTheQueryStillSolves) {
@@ -132,7 +133,7 @@ TEST_F(PudFunctorDependencyTest, AMiddleModulePermutesLocalIdsAndTheQueryStillSo
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), functor(4, {functor(2, {})}));
 }
 
@@ -149,7 +150,7 @@ TEST_F(PudFunctorDependencyTest, ALocalIdOfZeroIsNotTheNilGlobalId) {
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), functor(3, {}));
     EXPECT_EQ(runtime.solution_depth(), 1u);
 }
@@ -169,7 +170,7 @@ TEST_F(PudFunctorDependencyTest, ANestedForeignTermIsAdoptedOnceIntoTheAcceptor)
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), functor(5, {functor(3, {functor(2, {}), functor(2, {})})}));
     const std::vector<std::string>& names = modules[1].functor_names();
     ASSERT_EQ(names.size(), 6u);
@@ -207,7 +208,7 @@ TEST_F(PudFunctorDependencyTest, ACalleeBodyGoalIsStoredWithTheAcceptorsLocalIds
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     EXPECT_EQ(runtime.solution(), functor(5, {functor(2, {})}));
     const std::vector<std::string>& names = modules[1].functor_names();
     ASSERT_EQ(names.size(), 6u);
@@ -235,7 +236,7 @@ TEST_F(PudFunctorDependencyTest, AnUnboundVariableInsideAForeignTermStaysAVariab
     for (pud_module& module : modules)
         runtime.register_module(module);
 
-    ASSERT_TRUE(runtime.next());
+    ASSERT_TRUE(advance_to_report(runtime));
     const expr::functor& head = std::get<expr::functor>(runtime.solution()->content);
     EXPECT_EQ(head.id, 4u);
     ASSERT_EQ(head.args.size(), 1u);
