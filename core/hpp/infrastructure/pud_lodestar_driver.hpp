@@ -3,14 +3,12 @@
 
 #include <cstddef>
 #include <optional>
-#include <vector>
 #include "value_objects/pud_lodestar_choice.hpp"
-#include "value_objects/pud_leaf_goal_query.hpp"
 #include "value_objects/pud_unfold_outcome.hpp"
 
-// Picks and makes one unfold from the listed focus queries. A unit query is unfolded first. Otherwise the
-// non-conjecture ring gets a turn while fewer than the ratio of non-conjecture unfolds have happened since the
-// last conjecture unfold, then the conjecture ring, then the non-conjecture ring if it has not had its turn.
+// Picks and makes one unfold. A unit query is unfolded first. Otherwise the non-conjecture ring gets a turn while
+// fewer than the ratio of non-conjecture unfolds have happened since the last conjecture unfold, then the
+// conjecture ring, then the non-conjecture ring if it has not had its turn.
 template<
     typename IPropagateUnit,
     typename INextNonConjectureChoice,
@@ -23,7 +21,7 @@ struct pud_lodestar_driver {
         INextConjectureChoice& next_conjecture_choice,
         IUnfoldLeaf& unfold_leaf,
         size_t non_conjecture_unfolds_per_conjecture_unfold);
-    pud_unfold_outcome unfold_one(const std::vector<pud_leaf_goal_query>& queries);
+    pud_unfold_outcome unfold_one();
 private:
     pud_unfold_outcome count(pud_unfold_outcome outcome);
 
@@ -56,23 +54,23 @@ PUD_LODESTAR_DRIVER::pud_lodestar_driver(
     , non_conjecture_unfolds_since_conjecture_unfold_(0) {}
 
 PUD_LODESTAR_DRIVER_TEMPLATE
-pud_unfold_outcome PUD_LODESTAR_DRIVER::unfold_one(const std::vector<pud_leaf_goal_query>& queries) {
+pud_unfold_outcome PUD_LODESTAR_DRIVER::unfold_one() {
     const pud_unfold_outcome unit = propagate_unit_.propagate();
     if (unit != pud_unfold_outcome::none)
         return count(unit);
     const bool non_conjecture_turn =
         non_conjecture_unfolds_since_conjecture_unfold_ < non_conjecture_unfolds_per_conjecture_unfold_;
     if (non_conjecture_turn) {
-        const std::optional<pud_lodestar_choice> outside = next_non_conjecture_choice_.next(queries);
+        const std::optional<pud_lodestar_choice> outside = next_non_conjecture_choice_.next();
         if (outside.has_value())
             return count(unfold_leaf_.unfold(outside->leaf, outside->body_goal));
     }
-    const std::optional<pud_lodestar_choice> inside = next_conjecture_choice_.next(queries);
+    const std::optional<pud_lodestar_choice> inside = next_conjecture_choice_.next();
     if (inside.has_value())
         return count(unfold_leaf_.unfold(inside->leaf, inside->body_goal));
     if (non_conjecture_turn)
         return pud_unfold_outcome::none;
-    const std::optional<pud_lodestar_choice> outside = next_non_conjecture_choice_.next(queries);
+    const std::optional<pud_lodestar_choice> outside = next_non_conjecture_choice_.next();
     if (!outside.has_value())
         return pud_unfold_outcome::none;
     return count(unfold_leaf_.unfold(outside->leaf, outside->body_goal));

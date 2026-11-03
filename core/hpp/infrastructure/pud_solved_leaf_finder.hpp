@@ -5,42 +5,33 @@
 #include <vector>
 #include "value_objects/pud_global_node_id.hpp"
 
-// Finds the live leaves under the focus that are solved: unrefuted, with no open goals.
-template<typename IGetLiveFocusLeaves, typename IIsNodeRefuted, typename IGetNodeGoals>
+// Finds the live leaves under the focus that are solved and unrefuted, reading the solved focus leaves kept
+// as leaves go live instead of walking every live leaf.
+template<typename IGetSolvedFocusLeaves, typename IIsNodeRefuted>
 struct pud_solved_leaf_finder {
-    pud_solved_leaf_finder(
-        IGetLiveFocusLeaves& get_live_focus_leaves,
-        IIsNodeRefuted& is_refuted,
-        IGetNodeGoals& get_node_goals);
+    pud_solved_leaf_finder(IGetSolvedFocusLeaves& get_solved_focus_leaves, IIsNodeRefuted& is_refuted);
     std::optional<pud_global_node_id> find() const;
     std::vector<pud_global_node_id> list() const;
 private:
-    bool is_solved(pud_global_node_id leaf) const;
-
-    IGetLiveFocusLeaves& get_live_focus_leaves_;
+    IGetSolvedFocusLeaves& get_solved_focus_leaves_;
     IIsNodeRefuted& is_refuted_;
-    IGetNodeGoals& get_node_goals_;
 };
 
-#define PUD_SOLVED_LEAF_FINDER_TEMPLATE \
-    template<typename IGetLiveFocusLeaves, typename IIsNodeRefuted, typename IGetNodeGoals>
-#define PUD_SOLVED_LEAF_FINDER \
-    pud_solved_leaf_finder<IGetLiveFocusLeaves, IIsNodeRefuted, IGetNodeGoals>
+#define PUD_SOLVED_LEAF_FINDER_TEMPLATE template<typename IGetSolvedFocusLeaves, typename IIsNodeRefuted>
+#define PUD_SOLVED_LEAF_FINDER          pud_solved_leaf_finder<IGetSolvedFocusLeaves, IIsNodeRefuted>
 
 PUD_SOLVED_LEAF_FINDER_TEMPLATE
 PUD_SOLVED_LEAF_FINDER::pud_solved_leaf_finder(
-    IGetLiveFocusLeaves& get_live_focus_leaves,
-    IIsNodeRefuted& is_refuted,
-    IGetNodeGoals& get_node_goals)
-    : get_live_focus_leaves_(get_live_focus_leaves)
-    , is_refuted_(is_refuted)
-    , get_node_goals_(get_node_goals) {}
+    IGetSolvedFocusLeaves& get_solved_focus_leaves, IIsNodeRefuted& is_refuted)
+    : get_solved_focus_leaves_(get_solved_focus_leaves)
+    , is_refuted_(is_refuted) {}
 
 PUD_SOLVED_LEAF_FINDER_TEMPLATE
 std::optional<pud_global_node_id> PUD_SOLVED_LEAF_FINDER::find() const {
-    for (const pud_global_node_id leaf : get_live_focus_leaves_.live()) {
-        if (is_solved(leaf))
-            return leaf;
+    for (const pud_global_node_id leaf : get_solved_focus_leaves_.solved()) {
+        if (is_refuted_.is_refuted(leaf))
+            continue;
+        return leaf;
     }
     return std::nullopt;
 }
@@ -48,18 +39,12 @@ std::optional<pud_global_node_id> PUD_SOLVED_LEAF_FINDER::find() const {
 PUD_SOLVED_LEAF_FINDER_TEMPLATE
 std::vector<pud_global_node_id> PUD_SOLVED_LEAF_FINDER::list() const {
     std::vector<pud_global_node_id> solved;
-    for (const pud_global_node_id leaf : get_live_focus_leaves_.live()) {
-        if (is_solved(leaf))
-            solved.push_back(leaf);
+    for (const pud_global_node_id leaf : get_solved_focus_leaves_.solved()) {
+        if (is_refuted_.is_refuted(leaf))
+            continue;
+        solved.push_back(leaf);
     }
     return solved;
-}
-
-PUD_SOLVED_LEAF_FINDER_TEMPLATE
-bool PUD_SOLVED_LEAF_FINDER::is_solved(pud_global_node_id leaf) const {
-    if (is_refuted_.is_refuted(leaf))
-        return false;
-    return get_node_goals_.get(leaf).goals.empty();
 }
 
 #undef PUD_SOLVED_LEAF_FINDER
