@@ -3,6 +3,7 @@
 #include <random>
 #include <iterator>
 #include <set>
+#include <utility>
 #include <variant>
 #include <vector>
 #include <gtest/gtest.h>
@@ -96,8 +97,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         return exprs.make_functor(functors.id(names[pick(3)]), args);
     }
 
-    std::vector<pud_substitution> random_substitutions(const pud_ubs_state& parent_bindings) {
-        ubs_bind_map bind_map{parent_bindings};
+    // Draws substitutions over the bind map and applies each to it.
+    std::vector<pud_substitution> random_substitutions(ubs_bind_map& bind_map) {
         std::vector<pud_substitution> substitutions;
         const uint32_t count = pick(4);
         for (uint32_t substitution_index = 0; substitution_index < count; ++substitution_index) {
@@ -129,8 +130,8 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
         return substitutions;
     }
 
-    std::vector<const expr*> random_goals(const pud_ubs_state& bindings, uint32_t count) {
-        const std::vector<uint32_t> reps = unbound_reps(ubs_bind_map{bindings});
+    std::vector<const expr*> random_goals(const ubs_bind_map& bind_map, uint32_t count) {
+        const std::vector<uint32_t> reps = unbound_reps(bind_map);
         std::vector<const expr*> goals;
         for (uint32_t goal_index = 0; goal_index < count; ++goal_index)
             goals.push_back(random_expr(reps, 3));
@@ -138,21 +139,23 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
     }
 
     level make_root(pud_node_id root) {
-        const std::vector<const expr*> opened_goals = random_goals({}, 1 + pick(4));
+        const std::vector<const expr*> opened_goals = random_goals(ubs_bind_map{pud_ubs_state{}}, 1 + pick(4));
         const pud_goal_list goals = root_goal_lists.build(opened_goals);
         return level{.bindings = {}, .goals = goals, .watch = watcher.watch_root({}, goals, 0), .node = root, .depth = 0};
     }
 
     level descend_and_check(const level& parent, pud_body_goal_id call_site) {
+        ubs_bind_map step_bind_map{parent.bindings};
+        std::vector<pud_substitution> substitutions = random_substitutions(step_bind_map);
+        const std::vector<const expr*> added_goals = random_goals(step_bind_map, pick(4));
         const pud_global_node_id child = modules.store_inference(k_module, pud_inference{
             .parent = parent.node,
             .call_site = call_site,
-            .substitutions = random_substitutions(parent.bindings),
-            .body_goals = {},
+            .substitutions = std::move(substitutions),
+            .body_goals = added_goals,
             .var_count = 0,
         });
         const pud_ubs_state child_bindings = binder.bind(parent.bindings, child);
-        const std::vector<const expr*> added_goals = random_goals(child_bindings, pick(4));
         const pud_goal_list goals = child_goal_lists.build(parent.goals, call_site, added_goals);
 
         std::set<pud_body_goal_id> expected;
@@ -165,7 +168,7 @@ struct PudStructureWatcherFuzzTest : public ::testing::Test {
                 expected.insert(inherited_id);
         }
 
-        const pud_structure_watch_change change = watcher.descend(parent.watch, child_bindings, child, call_site, goals);
+        const pud_structure_watch_change change = watcher.descend(parent.watch, child_bindings, child, goals);
         const std::set<pud_body_goal_id> actual(change.changed_goals.begin(), change.changed_goals.end());
         EXPECT_EQ(actual.size(), change.changed_goals.size()) << "a goal was reported twice at node " << child.node;
         EXPECT_EQ(actual, expected) << "at node " << child.node << " depth " << parent.depth + 1;
