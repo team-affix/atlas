@@ -1,7 +1,7 @@
 #include <limits>
 #include <optional>
 #include <set>
-#include <stdexcept>
+#include <utility>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -10,6 +10,7 @@
 #include "pud_test_node.hpp"
 
 using ::testing::_;
+using ::testing::Invoke;
 using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -67,6 +68,12 @@ struct MockFindWitnessNode {
 struct MockAllowUnfold {
     MOCK_METHOD(bool, allow, (pud_global_node_id), (const));
 };
+struct MockTakeIntroducedQueries {
+    MOCK_METHOD(std::vector<pud_introduced_query>, take_introduced, ());
+};
+struct MockTakeWithdrawnQueries {
+    MOCK_METHOD(std::vector<pud_mhq_head_id>, take_withdrawn, ());
+};
 
 using test_slot_index_t = pud_lodestar_slot_index<
     NiceMock<MockApplyRegister>, NiceMock<MockApplyUnfold>, NiceMock<MockEraseRefuted>, NiceMock<MockEraseLeaf>,
@@ -74,7 +81,8 @@ using test_slot_index_t = pud_lodestar_slot_index<
     NiceMock<MockGetLiveNodes>,
     NiceMock<MockIsNodeRefuted>, NiceMock<MockContainsFocusNode>, NiceMock<MockGetNodeQueries>,
     NiceMock<MockIsQueryExhausted>, NiceMock<MockGetQueryCandidates>, NiceMock<MockFindCandidateWitnesses>,
-    NiceMock<MockFindWitnessNode>, NiceMock<MockAllowUnfold>>;
+    NiceMock<MockFindWitnessNode>, NiceMock<MockAllowUnfold>, NiceMock<MockTakeIntroducedQueries>,
+    NiceMock<MockTakeWithdrawnQueries>>;
 
 pud_lodestar_choice choice(
     pud_mhcs_head_id candidate, pud_lodestar_side side, pud_node_id leaf, pud_body_goal_id goal) {
@@ -103,10 +111,10 @@ pud_frontier_change offspring(std::vector<pud_global_node_id> nodes) {
     return pud_frontier_change{.offspring = std::move(nodes), .refuted = {}};
 }
 
-// Focus leaf 3 asks query 40 on its goal 0. Candidate 30 rests on witness searches 50 and 51, at leaves 10 and
-// 11 outside the focus; candidate 31 is its own witness at leaf 12, inside it. Leaves 10, 11 and 12 hold goal 5
-// on query 60, which has no candidates of its own, so leaf 12, a focus leaf itself, holds only its caller choice.
-// Every leaf is live once registered, unrefuted and may be unfolded.
+// Query 40 is introduced at focus leaf 3 on its goal 0 and reported at the first settle. Candidate 30 rests on
+// witness searches 50 and 51, at leaves 10 and 11 outside the focus; candidate 31 is its own witness at leaf 12,
+// inside it. Leaves 10, 11 and 12 hold goal 5 on query 60, which has no candidates of its own, so leaf 12, a focus
+// leaf itself, holds only its caller choice. Every leaf is live once registered, unrefuted and may be unfolded.
 struct PudLodestarSlotIndexTest : public ::testing::Test {
     PudLodestarSlotIndexTest();
     NiceMock<MockRemoveQuery> remover;
@@ -126,6 +134,8 @@ struct PudLodestarSlotIndexTest : public ::testing::Test {
     NiceMock<MockFindCandidateWitnesses> witness_index;
     NiceMock<MockFindWitnessNode> witnesses;
     NiceMock<MockAllowUnfold> allower;
+    NiceMock<MockTakeIntroducedQueries> introductions;
+    NiceMock<MockTakeWithdrawnQueries> withdrawals;
     test_slot_index_t index;
     std::set<pud_global_node_id> live_focus;
     std::set<pud_global_node_id> live;
@@ -135,6 +145,16 @@ struct PudLodestarSlotIndexTest : public ::testing::Test {
     pud_candidate_witnesses self_witnessed;
     pud_lodestar_choice caller;
     pud_lodestar_choice witness_caller;
+    std::vector<pud_introduced_query> introduced;
+    std::vector<pud_mhq_head_id> withdrawn;
+
+    std::vector<pud_introduced_query> take_introduced() {
+        return std::exchange(introduced, {});
+    }
+
+    std::vector<pud_mhq_head_id> take_withdrawn() {
+        return std::exchange(withdrawn, {});
+    }
 
     void SetUp() override {
         ON_CALL(unsettled, take_unsettled_leaves()).WillByDefault(Return(std::vector<pud_global_node_id>{}));
@@ -155,6 +175,9 @@ struct PudLodestarSlotIndexTest : public ::testing::Test {
         ON_CALL(witnesses, node_of(50)).WillByDefault(Return(pud_test_node(10)));
         ON_CALL(witnesses, node_of(51)).WillByDefault(Return(pud_test_node(11)));
         ON_CALL(allower, allow(_)).WillByDefault(Return(true));
+        ON_CALL(introductions, take_introduced())
+            .WillByDefault(Invoke(this, &PudLodestarSlotIndexTest::take_introduced));
+        ON_CALL(withdrawals, take_withdrawn()).WillByDefault(Invoke(this, &PudLodestarSlotIndexTest::take_withdrawn));
     }
 
     void go_live(std::vector<pud_global_node_id> nodes) {
@@ -195,10 +218,11 @@ PudLodestarSlotIndexTest::PudLodestarSlotIndexTest()
     , witness_index()
     , witnesses()
     , allower()
+    , introductions()
+    , withdrawals()
     , index(
           registrar, unfolder, refuted_eraser, eraser, unsettled, unsettled_searches, focus_frontier, frontier, refuted,
-          focus,
-          node_queries, exhausted, candidates, witness_index, witnesses, allower)
+          focus, node_queries, exhausted, candidates, witness_index, witnesses, allower, introductions, withdrawals)
     , live_focus()
     , live()
     , query_on_goal_zero(test_node_queries_t{}.set(0, test_owner_box_t{remover, 40}))
@@ -206,7 +230,9 @@ PudLodestarSlotIndexTest::PudLodestarSlotIndexTest()
     , witnessed{.self_witness = false, .self_leaf = {}, .witnesses = {50, 51}}
     , self_witnessed{.self_witness = true, .self_leaf = pud_test_node(12), .witnesses = {}}
     , caller(caller_on(3, 0))
-    , witness_caller(caller_on(12, 5)) {}
+    , witness_caller(caller_on(12, 5))
+    , introduced{pud_introduced_query{.head = 40, .node = pud_test_node(3), .goal = 0}}
+    , withdrawn() {}
 
 }
 
@@ -236,7 +262,7 @@ TEST_F(PudLodestarSlotIndexTest, TheOuterRingHoldsTheWitnessLeavesOutsideTheFocu
     }));
 }
 
-TEST_F(PudLodestarSlotIndexTest, TheFocusRingHoldsTheWitnessLeavesInsideItAndOneCallerChoicePerGoal) {
+TEST_F(PudLodestarSlotIndexTest, TheFocusRingHoldsTheWitnessLeavesInsideItAndOneCallerChoicePerLeaf) {
     go_live_everywhere();
     EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{
         choice(31, pud_lodestar_side::self, 12, 5),
@@ -343,18 +369,67 @@ TEST_F(PudLodestarSlotIndexTest, AnEndedWitnessSearchLosesItsChoice) {
     EXPECT_EQ(index.ring(false), (std::multiset<pud_lodestar_choice>{choice(30, pud_lodestar_side::a, 10, 5)}));
 }
 
-TEST_F(PudLodestarSlotIndexTest, AQueryLeafLeavingTheFocusFrontierTakesAllItsChoicesOut) {
+TEST_F(PudLodestarSlotIndexTest, ALeafLeavingTheFocusFrontierTakesOnlyItsCallerChoiceOut) {
     go_live_everywhere();
     leave(pud_test_node(3));
-    EXPECT_THAT(index.ring(false), IsEmpty());
-    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{witness_caller}));
+    EXPECT_EQ(index.ring(false), (std::multiset<pud_lodestar_choice>{
+        choice(30, pud_lodestar_side::a, 10, 5),
+        choice(30, pud_lodestar_side::b, 11, 5),
+    }));
+    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{
+        choice(31, pud_lodestar_side::self, 12, 5),
+        witness_caller,
+    }));
 }
 
-TEST_F(PudLodestarSlotIndexTest, ARefutedQueryLeafHoldsNoChoices) {
+TEST_F(PudLodestarSlotIndexTest, ARefutedLeafHoldsNoCallerChoice) {
     ON_CALL(refuted, is_refuted(pud_test_node(3))).WillByDefault(Return(true));
     go_live_everywhere();
+    EXPECT_FALSE(index.ring(true).contains(caller));
+}
+
+TEST_F(PudLodestarSlotIndexTest, AWithdrawnQueryTakesAllItsChoicesOut) {
+    go_live_everywhere();
+    withdrawn = {40};
+    index.erase(pud_test_node(20));
     EXPECT_THAT(index.ring(false), IsEmpty());
-    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{witness_caller}));
+    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{caller, witness_caller}));
+}
+
+TEST_F(PudLodestarSlotIndexTest, AQueryWithdrawnInTheStepItWasIntroducedOpensNothing) {
+    withdrawn = {40};
+    go_live_everywhere();
+    EXPECT_THAT(index.ring(false), IsEmpty());
+    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{caller, witness_caller}));
+}
+
+TEST_F(PudLodestarSlotIndexTest, AQueryIntroducedOutsideTheFocusOpensNothing) {
+    introduced = {pud_introduced_query{.head = 40, .node = pud_test_node(10), .goal = 0}};
+    go_live_everywhere();
+    EXPECT_THAT(index.ring(false), IsEmpty());
+}
+
+TEST_F(PudLodestarSlotIndexTest, AQueryInheritedByMoreLeavesKeepsOneEntryPerWitness) {
+    go_live_everywhere();
+    ON_CALL(focus, contains(pud_test_node(4))).WillByDefault(Return(true));
+    ON_CALL(node_queries, get(pud_test_node(4))).WillByDefault(ReturnRef(query_on_goal_zero));
+    go_live({pud_test_node(4)});
+    EXPECT_EQ(index.ring(false), (std::multiset<pud_lodestar_choice>{
+        choice(30, pud_lodestar_side::a, 10, 5),
+        choice(30, pud_lodestar_side::b, 11, 5),
+    }));
+    EXPECT_TRUE(index.ring(true).contains(caller_on(4, 0)));
+}
+
+TEST_F(PudLodestarSlotIndexTest, ALeafsOneCallerChoiceUnfoldsItsSmallestGoalThatHasCandidates) {
+    const test_node_queries_t three_goals{test_node_queries_t{}
+        .set(7, test_owner_box_t{remover, 62})
+        .set(4, test_owner_box_t{remover, 61})
+        .set(6, test_owner_box_t{remover, 63})};
+    ON_CALL(node_queries, get(pud_test_node(3))).WillByDefault(ReturnRef(three_goals));
+    ON_CALL(exhausted, is_exhausted(61)).WillByDefault(Return(true));
+    go_live({pud_test_node(3)});
+    EXPECT_EQ(index.ring(true), (std::multiset<pud_lodestar_choice>{caller_on(3, 6)}));
 }
 
 TEST_F(PudLodestarSlotIndexTest, EqualChoicesAreKeptOncePerEntry) {
@@ -388,11 +463,6 @@ TEST_F(PudLodestarSlotIndexTest, ErasingRefutedLeavesSettlesThem) {
     live.erase(pud_test_node(11));
     index.erase_refuted({pud_test_node(11)});
     EXPECT_EQ(index.ring(false), (std::multiset<pud_lodestar_choice>{choice(30, pud_lodestar_side::a, 10, 5)}));
-}
-
-TEST_F(PudLodestarSlotIndexTest, AnOpenedLeafWithAnExhaustedQueryBreaksTheInvariant) {
-    ON_CALL(exhausted, is_exhausted(40)).WillByDefault(Return(true));
-    EXPECT_THROW(go_live({pud_test_node(3)}), std::logic_error);
 }
 
 TEST_F(PudLodestarSlotIndexTest, AnUnsettledLeafWhoseSearchesStayedPutReplacesNoChoice) {

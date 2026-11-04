@@ -51,6 +51,7 @@
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "infrastructure/pud_pending_conflict_store.hpp"
 #include "infrastructure/pud_query_introducers.hpp"
+#include "infrastructure/pud_query_introduction_recorder.hpp"
 #include "infrastructure/pud_query_leaf_finder.hpp"
 #include "infrastructure/pud_query_remover.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
@@ -153,8 +154,12 @@ struct pud_lodestar_manifest {
             replayer_t, module_registry_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t,
             unit_queries_t>::pud_mhq;
     };
-    struct query_remover_t : pud_query_remover<pud_query_introducers, mhq_t> {
-        using pud_query_remover<pud_query_introducers, mhq_t>::pud_query_remover;
+    struct introduction_recorder_t : pud_query_introduction_recorder<pud_query_introducers, pud_query_introducers> {
+        using pud_query_introduction_recorder<
+            pud_query_introducers, pud_query_introducers>::pud_query_introduction_recorder;
+    };
+    struct query_remover_t : pud_query_remover<introduction_recorder_t, mhq_t> {
+        using pud_query_remover<introduction_recorder_t, mhq_t>::pud_query_remover;
     };
     struct node_queries_t : pud_node_table<pud_node_queries<query_remover_t>> {
         using pud_node_table<pud_node_queries<query_remover_t>>::pud_node_table;
@@ -174,11 +179,11 @@ struct pud_lodestar_manifest {
     struct root_activator_t : pud_root_activator<
         module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t,
         node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, structure_watcher_t, mhq_t, query_remover_t,
-        pud_query_introducers> {
+        introduction_recorder_t> {
         using pud_root_activator<
             module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t,
             node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, structure_watcher_t, mhq_t, query_remover_t,
-            pud_query_introducers>::pud_root_activator;
+            introduction_recorder_t>::pud_root_activator;
     };
     struct root_depth_recorder_t : pud_root_depth_recorder<node_depths_t, root_activator_t> {
         using pud_root_depth_recorder<node_depths_t, root_activator_t>::pud_root_depth_recorder;
@@ -188,13 +193,13 @@ struct pud_lodestar_manifest {
         node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
         module_registry_t, node_goals_t, node_axioms_t, pud_child_goal_list_builder,
         node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
-        mhq_t, mhq_t, query_remover_t, pud_query_introducers, pud_query_introducers> {
+        mhq_t, mhq_t, query_remover_t, introduction_recorder_t, pud_query_introducers> {
         using pud_child_activator<
             node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
             node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
             module_registry_t, node_goals_t, node_axioms_t, pud_child_goal_list_builder,
             node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t, structure_watcher_t,
-            mhq_t, mhq_t, query_remover_t, pud_query_introducers, pud_query_introducers>::pud_child_activator;
+            mhq_t, mhq_t, query_remover_t, introduction_recorder_t, pud_query_introducers>::pud_child_activator;
     };
     struct child_depth_recorder_t : pud_child_depth_recorder<node_depths_t, node_depths_t, child_activator_t> {
         using pud_child_depth_recorder<node_depths_t, node_depths_t, child_activator_t>::pud_child_depth_recorder;
@@ -255,12 +260,13 @@ struct pud_lodestar_manifest {
     struct slot_index_t : pud_lodestar_slot_index<
         focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, witness_search_recorder_t,
         witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_queries_t,
-        mhq_t, mhq_t, candidate_witness_index_t, witness_search_recorder_t, unfold_allower_t> {
+        mhq_t, mhq_t, candidate_witness_index_t, witness_search_recorder_t, unfold_allower_t, introduction_recorder_t,
+        introduction_recorder_t> {
         using pud_lodestar_slot_index<
             focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, witness_search_recorder_t,
             witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_queries_t,
             mhq_t, mhq_t, candidate_witness_index_t, witness_search_recorder_t,
-            unfold_allower_t>::pud_lodestar_slot_index;
+            unfold_allower_t, introduction_recorder_t, introduction_recorder_t>::pud_lodestar_slot_index;
     };
     struct round_robin_t : pud_lodestar_round_robin<slot_index_t> {
         using pud_lodestar_round_robin<slot_index_t>::pud_lodestar_round_robin;
@@ -362,6 +368,7 @@ struct pud_lodestar_manifest {
     node_bindings_t            node_bindings_;
     node_watches_t             node_watches_;
     pud_query_introducers      query_introducers_;
+    introduction_recorder_t    introduction_recorder_;
     query_remover_t            query_remover_;
     node_queries_t             node_queries_;
     query_leaf_finder_t        query_leaf_finder_;
