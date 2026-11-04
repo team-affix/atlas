@@ -158,8 +158,7 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
     increment_live_child_count_.increment(parent);
     const uint32_t lvc = get_node_lvc_.get(parent) + inference.var_count;
     pud_ubs_state bindings = bind_.bind(get_node_bindings_.get(parent), child);
-    pud_structure_watch_change watched =
-        watch_descend_.descend(get_node_watch_.get(parent), bindings, child, inference.call_site, goals);
+    pud_structure_watch_change watched = watch_descend_.descend(get_node_watch_.get(parent), bindings, child, goals);
     pud_node_queries queries = parent_queries.erase(inference.call_site);
     bool refuted = false;
     for (pud_body_goal_id goal : watched.changed_goals) {
@@ -174,17 +173,17 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
         }
         queries = queries.set(goal, forked.value());
     }
-    for (const auto& [id, goal] : goals.goals) {
-        if (parent_queries.find(id) != nullptr)
-            continue;
-        DEBUG_ASSERT(id >= parent_goals.next_id);
-        const std::optional<pud_mhq_head_id> opened = open_query_.try_open(child.module, bindings, goal, lvc);
+    for (pud_body_goal_id id = parent_goals.next_id; id < goals.next_id; ++id) {
+        const std::optional<pud_mhq_head_id> opened =
+            open_query_.try_open(child.module, bindings, goals.goals.at(id), lvc);
         if (!opened.has_value()) {
             refuted = true;
             continue;
         }
         queries = queries.set(id, opened.value());
     }
+    // Every inherited goal kept its parent's query or forked it, so an unrefuted child holds one per goal.
+    DEBUG_ASSERT(refuted || queries.size() == goals.goals.size());
     for (const auto& [goal, head_id] : queries) {
         hold_query_.hold(head_id, child, goal);
         refuted = refuted || is_query_exhausted_.is_exhausted(head_id);

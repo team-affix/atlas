@@ -71,7 +71,7 @@ struct MockBind {
 };
 struct MockWatchDescend {
     MOCK_METHOD(pud_structure_watch_change, descend,
-        (const pud_structure_watch&, const pud_ubs_state&, pud_global_node_id, pud_body_goal_id, const pud_goal_list&));
+        (const pud_structure_watch&, const pud_ubs_state&, pud_global_node_id, const pud_goal_list&));
 };
 struct MockForkQuery {
     MOCK_METHOD(std::optional<pud_mhq_head_id>, try_fork, (pud_mhq_head_id, const pud_ubs_state&, const expr*, uint32_t));
@@ -150,7 +150,7 @@ struct PudChildActivatorTest : public ::testing::Test {
         ON_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals))
             .WillByDefault(Return(child_goals));
         ON_CALL(binder, bind(_, pud_test_node(4))).WillByDefault(Return(child_bindings));
-        ON_CALL(watcher, descend(_, _, _, _, _))
+        ON_CALL(watcher, descend(_, _, _, _))
             .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {}}));
         ON_CALL(opener, try_open(k_test_module, _, &goal_c, 7)).WillByDefault(Return(70));
         ON_CALL(forker, try_fork(41, _, &goal_b, 7)).WillByDefault(Return(60));
@@ -181,7 +181,7 @@ TEST_F(PudChildActivatorTest, AChildCountsAsOneMoreLiveChildOfItsParent) {
 }
 
 TEST_F(PudChildActivatorTest, AChildsGoalsAreStoredBeforeAnyOfItsQueriesIsForkedOrOpened) {
-    ON_CALL(watcher, descend(_, _, _, _, _))
+    ON_CALL(watcher, descend(_, _, _, _))
         .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     InSequence in_order;
     EXPECT_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals)).WillOnce(Return(child_goals));
@@ -192,7 +192,7 @@ TEST_F(PudChildActivatorTest, AChildsGoalsAreStoredBeforeAnyOfItsQueriesIsForked
 }
 
 TEST_F(PudChildActivatorTest, AChildKeepsItsParentsQueryForAnUnchangedGoalAndOpensOneForItsOwn) {
-    EXPECT_CALL(watcher, descend(parent_watch, child_bindings, pud_test_node(4), 0u, child_goals));
+    EXPECT_CALL(watcher, descend(parent_watch, child_bindings, pud_test_node(4), child_goals));
     EXPECT_CALL(forker, try_fork(_, _, _, _)).Times(0);
     EXPECT_CALL(opener, try_open(k_test_module, child_bindings, &goal_c, 7u)).WillOnce(Return(70));
     EXPECT_CALL(holders, hold(41u, pud_test_node(4), 1u));
@@ -219,7 +219,7 @@ TEST_F(PudChildActivatorTest, AChildsLvcIsItsParentsPlusItsOwnVariables) {
 }
 
 TEST_F(PudChildActivatorTest, AGoalThatChangedStructureForksTheParentsQueryInTheChildsEnvironment) {
-    ON_CALL(watcher, descend(_, _, _, _, _))
+    ON_CALL(watcher, descend(_, _, _, _))
         .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     EXPECT_CALL(forker, try_fork(41, child_bindings, &goal_b, 7u)).WillOnce(Return(60));
     EXPECT_CALL(holders, hold(60u, pud_test_node(4), 1u));
@@ -229,7 +229,7 @@ TEST_F(PudChildActivatorTest, AGoalThatChangedStructureForksTheParentsQueryInThe
 }
 
 TEST_F(PudChildActivatorTest, AForkWithoutCandidatesDropsTheQueryAndRefutesTheChild) {
-    ON_CALL(watcher, descend(_, _, _, _, _))
+    ON_CALL(watcher, descend(_, _, _, _))
         .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     ON_CALL(forker, try_fork(_, _, _, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
@@ -261,4 +261,16 @@ TEST_F(PudChildActivatorTest, ARefutedChildStillCountsAsALiveChildUntilItIsRefut
     ON_CALL(opener, try_open(_, _, _, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(live_child_counts, increment(pud_test_node(3)));
     EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
+}
+
+TEST_F(PudChildActivatorTest, OnlyTheChildsOwnGoalsAreOpenedInIdOrder) {
+    expr goal_d{expr::functor{4, {}}};
+    child_inference.body_goals = {&goal_c, &goal_d};
+    child_goals.goals = child_goals.goals.set(3, &goal_d);
+    child_goals.next_id = 4;
+    ON_CALL(child_goal_lists, build(parent_goals, 0u, child_inference.body_goals)).WillByDefault(Return(child_goals));
+    InSequence order;
+    EXPECT_CALL(opener, try_open(k_test_module, _, &goal_c, 7u)).WillOnce(Return(70));
+    EXPECT_CALL(opener, try_open(k_test_module, _, &goal_d, 7u)).WillOnce(Return(71));
+    EXPECT_FALSE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }

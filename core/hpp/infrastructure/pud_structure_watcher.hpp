@@ -11,6 +11,7 @@
 #include "value_objects/framed_expr.hpp"
 #include "value_objects/pud_body_goal_id.hpp"
 #include "value_objects/pud_goal_list.hpp"
+#include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_structure_watch.hpp"
 #include "value_objects/pud_structure_watch_change.hpp"
@@ -29,7 +30,6 @@ struct pud_structure_watcher {
         const pud_structure_watch& parent_watch,
         const pud_ubs_state& child_bindings,
         pud_global_node_id child,
-        pud_body_goal_id closed_goal,
         const pud_goal_list& child_goals) const;
 private:
     template<typename IFind>
@@ -73,13 +73,13 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
     const pud_structure_watch& parent_watch,
     const pud_ubs_state& child_bindings,
     pud_global_node_id child,
-    pud_body_goal_id closed_goal,
     const pud_goal_list& child_goals) const {
+    const pud_inference& inference = get_inference_.get_inference(child);
     auto&& bind_map = make_bind_map_.make_bind_map(child_bindings);
     pud_structure_watch_change change{.watch = parent_watch, .changed_goals = {}};
-    unwatch(change.watch, closed_goal);
+    unwatch(change.watch, inference.call_site);
     std::unordered_set<pud_body_goal_id> changed_once;
-    for (const pud_substitution& substitution : get_inference_.get_inference(child).substitutions) {
+    for (const pud_substitution& substitution : inference.substitutions) {
         const expr* value = substitution.value;
         pud_module_id value_module = child.module;
         std::optional<uint32_t> surviving_rep;
@@ -104,12 +104,10 @@ pud_structure_watch_change PUD_STRUCTURE_WATCHER::descend(
             change.changed_goals.push_back(goal);
         }
     }
-    for (const auto& [id, goal] : child_goals.goals) {
-        const bool added = change.watch.goal_to_reps.find(id) == nullptr;
-        if (!added)
-            continue;
-        watch(change.watch, id, goal, child.module, bind_map);
-    }
+    // The inference's body goals took the child goal list's last ids.
+    const pud_body_goal_id first_added_goal = child_goals.next_id - inference.body_goals.size();
+    for (pud_body_goal_id id = first_added_goal; id < child_goals.next_id; ++id)
+        watch(change.watch, id, child_goals.goals.at(id), child.module, bind_map);
     return change;
 }
 
