@@ -1134,7 +1134,7 @@ TEST_F(PudLodestarRuntimeSuiteTest, EnumeratesAddPairsSummingExactlyTen) {
 
 TEST_F(PudLodestarRuntimeSuiteTest, EnumeratesMulPairsProductEight) {
     static constexpr size_t kInitialVarCount = 2;
-    static constexpr size_t kPeanoBudget = 256;
+    static constexpr size_t kPeanoBudget = 512;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});

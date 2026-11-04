@@ -25,6 +25,9 @@
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_candidate_witness_index.hpp"
 #include "infrastructure/pud_lodestar_driver.hpp"
+#include "infrastructure/pud_lodestar_smallest_goal_chooser.hpp"
+#include "infrastructure/pud_lodestar_unit_goal_chooser.hpp"
+#include "infrastructure/pud_lodestar_unit_goal_finder.hpp"
 #include "infrastructure/pud_focus_frontier.hpp"
 #include "infrastructure/pud_focus_leaf_tally.hpp"
 #include "infrastructure/pud_focus_set.hpp"
@@ -38,7 +41,6 @@
 #include "infrastructure/pud_solved_leaf_finder.hpp"
 #include "infrastructure/pud_stored_solution_dropper.hpp"
 #include "infrastructure/pud_unfold_applier.hpp"
-#include "infrastructure/pud_unit_propagator.hpp"
 #include "infrastructure/pud_witness_search_recorder.hpp"
 #include "infrastructure/pud_mhcs.hpp"
 #include "infrastructure/pud_mhq.hpp"
@@ -122,9 +124,8 @@ struct pud_lodestar_manifest {
     struct term_exporter_factory_t : pud_term_exporter_factory<globalizer, expr_pool, expr_pool, functor_relinker_t> {
         using pud_term_exporter_factory<globalizer, expr_pool, expr_pool, functor_relinker_t>::pud_term_exporter_factory;
     };
-    struct unit_queries_t : std::deque<pud_mhq_head_id> {
-        using std::deque<pud_mhq_head_id>::deque;
-    };
+    // The MHQ reports unit queries to the unit goal finder, which reads the MHQ back, so it is declared first.
+    struct unit_goal_finder_t;
     struct refutation_propagator_t : pud_refutation_propagator<module_registry_t, pud_node_live_child_counts, module_registry_t> {
         using pud_refutation_propagator<module_registry_t, pud_node_live_child_counts, module_registry_t>::pud_refutation_propagator;
     };
@@ -149,10 +150,10 @@ struct pud_lodestar_manifest {
     struct candidate_witness_index_t : pud_candidate_witness_index<mhcs_t, witness_search_recorder_t> {
         using pud_candidate_witness_index<mhcs_t, witness_search_recorder_t>::pud_candidate_witness_index;
     };
-    struct mhq_t : pud_mhq<replayer_t, module_registry_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, unit_queries_t> {
+    struct mhq_t : pud_mhq<replayer_t, module_registry_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, unit_goal_finder_t> {
         using pud_mhq<
             replayer_t, module_registry_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t, candidate_witness_index_t,
-            unit_queries_t>::pud_mhq;
+            unit_goal_finder_t>::pud_mhq;
     };
     struct introduction_recorder_t : pud_query_introduction_recorder<pud_query_introducers, pud_query_introducers> {
         using pud_query_introduction_recorder<
@@ -163,6 +164,10 @@ struct pud_lodestar_manifest {
     };
     struct node_queries_t : pud_node_table<pud_node_queries<query_remover_t>> {
         using pud_node_table<pud_node_queries<query_remover_t>>::pud_node_table;
+    };
+    struct unit_goal_finder_t : pud_lodestar_unit_goal_finder<pud_query_introducers, mhq_t, node_queries_t> {
+        using pud_lodestar_unit_goal_finder<
+            pud_query_introducers, mhq_t, node_queries_t>::pud_lodestar_unit_goal_finder;
     };
     struct query_leaf_finder_t : pud_query_leaf_finder<
         pud_query_introducers, module_registry_t, module_registry_t, module_registry_t, node_queries_t> {
@@ -259,13 +264,13 @@ struct pud_lodestar_manifest {
     };
     struct slot_index_t : pud_lodestar_slot_index<
         focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, witness_search_recorder_t,
-        witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_queries_t,
-        mhq_t, mhq_t, candidate_witness_index_t, witness_search_recorder_t, unfold_allower_t, introduction_recorder_t,
+        witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_goals_t,
+        mhq_t, candidate_witness_index_t, witness_search_recorder_t, unfold_allower_t, introduction_recorder_t,
         introduction_recorder_t> {
         using pud_lodestar_slot_index<
             focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, focus_leaf_tally_t, witness_search_recorder_t,
-            witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_queries_t,
-            mhq_t, mhq_t, candidate_witness_index_t, witness_search_recorder_t,
+            witness_search_recorder_t, focus_frontier_t, pud_frontier, module_registry_t, pud_focus_set, node_goals_t,
+            mhq_t, candidate_witness_index_t, witness_search_recorder_t,
             unfold_allower_t, introduction_recorder_t, introduction_recorder_t>::pud_lodestar_slot_index;
     };
     struct round_robin_t : pud_lodestar_round_robin<slot_index_t> {
@@ -279,16 +284,16 @@ struct pud_lodestar_manifest {
     struct unfold_depth_recorder_t : pud_unfold_depth_recorder<node_depths_t, unfold_applier_t> {
         using pud_unfold_depth_recorder<node_depths_t, unfold_applier_t>::pud_unfold_depth_recorder;
     };
-    struct unit_propagator_t : pud_unit_propagator<
-        unit_queries_t, query_leaf_finder_t, mhq_t, pud_frontier, module_registry_t,
-        unfold_allower_t, unfold_depth_recorder_t> {
-        using pud_unit_propagator<
-            unit_queries_t, query_leaf_finder_t, mhq_t, pud_frontier, module_registry_t,
-            unfold_allower_t, unfold_depth_recorder_t>::pud_unit_propagator;
+    struct smallest_goal_chooser_t : pud_lodestar_smallest_goal_chooser<node_goals_t> {
+        using pud_lodestar_smallest_goal_chooser<node_goals_t>::pud_lodestar_smallest_goal_chooser;
     };
-    struct driver_t : pud_lodestar_driver<unit_propagator_t, round_robin_t, round_robin_t, unfold_depth_recorder_t> {
+    struct goal_chooser_t : pud_lodestar_unit_goal_chooser<unit_goal_finder_t, smallest_goal_chooser_t> {
+        using pud_lodestar_unit_goal_chooser<
+            unit_goal_finder_t, smallest_goal_chooser_t>::pud_lodestar_unit_goal_chooser;
+    };
+    struct driver_t : pud_lodestar_driver<round_robin_t, round_robin_t, goal_chooser_t, unfold_depth_recorder_t> {
         using pud_lodestar_driver<
-            unit_propagator_t, round_robin_t, round_robin_t, unfold_depth_recorder_t>::pud_lodestar_driver;
+            round_robin_t, round_robin_t, goal_chooser_t, unfold_depth_recorder_t>::pud_lodestar_driver;
     };
     struct solved_leaf_finder_t : pud_solved_leaf_finder<focus_frontier_t, module_registry_t> {
         using pud_solved_leaf_finder<focus_frontier_t, module_registry_t>::pud_solved_leaf_finder;
@@ -356,7 +361,7 @@ struct pud_lodestar_manifest {
     pud_node_live_child_counts live_child_counts_;
     refutation_propagator_t    refutation_propagator_;
 
-    unit_queries_t             unit_queries_;
+    unit_goal_finder_t         unit_goal_finder_;
     replayer_t                 replayer_;
     mhws_t                     mhws_;
     witness_search_recorder_t              witness_search_recorder_;
@@ -402,7 +407,8 @@ struct pud_lodestar_manifest {
     round_robin_t                    conjecture_round_robin_;
     unfold_applier_t                 unfold_applier_;
     unfold_depth_recorder_t          unfold_depth_recorder_;
-    unit_propagator_t                unit_propagator_;
+    smallest_goal_chooser_t          smallest_goal_chooser_;
+    goal_chooser_t                   goal_chooser_;
     driver_t                         driver_;
     solved_leaf_finder_t             solved_leaf_finder_;
     stored_solution_dropper_t        stored_solution_dropper_;

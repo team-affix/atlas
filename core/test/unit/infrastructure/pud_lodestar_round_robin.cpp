@@ -23,7 +23,6 @@ pud_lodestar_choice choice_on(
         .slot = pud_lodestar_slot_id{
             .query_node = pud_test_node(query_node), .query_goal = 0, .candidate = candidate, .side = side},
         .leaf = pud_test_node(leaf),
-        .body_goal = 0,
     };
 }
 
