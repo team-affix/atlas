@@ -27,7 +27,7 @@ template<
     typename IWatchRoot,
     typename IOpenQuery,
     typename IRemoveQuery,
-    typename IHoldQuery>
+    typename IIntroduceQuery>
 struct pud_root_activator {
     pud_root_activator(
         IGetAxiom& get_axiom,
@@ -41,7 +41,7 @@ struct pud_root_activator {
         IWatchRoot& watch_root,
         IOpenQuery& open_query,
         IRemoveQuery& remove_query,
-        IHoldQuery& hold_query);
+        IIntroduceQuery& introduce_query);
     bool activate_root(pud_global_node_id root);
 private:
     IGetAxiom& get_axiom_;
@@ -55,18 +55,18 @@ private:
     IWatchRoot& watch_root_;
     IOpenQuery& open_query_;
     IRemoveQuery& remove_query_;
-    IHoldQuery& hold_query_;
+    IIntroduceQuery& introduce_query_;
 };
 
 #define PUD_ROOT_ACTIVATOR_TEMPLATE                                                            \
     template<typename IGetAxiom, typename IBuildRootGoalList, typename IStoreNodeGoals,                \
              typename IStoreNodeAxiom, typename IStoreNodeLvc, typename IStoreNodeBindings,             \
              typename IStoreNodeWatch, typename IStoreNodeQueries, typename IWatchRoot,                 \
-             typename IOpenQuery, typename IRemoveQuery, typename IHoldQuery>
+             typename IOpenQuery, typename IRemoveQuery, typename IIntroduceQuery>
 #define PUD_ROOT_ACTIVATOR                                                                       \
     pud_root_activator<IGetAxiom, IBuildRootGoalList, IStoreNodeGoals, IStoreNodeAxiom,                \
         IStoreNodeLvc, IStoreNodeBindings, IStoreNodeWatch, IStoreNodeQueries, IWatchRoot, IOpenQuery,  \
-        IRemoveQuery, IHoldQuery>
+        IRemoveQuery, IIntroduceQuery>
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
 PUD_ROOT_ACTIVATOR::pud_root_activator(
@@ -81,7 +81,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     IWatchRoot& watch_root,
     IOpenQuery& open_query,
     IRemoveQuery& remove_query,
-    IHoldQuery& hold_query)
+    IIntroduceQuery& introduce_query)
     : get_axiom_(get_axiom)
     , build_root_goal_list_(build_root_goal_list)
     , store_node_goals_(store_node_goals)
@@ -93,7 +93,7 @@ PUD_ROOT_ACTIVATOR::pud_root_activator(
     , watch_root_(watch_root)
     , open_query_(open_query)
     , remove_query_(remove_query)
-    , hold_query_(hold_query) {}
+    , introduce_query_(introduce_query) {}
 
 PUD_ROOT_ACTIVATOR_TEMPLATE
 bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
@@ -111,9 +111,8 @@ bool PUD_ROOT_ACTIVATOR::activate_root(pud_global_node_id root) {
             continue;
         }
         queries = queries.set(id, immer::box<pud_mhq_head_owner<IRemoveQuery>>{remove_query_, opened.value()});
+        introduce_query_.introduce(opened.value(), root, id);
     }
-    for (const auto& [goal, owner] : queries)
-        hold_query_.hold(owner->head_id(), root, goal);
     store_node_lvc_.store(root, axiom.var_count);
     store_node_bindings_.store(root, bindings);
     store_node_watch_.store(root, watch_root_.watch_root(bindings, goals, root.module));

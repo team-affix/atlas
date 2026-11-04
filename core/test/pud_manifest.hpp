@@ -27,7 +27,9 @@
 #include "infrastructure/pud_node_table.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
-#include "infrastructure/pud_query_holders.hpp"
+#include "infrastructure/pud_query_introducers.hpp"
+#include "infrastructure/pud_query_leaf_finder.hpp"
+#include "infrastructure/pud_query_remover.hpp"
 #include "infrastructure/pud_refutation_propagator.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_resolver.hpp"
@@ -115,8 +117,17 @@ struct pud_manifest {
     struct mhq_t : pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t> {
         using pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>::pud_mhq;
     };
-    struct node_queries_t : pud_node_table<pud_node_queries<mhq_t>> {
-        using pud_node_table<pud_node_queries<mhq_t>>::pud_node_table;
+    struct query_remover_t : pud_query_remover<pud_query_introducers, mhq_t> {
+        using pud_query_remover<pud_query_introducers, mhq_t>::pud_query_remover;
+    };
+    struct node_queries_t : pud_node_table<pud_node_queries<query_remover_t>> {
+        using pud_node_table<pud_node_queries<query_remover_t>>::pud_node_table;
+    };
+    struct query_leaf_finder_t : pud_query_leaf_finder<
+        pud_query_introducers, module_registry_t, module_registry_t, module_registry_t, node_queries_t> {
+        using pud_query_leaf_finder<
+            pud_query_introducers, module_registry_t, module_registry_t, module_registry_t,
+            node_queries_t>::pud_query_leaf_finder;
     };
     struct binder_t : pud_binder<bind_map_factory_t, module_registry_t> {
         using pud_binder<bind_map_factory_t, module_registry_t>::pud_binder;
@@ -126,25 +137,24 @@ struct pud_manifest {
     };
     struct root_activator_t : pud_root_activator<
         module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
-        structure_watcher_t, mhq_t, mhq_t, pud_query_holders> {
+        structure_watcher_t, mhq_t, query_remover_t, pud_query_introducers> {
         using pud_root_activator<
             module_registry_t, pud_root_goal_list_builder, node_goals_t, node_axioms_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t,
-            structure_watcher_t, mhq_t, mhq_t, pud_query_holders>::pud_root_activator;
+            structure_watcher_t, mhq_t, query_remover_t, pud_query_introducers>::pud_root_activator;
     };
     struct child_activator_t : pud_child_activator<
         node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, module_registry_t, node_goals_t, node_axioms_t,
         pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
-        structure_watcher_t, mhq_t, mhq_t, mhq_t, pud_query_holders, mhq_t> {
+        structure_watcher_t, mhq_t, mhq_t, query_remover_t, pud_query_introducers, pud_query_introducers> {
         using pud_child_activator<
             node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, node_lvcs_t, node_bindings_t, node_watches_t, node_queries_t, module_registry_t, node_goals_t, node_axioms_t,
             pud_child_goal_list_builder, node_goals_t, node_axioms_t, pud_node_live_child_counts, binder_t,
-            structure_watcher_t, mhq_t, mhq_t, mhq_t, pud_query_holders, mhq_t>::pud_child_activator;
+            structure_watcher_t, mhq_t, mhq_t, query_remover_t, pud_query_introducers, pud_query_introducers>::pud_child_activator;
     };
     struct node_deactivator_t : pud_node_deactivator<
-        node_queries_t, node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, pud_query_holders, mhq_t, pud_query_holders> {
+        node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, mhq_t, pud_query_introducers, query_leaf_finder_t> {
         using pud_node_deactivator<
-            node_queries_t, node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, pud_query_holders, mhq_t,
-            pud_query_holders>::pud_node_deactivator;
+        node_queries_t, node_watches_t, node_bindings_t, node_lvcs_t, mhq_t, pud_query_introducers, query_leaf_finder_t>::pud_node_deactivator;
     };
     struct leaf_refuter_t : pud_leaf_refuter<
         module_registry_t, refutation_propagator_t, node_deactivator_t, module_registry_t, module_registry_t> {
@@ -204,8 +214,10 @@ struct pud_manifest {
     node_lvcs_t                node_lvcs_;
     node_bindings_t            node_bindings_;
     node_watches_t             node_watches_;
+    pud_query_introducers      query_introducers_;
+    query_remover_t            query_remover_;
     node_queries_t             node_queries_;
-    pud_query_holders          query_holders_;
+    query_leaf_finder_t        query_leaf_finder_;
     binder_t                   binder_;
     structure_watcher_t        structure_watcher_;
     root_activator_t           root_activator_;
@@ -247,18 +259,19 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
     , node_lvcs_()
     , node_bindings_()
     , node_watches_()
+    , query_introducers_()
+    , query_remover_(query_introducers_, mhq_)
     , node_queries_()
-    , query_holders_()
+    , query_leaf_finder_(query_introducers_, modules_, modules_, modules_, node_queries_)
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
           modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_lvcs_, node_bindings_, node_watches_, node_queries_, structure_watcher_, mhq_,
-          mhq_, query_holders_)
+          query_remover_, query_introducers_)
     , child_activator_(
           node_lvcs_, node_bindings_, node_watches_, node_queries_, node_lvcs_, node_bindings_, node_watches_, node_queries_, modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
-          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, mhq_, query_holders_,
-          mhq_)
-    , node_deactivator_(node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_, query_holders_)
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_remover_, query_introducers_, query_introducers_)
+    , node_deactivator_(node_queries_, node_watches_, node_bindings_, node_lvcs_, mhq_, query_introducers_, query_leaf_finder_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,

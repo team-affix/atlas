@@ -1,73 +1,64 @@
-#include <set>
+#include <map>
 #include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/pud_node_deactivator.hpp"
-#include "value_objects/pud_node_queries.hpp"
 #include "pud_test_node.hpp"
 
 using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::InSequence;
+using ::testing::Invoke;
+using ::testing::IsEmpty;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::ReturnRef;
 
 namespace {
 
-struct MockRemoveQuery {
-    MOCK_METHOD(void, remove, (pud_mhq_head_id));
-};
-using test_node_queries_t = pud_node_queries<NiceMock<MockRemoveQuery>>;
-using test_owner_box_t = immer::box<pud_mhq_head_owner<NiceMock<MockRemoveQuery>>>;
-struct MockGetNodeQueries {
-    MOCK_METHOD(const test_node_queries_t&, get, (pud_global_node_id));
-};
 struct MockEraseNodeField {
     MOCK_METHOD(void, erase, (pud_global_node_id));
-};
-struct MockReleaseQuery {
-    MOCK_METHOD(bool, release, (pud_mhq_head_id, pud_global_node_id));
 };
 struct MockInvalidateQueryLeaf {
     MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_global_node_id));
 };
-struct MockGetQueryHolders {
-    MOCK_METHOD(const std::set<pud_global_node_id>&, get_holders, (pud_mhq_head_id));
+struct MockMarkQueryExhausted {
+    MOCK_METHOD(void, mark_exhausted, (pud_mhq_head_id));
+};
+struct MockFindQueryLeaves {
+    MOCK_METHOD((coroutine<pud_unfold, void>), find_leaves, (pud_mhq_head_id), (const));
 };
 
 using test_node_deactivator_t = pud_node_deactivator<
-    NiceMock<MockGetNodeQueries>, NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>,
-    NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>, NiceMock<MockReleaseQuery>,
-    NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>>;
+    NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>,
+    NiceMock<MockEraseNodeField>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockMarkQueryExhausted>,
+    NiceMock<MockFindQueryLeaves>>;
 
+// Node 5's witnesses leave no query without a candidate unless a test says otherwise. Query 40 is held by
+// leaves 7 and 8, query 41 by leaf 9.
 struct PudNodeDeactivatorTest : public ::testing::Test {
-    NiceMock<MockRemoveQuery> remover;
-    NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockEraseNodeField> erase_queries;
     NiceMock<MockEraseNodeField> erase_watches;
     NiceMock<MockEraseNodeField> erase_bindings;
     NiceMock<MockEraseNodeField> erase_lvcs;
-    NiceMock<MockReleaseQuery> holders;
     NiceMock<MockInvalidateQueryLeaf> invalidate;
-    NiceMock<MockGetQueryHolders> get_holders;
+    NiceMock<MockMarkQueryExhausted> introducers;
+    NiceMock<MockFindQueryLeaves> leaf_finder;
     test_node_deactivator_t deactivator{
-        node_queries, erase_queries, erase_watches, erase_bindings, erase_lvcs, holders, invalidate, get_holders};
-    test_node_queries_t held{
-        test_node_queries_t{}.set(0, test_owner_box_t{remover, 30}).set(1, test_owner_box_t{remover, 31})};
+        erase_queries, erase_watches, erase_bindings, erase_lvcs, invalidate, introducers, leaf_finder};
+    std::map<pud_mhq_head_id, std::vector<pud_global_node_id>> held{
+        {40, {pud_test_node(7), pud_test_node(8)}}, {41, {pud_test_node(9)}}};
+
+    coroutine<pud_unfold, void> find_held_leaves(pud_mhq_head_id head) {
+        for (const pud_global_node_id leaf : held.at(head))
+            co_yield pud_unfold{.leaf = leaf, .goal = 0};
+    }
 
     void SetUp() override {
-        ON_CALL(node_queries, get(pud_test_node(5))).WillByDefault(ReturnRef(held));
         ON_CALL(invalidate, invalidate_leaf(pud_test_node(5))).WillByDefault(Return(std::vector<pud_mhq_head_id>{}));
+        ON_CALL(leaf_finder, find_leaves(_)).WillByDefault(Invoke(this, &PudNodeDeactivatorTest::find_held_leaves));
     }
 };
 
-}
-
-TEST_F(PudNodeDeactivatorTest, TheNodeLetsGoOfEveryQueryItHolds) {
-    EXPECT_CALL(holders, release(30u, pud_test_node(5)));
-    EXPECT_CALL(holders, release(31u, pud_test_node(5)));
-    deactivator.deactivate(pud_test_node(5));
 }
 
 TEST_F(PudNodeDeactivatorTest, TheActiveFieldsAreErasedInReverseOfActivationThenItStopsWitnessing) {
@@ -80,19 +71,23 @@ TEST_F(PudNodeDeactivatorTest, TheActiveFieldsAreErasedInReverseOfActivationThen
     deactivator.deactivate(pud_test_node(5));
 }
 
-TEST_F(PudNodeDeactivatorTest, EveryQueryIsReleasedBeforeTheQueriesAreErased) {
-    InSequence order;
-    EXPECT_CALL(holders, release(30u, pud_test_node(5)));
-    EXPECT_CALL(holders, release(31u, pud_test_node(5)));
-    EXPECT_CALL(erase_queries, erase(pud_test_node(5)));
-    deactivator.deactivate(pud_test_node(5));
+TEST_F(PudNodeDeactivatorTest, NothingIsStrandedWhileEveryQueryKeepsACandidate) {
+    EXPECT_CALL(leaf_finder, find_leaves(_)).Times(0);
+    EXPECT_THAT(deactivator.deactivate(pud_test_node(5)), IsEmpty());
 }
 
-TEST_F(PudNodeDeactivatorTest, EveryHolderOfAQueryLeftWithoutACandidateIsReturned) {
+TEST_F(PudNodeDeactivatorTest, EveryLeafHoldingAQueryLeftWithoutACandidateIsReturned) {
     ON_CALL(invalidate, invalidate_leaf(pud_test_node(5))).WillByDefault(Return(std::vector<pud_mhq_head_id>{40, 41}));
-    const std::set<pud_global_node_id> first_holders{pud_test_node(7), pud_test_node(8)};
-    const std::set<pud_global_node_id> second_holders{pud_test_node(9)};
-    ON_CALL(get_holders, get_holders(40u)).WillByDefault(ReturnRef(first_holders));
-    ON_CALL(get_holders, get_holders(41u)).WillByDefault(ReturnRef(second_holders));
-    EXPECT_THAT(deactivator.deactivate(pud_test_node(5)), ElementsAre(pud_test_node(7), pud_test_node(8), pud_test_node(9)));
+    EXPECT_THAT(
+        deactivator.deactivate(pud_test_node(5)), ElementsAre(pud_test_node(7), pud_test_node(8), pud_test_node(9)));
+}
+
+TEST_F(PudNodeDeactivatorTest, AQueryLeftWithoutACandidateIsMarkedExhaustedBeforeItsLeavesAreFound) {
+    ON_CALL(invalidate, invalidate_leaf(pud_test_node(5))).WillByDefault(Return(std::vector<pud_mhq_head_id>{40, 41}));
+    InSequence order;
+    EXPECT_CALL(introducers, mark_exhausted(40u));
+    EXPECT_CALL(leaf_finder, find_leaves(40u));
+    EXPECT_CALL(introducers, mark_exhausted(41u));
+    EXPECT_CALL(leaf_finder, find_leaves(41u));
+    deactivator.deactivate(pud_test_node(5));
 }

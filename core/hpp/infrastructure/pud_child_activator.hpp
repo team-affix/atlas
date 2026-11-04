@@ -39,8 +39,8 @@ template<
     typename IForkQuery,
     typename IOpenQuery,
     typename IRemoveQuery,
-    typename IHoldQuery,
-    typename IIsQueryExhausted>
+    typename IIntroduceQuery,
+    typename IGetExhaustedQueries>
 struct pud_child_activator {
     pud_child_activator(
         IGetNodeLvc& get_node_lvc,
@@ -63,8 +63,8 @@ struct pud_child_activator {
         IForkQuery& fork_query,
         IOpenQuery& open_query,
         IRemoveQuery& remove_query,
-        IHoldQuery& hold_query,
-        IIsQueryExhausted& is_query_exhausted);
+        IIntroduceQuery& introduce_query,
+        IGetExhaustedQueries& get_exhausted_queries);
     bool activate_child(pud_global_node_id parent, pud_global_node_id child);
 private:
     IGetNodeLvc& get_node_lvc_;
@@ -87,8 +87,8 @@ private:
     IForkQuery& fork_query_;
     IOpenQuery& open_query_;
     IRemoveQuery& remove_query_;
-    IHoldQuery& hold_query_;
-    IIsQueryExhausted& is_query_exhausted_;
+    IIntroduceQuery& introduce_query_;
+    IGetExhaustedQueries& get_exhausted_queries_;
 };
 
 #define PUD_CHILD_ACTIVATOR_TEMPLATE                                                           \
@@ -98,14 +98,14 @@ private:
              typename IGetNodeGoals, typename IGetNodeAxiom, typename IBuildChildGoalList,           \
              typename IStoreNodeGoals, typename IStoreNodeAxiom,                               \
              typename IIncrementLiveChildCount, typename IBind, typename IWatchDescend,        \
-             typename IForkQuery, typename IOpenQuery, typename IRemoveQuery, typename IHoldQuery, \
-             typename IIsQueryExhausted>
+             typename IForkQuery, typename IOpenQuery, typename IRemoveQuery, typename IIntroduceQuery, \
+             typename IGetExhaustedQueries>
 #define PUD_CHILD_ACTIVATOR                                                                    \
     pud_child_activator<IGetNodeLvc, IGetNodeBindings, IGetNodeWatch, IGetNodeQueries, IStoreNodeLvc,  \
         IStoreNodeBindings, IStoreNodeWatch, IStoreNodeQueries, IGetInference, IGetNodeGoals,          \
         IGetNodeAxiom, IBuildChildGoalList, IStoreNodeGoals, IStoreNodeAxiom,        \
-        IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IRemoveQuery, IHoldQuery, \
-        IIsQueryExhausted>
+        IIncrementLiveChildCount, IBind, IWatchDescend, IForkQuery, IOpenQuery, IRemoveQuery, IIntroduceQuery, \
+        IGetExhaustedQueries>
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 PUD_CHILD_ACTIVATOR::pud_child_activator(
@@ -129,8 +129,8 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     IForkQuery& fork_query,
     IOpenQuery& open_query,
     IRemoveQuery& remove_query,
-    IHoldQuery& hold_query,
-    IIsQueryExhausted& is_query_exhausted)
+    IIntroduceQuery& introduce_query,
+    IGetExhaustedQueries& get_exhausted_queries)
     : get_node_lvc_(get_node_lvc)
     , get_node_bindings_(get_node_bindings)
     , get_node_watch_(get_node_watch)
@@ -151,8 +151,8 @@ PUD_CHILD_ACTIVATOR::pud_child_activator(
     , fork_query_(fork_query)
     , open_query_(open_query)
     , remove_query_(remove_query)
-    , hold_query_(hold_query)
-    , is_query_exhausted_(is_query_exhausted) {}
+    , introduce_query_(introduce_query)
+    , get_exhausted_queries_(get_exhausted_queries) {}
 
 PUD_CHILD_ACTIVATOR_TEMPLATE
 bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_node_id child) {
@@ -181,6 +181,7 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
             continue;
         }
         queries = queries.set(goal, owner_box_t{remove_query_, forked.value()});
+        introduce_query_.introduce(forked.value(), child, goal);
     }
     for (pud_body_goal_id id = parent_goals.next_id; id < goals.next_id; ++id) {
         const std::optional<pud_mhq_head_id> opened =
@@ -190,12 +191,16 @@ bool PUD_CHILD_ACTIVATOR::activate_child(pud_global_node_id parent, pud_global_n
             continue;
         }
         queries = queries.set(id, owner_box_t{remove_query_, opened.value()});
+        introduce_query_.introduce(opened.value(), child, id);
     }
     // Every inherited goal kept its parent's query or forked it, so an unrefuted child holds one per goal.
     DEBUG_ASSERT(refuted || queries.size() == goals.goals.size());
-    for (const auto& [goal, owner] : queries) {
-        hold_query_.hold(owner->head_id(), child, goal);
-        refuted = refuted || is_query_exhausted_.is_exhausted(owner->head_id());
+    // A parent activated under a query that has since lost every candidate passes it on unless this child closed
+    // or forked its goal. An exhausted query goes once the leaves holding it are refuted, so few are outstanding.
+    for (const auto& [head_id, introduction] : get_exhausted_queries_.exhausted()) {
+        const owner_box_t* held = queries.find(introduction.goal);
+        const bool inherited = held != nullptr && (*held)->head_id() == head_id;
+        refuted = refuted || inherited;
     }
     store_node_lvc_.store(child, lvc);
     store_node_bindings_.store(child, std::move(bindings));

@@ -38,7 +38,7 @@ PUD looked cleaner at first: `pud_runtime` exposes `register_module`, `unfold`, 
 - **Reload:** deserialize modules, register into a **new session**, rebuild the live frontier and queries via activation (`register_module` / `module_activator`). Live state is not read from the file.
 - **Implication:** Any solver can run on the same module bytes at different times; each run recomputes ephemeral metrics from the current structural and live state.
 
-Structural progress (what is unfolded) lives in the module. **Active frontier, MHQ, and query holders** are session live plane; see [pud-architecture.md](pud-architecture.md).
+Structural progress (what is unfolded) lives in the module. **Active frontier, MHQ, and query introducers** are session live plane; see [pud-architecture.md](pud-architecture.md).
 
 ### 2. Do not grow `pud_runtime` for solvers
 
@@ -50,7 +50,7 @@ Adding accessors to a shared runtime for each new heuristic (witness counts, que
 
 - Each **automated PUD solver** (and each distinct **manual driver**, if any) gets its own **`pud_<name>_manifest`** as the **entry point**, same pattern as `horizon_manifest` vs `ridge_manifest`.
 - Manifests may **repeat wiring** of the shared kernel (unfolder, resolver, MHQ stack, `pud_module_registry`, etc.). **Duplication at the entry point is acceptable**; minimizing DRY across manifests is not a goal.
-- Heuristic code may read **manifest internals directly** (query holders, MHQ, node tables, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
+- Heuristic code may read **manifest internals directly** (query introducers, MHQ, node tables, modules registry). That is in-process coupling localized to that manifest, not serialized into modules or a global runtime API.
 
 ### 4. Manual stack vs solver stacks (planned naming)
 
