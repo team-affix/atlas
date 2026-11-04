@@ -1,6 +1,6 @@
 # PUD architecture
 
-Progressive unfolding database (PUD): each registered **module** is an append-only resolution tree (axioms, then stored inferences). A **frontier** of **active leaves** sits on top: bindings, structure watches, and open **multi-headed queries** (MHQ). The caller expands by `unfold(leaf, body_goal)`; the runtime picks candidates, materializes child nodes, moves activity to children, and retires the parent.
+Progressive unfolding database (PUD): each registered **module** is an append-only resolution tree (axioms, then stored inferences). A **frontier** of **active leaves** sits on top: bindings, structure watches, and open **multi-headed queries** (MHQ). The caller expands by `unfold(leaf, body_goal)`; the runtime picks candidates, materializes child nodes, moves activity to children, and retires the parent. `pud_child_shuffler` stores an unfold's children in a pseudo-random order seeded by the parent's id, so every depth-first walk over children (witness searches included) is independent of rule order.
 
 Deeper query semantics: [pud-query-model.txt](pud-query-model.txt). Design history: [pud-smell-resolution.md](pud-smell-resolution.md). Solver and driver composition: [pud-solver-architecture.md](pud-solver-architecture.md).
 

@@ -172,8 +172,12 @@ TEST_F(PudFrontierChangesIntegrationTest, AChildRefutedOnArrivalIsReportedRefute
     for (pud_node_id child : mod.get_children(rule_node.node))
         children.push_back(pud_global_node_id{.module = rule_node.module, .node = child});
     ASSERT_EQ(children.size(), 2u);
-    const pud_global_node_id red = children.at(0);
-    const pud_global_node_id blue = children.at(1);
+    // Children are stored in a shuffled order, so each is told apart by the color its inference bound.
+    const bool red_first = mod.get_inference(children.at(0).node).substitutions.at(0).value == atom("red");
+    const pud_global_node_id red = red_first ? children.at(0) : children.at(1);
+    const pud_global_node_id blue = red_first ? children.at(1) : children.at(0);
+    ASSERT_EQ(mod.get_inference(red.node).substitutions.at(0).value, atom("red"));
+    ASSERT_EQ(mod.get_inference(blue.node).substitutions.at(0).value, atom("blue"));
     EXPECT_THAT(change.offspring, ElementsAre(red));
     EXPECT_THAT(change.refuted, ElementsAre(blue));
     EXPECT_TRUE(mod.is_refuted(blue.node));

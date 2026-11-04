@@ -477,7 +477,11 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, ADeeplyUnfoldedDatabaseReloads) {
         for (pud_global_node_id refuted : change.refuted)
             live.erase(refuted);
         ASSERT_FALSE(change.offspring.empty()) << "level " << level;
+        // Children are stored in a shuffled order, so the next level goes down a child that still has goals.
         deepest = change.offspring.back();
+        for (const pud_global_node_id child : change.offspring)
+            if (!runtime.get_rule_information(child).body.empty())
+                deepest = child;
         std::vector<pud_body_goal_id> goal_ids;
         for (const auto& [goal_id, goal_expr] : runtime.get_rule_information(deepest).body)
             goal_ids.push_back(goal_id);

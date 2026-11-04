@@ -10091,7 +10091,7 @@ TYPED_TEST(PudAnswerSetsRuntimeSuiteIntegrationTest, EnumeratesFibIndexPairsWith
     // Per-seed exhaustion is impossible (same infinite fib/nat tree as the deterministic test). Each seed
     // checks soundness; the union across seeds must still cover every expected pair.
     std::set<const expr*> found_across_seeds;
-    static constexpr size_t kMaxStepsPerSeed = 3000;
+    static constexpr size_t kMaxStepsPerSeed = 4500;
     for (uint32_t seed = 0; seed < 20; ++seed) {
         std::mt19937 rng(seed);
         std::deque<pud_module> modules;
