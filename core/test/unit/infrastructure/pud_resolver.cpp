@@ -15,8 +15,13 @@ using ::testing::ReturnRef;
 
 namespace {
 
+struct MockRemoveQuery {
+    MOCK_METHOD(void, remove, (pud_mhq_head_id));
+};
+using test_node_queries_t = pud_node_queries<NiceMock<MockRemoveQuery>>;
+using test_owner_box_t = immer::box<pud_mhq_head_owner<NiceMock<MockRemoveQuery>>>;
 struct MockGetNodeQueries {
-    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id));
+    MOCK_METHOD(const test_node_queries_t&, get, (pud_global_node_id));
 };
 struct MockGetNodeBindings {
     MOCK_METHOD(const pud_ubs_state&, get, (pud_global_node_id));
@@ -50,6 +55,7 @@ using test_resolver_t = pud_resolver<
     NiceMock<MockGetCandidatePath>, NiceMock<MockBuildInference>>;
 
 struct PudResolverTest : public ::testing::Test {
+    NiceMock<MockRemoveQuery> remover;
     NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockGetNodeBindings> node_bindings;
     NiceMock<MockGetNodeLvc> node_lvcs;
@@ -60,7 +66,7 @@ struct PudResolverTest : public ::testing::Test {
     test_resolver_t resolver{node_queries, node_bindings, node_lvcs, goals, candidates, paths, inference_builder};
     expr goal{expr::functor{1, {}}};
     pud_goal_list leaf_goals{.goals = immer::map<pud_body_goal_id, const expr*>{}.set(2, &goal), .next_id = 3};
-    pud_node_queries leaf_queries{pud_node_queries{}.set(2, 40)};
+    test_node_queries_t leaf_queries{test_node_queries_t{}.set(2, test_owner_box_t{remover, 40})};
     pud_ubs_state leaf_bindings;
     std::vector<pud_global_node_id> first_path{pud_test_node(0), pud_test_node(3)};
     std::vector<pud_global_node_id> second_path{pud_test_node(1)};

@@ -17,6 +17,7 @@
 #include "value_objects/pud_lodestar_choice.hpp"
 #include "value_objects/pud_lodestar_side.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
+#include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_mhws_head_id.hpp"
 #include "debug_assert.hpp"
 
@@ -291,7 +292,8 @@ PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 void PUD_LODESTAR_SLOT_INDEX::open(pud_global_node_id leaf) {
     open_leaf& opened = open_leaves_[leaf];
     const bool caller_slots = allow_unfold_.allow(leaf);
-    for (const auto& [goal, head] : get_node_queries_.get(leaf)) {
+    for (const auto& [goal, owner] : get_node_queries_.get(leaf)) {
+        const pud_mhq_head_id head = owner->head_id();
         DEBUG_ASSERT(!is_query_exhausted_.is_exhausted(head));
         if (caller_slots) {
             const pud_lodestar_choice caller{
@@ -447,8 +449,8 @@ std::optional<pud_body_goal_id> PUD_LODESTAR_SLOT_INDEX::find_ready_goal(pud_glo
     if (cached != ready_goals_.end())
         return cached->second;
     std::optional<pud_body_goal_id> smallest_ready_goal;
-    for (const auto& [goal, head] : get_node_queries_.get(leaf)) {
-        if (is_query_exhausted_.is_exhausted(head))
+    for (const auto& [goal, owner] : get_node_queries_.get(leaf)) {
+        if (is_query_exhausted_.is_exhausted(owner->head_id()))
             continue;
         if (smallest_ready_goal.has_value() && goal >= smallest_ready_goal.value())
             continue;

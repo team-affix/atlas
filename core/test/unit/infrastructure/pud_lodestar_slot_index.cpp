@@ -44,8 +44,13 @@ struct MockIsNodeRefuted {
 struct MockContainsFocusNode {
     MOCK_METHOD(bool, contains, (pud_global_node_id), (const));
 };
+struct MockRemoveQuery {
+    MOCK_METHOD(void, remove, (pud_mhq_head_id));
+};
+using test_node_queries_t = pud_node_queries<NiceMock<MockRemoveQuery>>;
+using test_owner_box_t = immer::box<pud_mhq_head_owner<NiceMock<MockRemoveQuery>>>;
 struct MockGetNodeQueries {
-    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id), (const));
+    MOCK_METHOD(const test_node_queries_t&, get, (pud_global_node_id), (const));
 };
 struct MockIsQueryExhausted {
     MOCK_METHOD(bool, is_exhausted, (pud_mhq_head_id), (const));
@@ -104,6 +109,7 @@ pud_frontier_change offspring(std::vector<pud_global_node_id> nodes) {
 // Every leaf is live once registered, unrefuted and may be unfolded.
 struct PudLodestarSlotIndexTest : public ::testing::Test {
     PudLodestarSlotIndexTest();
+    NiceMock<MockRemoveQuery> remover;
     NiceMock<MockApplyRegister> registrar;
     NiceMock<MockApplyUnfold> unfolder;
     NiceMock<MockEraseRefuted> refuted_eraser;
@@ -123,8 +129,8 @@ struct PudLodestarSlotIndexTest : public ::testing::Test {
     test_slot_index_t index;
     std::set<pud_global_node_id> live_focus;
     std::set<pud_global_node_id> live;
-    pud_node_queries query_on_goal_zero;
-    pud_node_queries ready_on_goal_five;
+    test_node_queries_t query_on_goal_zero;
+    test_node_queries_t ready_on_goal_five;
     pud_candidate_witnesses witnessed;
     pud_candidate_witnesses self_witnessed;
     pud_lodestar_choice caller;
@@ -172,7 +178,8 @@ struct PudLodestarSlotIndexTest : public ::testing::Test {
 };
 
 PudLodestarSlotIndexTest::PudLodestarSlotIndexTest()
-    : registrar()
+    : remover()
+    , registrar()
     , unfolder()
     , refuted_eraser()
     , eraser()
@@ -194,8 +201,8 @@ PudLodestarSlotIndexTest::PudLodestarSlotIndexTest()
           node_queries, exhausted, candidates, witness_index, witnesses, allower)
     , live_focus()
     , live()
-    , query_on_goal_zero(pud_node_queries{}.set(0, 40))
-    , ready_on_goal_five(pud_node_queries{}.set(5, 60))
+    , query_on_goal_zero(test_node_queries_t{}.set(0, test_owner_box_t{remover, 40}))
+    , ready_on_goal_five(test_node_queries_t{}.set(5, test_owner_box_t{remover, 60}))
     , witnessed{.self_witness = false, .self_leaf = {}, .witnesses = {50, 51}}
     , self_witnessed{.self_witness = true, .self_leaf = pud_test_node(12), .witnesses = {}}
     , caller(caller_on(3, 0))
@@ -283,7 +290,10 @@ TEST_F(PudLodestarSlotIndexTest, AWitnessLeafWithoutAGoalThatHasCandidatesIsLeft
 }
 
 TEST_F(PudLodestarSlotIndexTest, AWitnessLeafIsUnfoldedOnItsSmallestGoalThatHasCandidates) {
-    const pud_node_queries three_goals{pud_node_queries{}.set(7, 62).set(4, 61).set(6, 63)};
+    const test_node_queries_t three_goals{test_node_queries_t{}
+        .set(7, test_owner_box_t{remover, 62})
+        .set(4, test_owner_box_t{remover, 61})
+        .set(6, test_owner_box_t{remover, 63})};
     ON_CALL(node_queries, get(pud_test_node(10))).WillByDefault(ReturnRef(three_goals));
     ON_CALL(exhausted, is_exhausted(61)).WillByDefault(Return(true));
     go_live({pud_test_node(10)});

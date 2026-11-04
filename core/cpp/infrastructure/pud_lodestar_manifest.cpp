@@ -43,17 +43,17 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
           modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_lvcs_, node_bindings_, node_watches_, node_queries_, structure_watcher_,
-          mhq_, query_holders_)
+          mhq_, mhq_, query_holders_)
     , child_activator_(
           node_lvcs_, node_bindings_, node_watches_, node_queries_, node_lvcs_, node_bindings_, node_watches_, node_queries_,
           modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
-          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, mhq_, query_holders_,
           mhq_)
     , root_depth_recorder_(node_depths_, root_activator_)
     , child_depth_recorder_(node_depths_, node_depths_, child_activator_)
     , child_focus_recorder_(focus_set_, focus_set_, child_depth_recorder_)
     , node_deactivator_(
-          node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_, mhq_,
+          node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_,
           query_holders_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(

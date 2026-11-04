@@ -14,7 +14,6 @@ template<
     typename IEraseNodeBindings,
     typename IEraseNodeLvc,
     typename IReleaseQuery,
-    typename IRemoveQuery,
     typename IInvalidateQueryLeaf,
     typename IGetQueryHolders>
 struct pud_node_deactivator {
@@ -25,7 +24,6 @@ struct pud_node_deactivator {
         IEraseNodeBindings& erase_node_bindings,
         IEraseNodeLvc& erase_node_lvc,
         IReleaseQuery& release_query,
-        IRemoveQuery& remove_query,
         IInvalidateQueryLeaf& invalidate_query_leaf,
         IGetQueryHolders& get_query_holders);
     std::vector<pud_global_node_id> deactivate(pud_global_node_id node);
@@ -36,7 +34,6 @@ private:
     IEraseNodeBindings& erase_node_bindings_;
     IEraseNodeLvc& erase_node_lvc_;
     IReleaseQuery& release_query_;
-    IRemoveQuery& remove_query_;
     IInvalidateQueryLeaf& invalidate_query_leaf_;
     IGetQueryHolders& get_query_holders_;
 };
@@ -44,10 +41,10 @@ private:
 #define PUD_NODE_DEACTIVATOR_TEMPLATE                                                      \
     template<typename IGetNodeQueries, typename IEraseNodeQueries, typename IEraseNodeWatch,         \
              typename IEraseNodeBindings, typename IEraseNodeLvc, typename IReleaseQuery,           \
-             typename IRemoveQuery, typename IInvalidateQueryLeaf, typename IGetQueryHolders>
+             typename IInvalidateQueryLeaf, typename IGetQueryHolders>
 #define PUD_NODE_DEACTIVATOR                                                               \
     pud_node_deactivator<IGetNodeQueries, IEraseNodeQueries, IEraseNodeWatch, IEraseNodeBindings,    \
-        IEraseNodeLvc, IReleaseQuery, IRemoveQuery,                                                  \
+        IEraseNodeLvc, IReleaseQuery,                                                  \
         IInvalidateQueryLeaf, IGetQueryHolders>
 
 PUD_NODE_DEACTIVATOR_TEMPLATE
@@ -58,7 +55,6 @@ PUD_NODE_DEACTIVATOR::pud_node_deactivator(
     IEraseNodeBindings& erase_node_bindings,
     IEraseNodeLvc& erase_node_lvc,
     IReleaseQuery& release_query,
-    IRemoveQuery& remove_query,
     IInvalidateQueryLeaf& invalidate_query_leaf,
     IGetQueryHolders& get_query_holders)
     : get_node_queries_(get_node_queries)
@@ -67,17 +63,14 @@ PUD_NODE_DEACTIVATOR::pud_node_deactivator(
     , erase_node_bindings_(erase_node_bindings)
     , erase_node_lvc_(erase_node_lvc)
     , release_query_(release_query)
-    , remove_query_(remove_query)
     , invalidate_query_leaf_(invalidate_query_leaf)
     , get_query_holders_(get_query_holders) {}
 
 PUD_NODE_DEACTIVATOR_TEMPLATE
 std::vector<pud_global_node_id> PUD_NODE_DEACTIVATOR::deactivate(pud_global_node_id node) {
-    for (const auto& [goal, head_id] : get_node_queries_.get(node)) {
-        if (!release_query_.release(head_id, node))
-            continue;
-        remove_query_.remove(head_id);
-    }
+    for (const auto& [goal, owner] : get_node_queries_.get(node))
+        release_query_.release(owner->head_id(), node);
+    // Erasing the node's queries drops its share of each head owner; a head no other live node shares is removed.
     erase_node_queries_.erase(node);
     erase_node_watch_.erase(node);
     erase_node_bindings_.erase(node);

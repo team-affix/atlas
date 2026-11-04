@@ -1,3 +1,4 @@
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <gtest/gtest.h>
@@ -8,10 +9,12 @@
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_goal_list.hpp"
 #include "pud_test_node.hpp"
+#include "pud_test_node_queries.hpp"
 
 using ::testing::_;
 using ::testing::InSequence;
 using ::testing::NiceMock;
+using ::testing::ResultOf;
 using ::testing::Return;
 using ::testing::ReturnRef;
 
@@ -26,8 +29,14 @@ struct MockGetNodeBindings {
 struct MockGetNodeWatch {
     MOCK_METHOD(const pud_structure_watch&, get, (pud_global_node_id));
 };
+struct MockRemoveQuery {
+    MOCK_METHOD(void, remove, (pud_mhq_head_id));
+};
+using test_node_queries_t = pud_node_queries<NiceMock<MockRemoveQuery>>;
+using test_owner_box_t = immer::box<pud_mhq_head_owner<NiceMock<MockRemoveQuery>>>;
+using heads_t = std::map<pud_body_goal_id, pud_mhq_head_id>;
 struct MockGetNodeQueries {
-    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id));
+    MOCK_METHOD(const test_node_queries_t&, get, (pud_global_node_id));
 };
 struct MockStoreNodeLvc {
     MOCK_METHOD(void, store, (pud_global_node_id, uint32_t));
@@ -39,7 +48,7 @@ struct MockStoreNodeWatch {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_structure_watch));
 };
 struct MockStoreNodeQueries {
-    MOCK_METHOD(void, store, (pud_global_node_id, pud_node_queries));
+    MOCK_METHOD(void, store, (pud_global_node_id, test_node_queries_t));
 };
 struct MockGetInference {
     MOCK_METHOD(const pud_inference&, get_inference, (pud_global_node_id));
@@ -93,11 +102,12 @@ using test_child_activator_t = pud_child_activator<
     NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeAxiom>, NiceMock<MockBuildChildGoalList>,
     NiceMock<MockStoreNodeGoals>, NiceMock<MockStoreNodeAxiom>, NiceMock<MockIncrementLiveChildCount>,
     NiceMock<MockBind>, NiceMock<MockWatchDescend>, NiceMock<MockForkQuery>, NiceMock<MockOpenQuery>,
-    NiceMock<MockHoldQuery>, NiceMock<MockIsQueryExhausted>>;
+    NiceMock<MockRemoveQuery>, NiceMock<MockHoldQuery>, NiceMock<MockIsQueryExhausted>>;
 
 // The parent, node 3 at lvc 5, has goals a and b, holds queries 40 and 41 for them, and the child,
 // node 4, was resolved on goal 0. The child keeps goal 1, adds goal 2 of its own, and two variables.
 struct PudChildActivatorTest : public ::testing::Test {
+    NiceMock<MockRemoveQuery> remover;
     NiceMock<MockGetNodeLvc> get_lvcs;
     NiceMock<MockGetNodeBindings> get_bindings;
     NiceMock<MockGetNodeWatch> get_watches;
@@ -122,7 +132,7 @@ struct PudChildActivatorTest : public ::testing::Test {
     test_child_activator_t activator{
         get_lvcs, get_bindings, get_watches, get_queries, store_lvcs, store_bindings, store_watches, store_queries,
         inferences, get_goals, get_node_axiom, child_goal_lists, store_goals,
-        store_node_axiom, live_child_counts, binder, watcher, forker, opener, holders, exhausted};
+        store_node_axiom, live_child_counts, binder, watcher, forker, opener, remover, holders, exhausted};
     expr goal_a{expr::functor{1, {}}};
     expr goal_b{expr::functor{2, {}}};
     expr goal_c{expr::functor{3, {}}};
@@ -134,7 +144,8 @@ struct PudChildActivatorTest : public ::testing::Test {
     pud_structure_watch child_watch;
     pud_ubs_state child_bindings;
     pud_ubs_state parent_bindings;
-    pud_node_queries parent_queries{pud_node_queries{}.set(0, 40).set(1, 41)};
+    test_node_queries_t parent_queries{
+        test_node_queries_t{}.set(0, test_owner_box_t{remover, 40}).set(1, test_owner_box_t{remover, 41})};
     pud_inference child_inference{.parent = 3, .call_site = 0, .substitutions = {}, .body_goals = {&goal_c}, .var_count = 2};
 
     void SetUp() override {
@@ -199,7 +210,8 @@ TEST_F(PudChildActivatorTest, AChildKeepsItsParentsQueryForAnUnchangedGoalAndOpe
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
     EXPECT_CALL(store_bindings, store(pud_test_node(4), child_bindings));
     EXPECT_CALL(store_watches, store(pud_test_node(4), child_watch));
-    EXPECT_CALL(store_queries, store(pud_test_node(4), pud_node_queries{}.set(1, 41).set(2, 70)));
+    EXPECT_CALL(store_queries, store(
+        pud_test_node(4), ResultOf(&heads_of<NiceMock<MockRemoveQuery>>, heads_t{{1, 41}, {2, 70}})));
     EXPECT_FALSE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }
 
@@ -224,7 +236,8 @@ TEST_F(PudChildActivatorTest, AGoalThatChangedStructureForksTheParentsQueryInThe
     EXPECT_CALL(forker, try_fork(41, child_bindings, &goal_b, 7u)).WillOnce(Return(60));
     EXPECT_CALL(holders, hold(60u, pud_test_node(4), 1u));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
-    EXPECT_CALL(store_queries, store(pud_test_node(4), pud_node_queries{}.set(1, 60).set(2, 70)));
+    EXPECT_CALL(store_queries, store(
+        pud_test_node(4), ResultOf(&heads_of<NiceMock<MockRemoveQuery>>, heads_t{{1, 60}, {2, 70}})));
     EXPECT_FALSE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }
 
@@ -233,7 +246,8 @@ TEST_F(PudChildActivatorTest, AForkWithoutCandidatesDropsTheQueryAndRefutesTheCh
         .WillByDefault(Return(pud_structure_watch_change{.watch = child_watch, .changed_goals = {1}}));
     ON_CALL(forker, try_fork(_, _, _, _)).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(holders, hold(70u, pud_test_node(4), 2u));
-    EXPECT_CALL(store_queries, store(pud_test_node(4), pud_node_queries{}.set(2, 70)));
+    EXPECT_CALL(store_queries, store(
+        pud_test_node(4), ResultOf(&heads_of<NiceMock<MockRemoveQuery>>, heads_t{{2, 70}})));
     EXPECT_TRUE(activator.activate_child(pud_test_node(3), pud_test_node(4)));
 }
 
@@ -253,7 +267,7 @@ TEST_F(PudChildActivatorTest, AnInheritedQueryAlreadyExhaustedRefutesTheChildBut
 // A live parent holds a query for each of its goals (a failed open or fork refutes the node), so a
 // goal it holds no query for can only be one the child added.
 TEST_F(PudChildActivatorTest, AnInheritedGoalItsParentHoldsNoQueryForBreaksTheActivationInvariant) {
-    parent_queries = pud_node_queries{}.set(0, 40);
+    parent_queries = test_node_queries_t{}.set(0, test_owner_box_t{remover, 40});
     EXPECT_THROW(activator.activate_child(pud_test_node(3), pud_test_node(4)), std::logic_error);
 }
 

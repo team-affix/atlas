@@ -8,6 +8,7 @@
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
+#include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_ubs_state.hpp"
 
 template<
@@ -69,7 +70,8 @@ std::vector<pud_inference> PUD_RESOLVER::resolve(pud_global_node_id leaf, pud_bo
     const uint32_t lvc = get_node_lvc_.get(leaf);
     const expr* goal_expr = get_node_goals_.get(leaf).goals.at(goal);
     std::vector<pud_inference> inferences;
-    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(get_node_queries_.get(leaf).at(goal))) {
+    const pud_mhq_head_id head = get_node_queries_.get(leaf).at(goal)->head_id();
+    for (pud_mhcs_head_id candidate : get_query_candidates_.candidates(head)) {
         inferences.push_back(
             build_inference_.build(leaf, goal, bindings, lvc, goal_expr, get_candidate_path_.path(candidate)));
     }

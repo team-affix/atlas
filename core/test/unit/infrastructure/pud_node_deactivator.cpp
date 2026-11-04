@@ -15,17 +15,19 @@ using ::testing::ReturnRef;
 
 namespace {
 
+struct MockRemoveQuery {
+    MOCK_METHOD(void, remove, (pud_mhq_head_id));
+};
+using test_node_queries_t = pud_node_queries<NiceMock<MockRemoveQuery>>;
+using test_owner_box_t = immer::box<pud_mhq_head_owner<NiceMock<MockRemoveQuery>>>;
 struct MockGetNodeQueries {
-    MOCK_METHOD(const pud_node_queries&, get, (pud_global_node_id));
+    MOCK_METHOD(const test_node_queries_t&, get, (pud_global_node_id));
 };
 struct MockEraseNodeField {
     MOCK_METHOD(void, erase, (pud_global_node_id));
 };
 struct MockReleaseQuery {
     MOCK_METHOD(bool, release, (pud_mhq_head_id, pud_global_node_id));
-};
-struct MockRemoveQuery {
-    MOCK_METHOD(void, remove, (pud_mhq_head_id));
 };
 struct MockInvalidateQueryLeaf {
     MOCK_METHOD(std::vector<pud_mhq_head_id>, invalidate_leaf, (pud_global_node_id));
@@ -37,21 +39,22 @@ struct MockGetQueryHolders {
 using test_node_deactivator_t = pud_node_deactivator<
     NiceMock<MockGetNodeQueries>, NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>,
     NiceMock<MockEraseNodeField>, NiceMock<MockEraseNodeField>, NiceMock<MockReleaseQuery>,
-    NiceMock<MockRemoveQuery>, NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>>;
+    NiceMock<MockInvalidateQueryLeaf>, NiceMock<MockGetQueryHolders>>;
 
 struct PudNodeDeactivatorTest : public ::testing::Test {
+    NiceMock<MockRemoveQuery> remover;
     NiceMock<MockGetNodeQueries> node_queries;
     NiceMock<MockEraseNodeField> erase_queries;
     NiceMock<MockEraseNodeField> erase_watches;
     NiceMock<MockEraseNodeField> erase_bindings;
     NiceMock<MockEraseNodeField> erase_lvcs;
     NiceMock<MockReleaseQuery> holders;
-    NiceMock<MockRemoveQuery> queries;
     NiceMock<MockInvalidateQueryLeaf> invalidate;
     NiceMock<MockGetQueryHolders> get_holders;
     test_node_deactivator_t deactivator{
-        node_queries, erase_queries, erase_watches, erase_bindings, erase_lvcs, holders, queries, invalidate, get_holders};
-    pud_node_queries held{pud_node_queries{}.set(0, 30).set(1, 31)};
+        node_queries, erase_queries, erase_watches, erase_bindings, erase_lvcs, holders, invalidate, get_holders};
+    test_node_queries_t held{
+        test_node_queries_t{}.set(0, test_owner_box_t{remover, 30}).set(1, test_owner_box_t{remover, 31})};
 
     void SetUp() override {
         ON_CALL(node_queries, get(pud_test_node(5))).WillByDefault(ReturnRef(held));
@@ -64,14 +67,6 @@ struct PudNodeDeactivatorTest : public ::testing::Test {
 TEST_F(PudNodeDeactivatorTest, TheNodeLetsGoOfEveryQueryItHolds) {
     EXPECT_CALL(holders, release(30u, pud_test_node(5)));
     EXPECT_CALL(holders, release(31u, pud_test_node(5)));
-    deactivator.deactivate(pud_test_node(5));
-}
-
-TEST_F(PudNodeDeactivatorTest, OnlyAQueryLeftWithoutHoldersIsRemoved) {
-    ON_CALL(holders, release(30u, pud_test_node(5))).WillByDefault(Return(true));
-    ON_CALL(holders, release(31u, pud_test_node(5))).WillByDefault(Return(false));
-    EXPECT_CALL(queries, remove(30u));
-    EXPECT_CALL(queries, remove(31u)).Times(0);
     deactivator.deactivate(pud_test_node(5));
 }
 
