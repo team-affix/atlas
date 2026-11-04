@@ -14,6 +14,7 @@
 #include "value_objects/pud_frontier_change.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_global_node_id_hash.hpp"
+#include "value_objects/pud_introduced_query.hpp"
 #include "value_objects/pud_lodestar_choice.hpp"
 #include "value_objects/pud_lodestar_side.hpp"
 #include "value_objects/pud_mhcs_head_id.hpp"
@@ -22,20 +23,22 @@
 #include "debug_assert.hpp"
 
 // Keeps Lodestar's two rings as sorted sets of choices, updated as the search changes instead of rebuilt.
-// Every frontier mutation is forwarded, then the nodes it touched are settled, together with the witness searches
-// that may have moved since: those of each invalidated leaf, and each search advanced or removed.
+// Every frontier mutation is forwarded, then the queries introduced and withdrawn since are applied, then the nodes
+// it touched are settled, together with the witness searches that may have moved since: those of each invalidated
+// leaf, and each search advanced or removed.
 //
-// Each goal of a live, unrefuted focus leaf opens entries: one per witness search its query's candidates were
-// recorded with (side a for the first, b after), or one for a candidate that is its own witness. An entry rests
-// on the leaf its search or candidate is at now and holds a choice while that leaf is live, unrefuted, may be
-// unfolded and has a goal with candidates; the choice unfolds that leaf on its smallest such goal and sits in the
-// ring of the leaf's side of the focus. Each such goal also holds a caller choice in the conjecture ring when its
-// own leaf may be unfolded.
+// Each live query introduced at a focus node opens entries once, however many leaves inherit it: one per witness
+// search its candidates were recorded with (side a for the first, b after), or one for a candidate that is its
+// own witness. The entries close when the query is withdrawn. An entry rests on the leaf its search or candidate is
+// at now and holds a choice while that leaf is live, unrefuted, may be unfolded and has a goal with candidates; the
+// choice unfolds that leaf on its smallest such goal and sits in the ring of the leaf's side of the focus. Each
+// live, unrefuted focus leaf that may be unfolded also holds one caller choice in the conjecture ring, which
+// unfolds it on its smallest such goal.
 //
 // Entries are grouped by the witness search they follow, and each search's leaf is kept once for its group. A
-// touched node opens or closes its entries as it joins or leaves the live focus, and replaces the choices of every
-// entry resting on it. An unsettled search is reread once, and its group moves only if it left its leaf, so a
-// search that stayed put costs one lookup however many entries follow it.
+// touched node opens or closes its caller choice as it joins or leaves the live focus, and replaces the choices of
+// every entry resting on it. An unsettled search is reread once, and its group moves only if it left its leaf, so
+// a search that stayed put costs one lookup however many entries follow it.
 template<
     typename IApplyRegister,
     typename IApplyUnfold,
@@ -52,7 +55,9 @@ template<
     typename IGetQueryCandidates,
     typename IFindCandidateWitnesses,
     typename IFindWitnessNode,
-    typename IAllowUnfold>
+    typename IAllowUnfold,
+    typename ITakeIntroducedQueries,
+    typename ITakeWithdrawnQueries>
 struct pud_lodestar_slot_index {
     pud_lodestar_slot_index(
         IApplyRegister& apply_register,
@@ -70,7 +75,9 @@ struct pud_lodestar_slot_index {
         IGetQueryCandidates& get_query_candidates,
         IFindCandidateWitnesses& find_candidate_witnesses,
         IFindWitnessNode& find_witness_node,
-        IAllowUnfold& allow_unfold);
+        IAllowUnfold& allow_unfold,
+        ITakeIntroducedQueries& take_introduced_queries,
+        ITakeWithdrawnQueries& take_withdrawn_queries);
     void apply_register(const pud_frontier_change& change);
     void apply_unfold(pud_global_node_id parent, const pud_frontier_change& change);
     void erase_refuted(const std::vector<pud_global_node_id>& refuted);
@@ -87,22 +94,20 @@ private:
         std::optional<pud_lodestar_choice> placed;
         bool placed_in_focus_ring;
     };
-    struct open_leaf {
-        std::vector<size_t> entries;
-        std::vector<pud_lodestar_choice> callers;
-    };
     struct witness_group {
         std::optional<pud_global_node_id> leaf;
         std::unordered_set<size_t> entries;
     };
 
     void settle(const std::vector<pud_global_node_id>& touched);
+    void open_query(const pud_introduced_query& introduced);
+    void close_query(pud_mhq_head_id head);
     void follow_leaf(pud_global_node_id leaf);
     void follow_search(pud_mhws_head_id witness);
     void sync(pud_global_node_id node);
     void open(pud_global_node_id leaf);
     void close(pud_global_node_id leaf);
-    void add_entry(const entry& added);
+    void add_entry(pud_mhq_head_id head, const entry& added);
     void remove_entry(size_t entry_id);
     void move_group(pud_mhws_head_id witness, witness_group& moved, std::optional<pud_global_node_id> leaf);
     void place(size_t entry_id);
@@ -126,9 +131,12 @@ private:
     IFindCandidateWitnesses& find_candidate_witnesses_;
     IFindWitnessNode& find_witness_node_;
     IAllowUnfold& allow_unfold_;
+    ITakeIntroducedQueries& take_introduced_queries_;
+    ITakeWithdrawnQueries& take_withdrawn_queries_;
     size_t next_entry_id_;
     std::unordered_map<size_t, entry> entries_;
-    std::unordered_map<pud_global_node_id, open_leaf, pud_global_node_id_hash> open_leaves_;
+    std::unordered_map<pud_mhq_head_id, std::vector<size_t>> query_entries_;
+    std::unordered_map<pud_global_node_id, std::optional<pud_lodestar_choice>, pud_global_node_id_hash> open_leaves_;
     std::unordered_map<pud_mhws_head_id, witness_group> witness_groups_;
     std::unordered_map<pud_global_node_id, std::unordered_set<pud_mhws_head_id>, pud_global_node_id_hash>
         resting_witnesses_;
@@ -143,12 +151,13 @@ private:
              typename ITakeUnsettledLeaves, typename ITakeUnsettledSearches, typename IGetLiveFocusLeaves,  \
              typename IGetLiveNodes, typename IIsNodeRefuted, typename IContainsFocusNode, typename IGetNodeQueries, \
              typename IIsQueryExhausted, typename IGetQueryCandidates, typename IFindCandidateWitnesses,   \
-             typename IFindWitnessNode, typename IAllowUnfold>
+             typename IFindWitnessNode, typename IAllowUnfold, typename ITakeIntroducedQueries,           \
+             typename ITakeWithdrawnQueries>
 #define PUD_LODESTAR_SLOT_INDEX                                                                          \
     pud_lodestar_slot_index<IApplyRegister, IApplyUnfold, IEraseRefuted, IEraseLeaf, ITakeUnsettledLeaves, \
         ITakeUnsettledSearches, IGetLiveFocusLeaves, IGetLiveNodes, IIsNodeRefuted, IContainsFocusNode,    \
         IGetNodeQueries, IIsQueryExhausted, IGetQueryCandidates, IFindCandidateWitnesses, IFindWitnessNode,   \
-        IAllowUnfold>
+        IAllowUnfold, ITakeIntroducedQueries, ITakeWithdrawnQueries>
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
@@ -167,7 +176,9 @@ PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
     IGetQueryCandidates& get_query_candidates,
     IFindCandidateWitnesses& find_candidate_witnesses,
     IFindWitnessNode& find_witness_node,
-    IAllowUnfold& allow_unfold)
+    IAllowUnfold& allow_unfold,
+    ITakeIntroducedQueries& take_introduced_queries,
+    ITakeWithdrawnQueries& take_withdrawn_queries)
     : apply_register_(apply_register)
     , apply_unfold_(apply_unfold)
     , erase_refuted_(erase_refuted)
@@ -184,8 +195,11 @@ PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
     , find_candidate_witnesses_(find_candidate_witnesses)
     , find_witness_node_(find_witness_node)
     , allow_unfold_(allow_unfold)
+    , take_introduced_queries_(take_introduced_queries)
+    , take_withdrawn_queries_(take_withdrawn_queries)
     , next_entry_id_(0)
     , entries_()
+    , query_entries_()
     , open_leaves_()
     , witness_groups_()
     , resting_witnesses_()
@@ -230,6 +244,16 @@ const std::multiset<pud_lodestar_choice>& PUD_LODESTAR_SLOT_INDEX::ring(bool foc
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 void PUD_LODESTAR_SLOT_INDEX::settle(const std::vector<pud_global_node_id>& touched) {
+    // A query withdrawn in the same step it was introduced is gone already, so it opens nothing.
+    std::vector<pud_mhq_head_id> withdrawn = take_withdrawn_queries_.take_withdrawn();
+    std::sort(withdrawn.begin(), withdrawn.end());
+    for (const pud_introduced_query& introduced : take_introduced_queries_.take_introduced()) {
+        if (std::binary_search(withdrawn.begin(), withdrawn.end(), introduced.head))
+            continue;
+        open_query(introduced);
+    }
+    for (const pud_mhq_head_id head : withdrawn)
+        close_query(head);
     std::vector<pud_global_node_id> unsettled = take_unsettled_leaves_.take_unsettled_leaves();
     std::sort(unsettled.begin(), unsettled.end());
     unsettled.erase(std::unique(unsettled.begin(), unsettled.end()), unsettled.end());
@@ -290,67 +314,78 @@ void PUD_LODESTAR_SLOT_INDEX::sync(pud_global_node_id node) {
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 void PUD_LODESTAR_SLOT_INDEX::open(pud_global_node_id leaf) {
-    open_leaf& opened = open_leaves_[leaf];
-    const bool caller_slots = allow_unfold_.allow(leaf);
-    for (const auto& [goal, owner] : get_node_queries_.get(leaf)) {
-        const pud_mhq_head_id head = owner->head_id();
-        DEBUG_ASSERT(!is_query_exhausted_.is_exhausted(head));
-        if (caller_slots) {
-            const pud_lodestar_choice caller{
-                .slot = pud_lodestar_slot_id{
-                    .query_node = leaf,
-                    .query_goal = goal,
-                    .candidate = std::numeric_limits<pud_mhcs_head_id>::max(),
-                    .side = pud_lodestar_side::caller,
-                },
-                .leaf = leaf,
-                .body_goal = goal,
-            };
-            conjecture_ring_.insert(caller);
-            opened.callers.push_back(caller);
-        }
-        for (const pud_mhcs_head_id candidate : get_query_candidates_.candidates(head)) {
-            const pud_candidate_witnesses* rests_on = find_candidate_witnesses_.find(candidate);
-            if (rests_on == nullptr)
-                continue;
-            entry added{
-                .query_node = leaf,
-                .query_goal = goal,
-                .candidate = candidate,
-                .side = pud_lodestar_side::self,
-                .witness = std::nullopt,
-                .self_leaf = rests_on->self_leaf,
-                .placed = std::nullopt,
-                .placed_in_focus_ring = false,
-            };
-            if (rests_on->self_witness) {
-                add_entry(added);
-                continue;
-            }
-            added.side = pud_lodestar_side::a;
-            for (const pud_mhws_head_id witness : rests_on->witnesses) {
-                added.witness = witness;
-                add_entry(added);
-                added.side = pud_lodestar_side::b;
-            }
-        }
-    }
+    std::optional<pud_lodestar_choice>& caller = open_leaves_[leaf];
+    if (!allow_unfold_.allow(leaf))
+        return;
+    const std::optional<pud_body_goal_id> ready_goal = find_ready_goal(leaf);
+    if (!ready_goal.has_value())
+        return;
+    caller = pud_lodestar_choice{
+        .slot = pud_lodestar_slot_id{
+            .query_node = leaf,
+            .query_goal = ready_goal.value(),
+            .candidate = std::numeric_limits<pud_mhcs_head_id>::max(),
+            .side = pud_lodestar_side::caller,
+        },
+        .leaf = leaf,
+        .body_goal = ready_goal.value(),
+    };
+    conjecture_ring_.insert(caller.value());
 }
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 void PUD_LODESTAR_SLOT_INDEX::close(pud_global_node_id leaf) {
     auto closed = open_leaves_.extract(leaf);
-    for (const pud_lodestar_choice& caller : closed.mapped().callers)
-        conjecture_ring_.erase(conjecture_ring_.find(caller));
-    for (const size_t entry_id : closed.mapped().entries)
+    if (!closed.mapped().has_value())
+        return;
+    conjecture_ring_.erase(conjecture_ring_.find(closed.mapped().value()));
+}
+
+PUD_LODESTAR_SLOT_INDEX_TEMPLATE
+void PUD_LODESTAR_SLOT_INDEX::open_query(const pud_introduced_query& introduced) {
+    if (!contains_focus_node_.contains(introduced.node))
+        return;
+    for (const pud_mhcs_head_id candidate : get_query_candidates_.candidates(introduced.head)) {
+        const pud_candidate_witnesses* rests_on = find_candidate_witnesses_.find(candidate);
+        if (rests_on == nullptr)
+            continue;
+        entry added{
+            .query_node = introduced.node,
+            .query_goal = introduced.goal,
+            .candidate = candidate,
+            .side = pud_lodestar_side::self,
+            .witness = std::nullopt,
+            .self_leaf = rests_on->self_leaf,
+            .placed = std::nullopt,
+            .placed_in_focus_ring = false,
+        };
+        if (rests_on->self_witness) {
+            add_entry(introduced.head, added);
+            continue;
+        }
+        added.side = pud_lodestar_side::a;
+        for (const pud_mhws_head_id witness : rests_on->witnesses) {
+            added.witness = witness;
+            add_entry(introduced.head, added);
+            added.side = pud_lodestar_side::b;
+        }
+    }
+}
+
+PUD_LODESTAR_SLOT_INDEX_TEMPLATE
+void PUD_LODESTAR_SLOT_INDEX::close_query(pud_mhq_head_id head) {
+    auto closed = query_entries_.extract(head);
+    if (closed.empty())
+        return;
+    for (const size_t entry_id : closed.mapped())
         remove_entry(entry_id);
 }
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
-void PUD_LODESTAR_SLOT_INDEX::add_entry(const entry& added) {
+void PUD_LODESTAR_SLOT_INDEX::add_entry(pud_mhq_head_id head, const entry& added) {
     const size_t entry_id = next_entry_id_++;
     entries_.emplace(entry_id, added);
-    open_leaves_.at(added.query_node).entries.push_back(entry_id);
+    query_entries_[head].push_back(entry_id);
     if (!added.witness.has_value()) {
         self_entries_[added.self_leaf].insert(entry_id);
         place(entry_id);
