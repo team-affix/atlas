@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 #include <sstream>
+#include <deque>
+#include <string>
 #include "infrastructure/expr_printer.hpp"
 #include "infrastructure/id_functor_printer.hpp"
 #include "infrastructure/id_var_printer.hpp"
@@ -170,4 +172,19 @@ struct ExprPrinterIdFunctorTest : public ::testing::Test {
 TEST_F(ExprPrinterIdFunctorTest, PrintAtomAsFThenId) {
     printer.print(&atom_a);
     EXPECT_EQ(os.str(), "f2");
+}
+
+TEST_F(ExprPrinterTest, ATermNestedFarDeeperThanTheCallStackCouldRecurseIsPrinted) {
+    fn.set_name(2, "a");
+    fn.set_name(5, "f");
+    std::deque<expr> owned{atom_a};
+    const size_t depth = 200000;
+    for (size_t level = 0; level < depth; ++level)
+        owned.push_back(expr{expr::functor{5, {&owned.back()}}});
+    std::string expected;
+    for (size_t level = 0; level < depth; ++level)
+        expected += "f(";
+    expected += "a";
+    expected += std::string(depth, ')');
+    EXPECT_EQ(print(&owned.back()), expected);
 }

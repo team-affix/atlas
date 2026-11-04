@@ -151,3 +151,17 @@ TEST_F(PudStreamCodecLayersIntegrationTest, InferenceRoundTrip) {
     expect_same_expr(loaded.body_goals[0], goal);
     EXPECT_EQ(loaded.var_count, 4u);
 }
+
+TEST_F(PudStreamCodecLayersIntegrationTest, AnExprNestedFarDeeperThanTheCallStackCouldRecurseRoundTrips) {
+    const expr* original = encode_pool.make_functor(functors.id("a"), {});
+    for (size_t level = 0; level < 200000; ++level)
+        original = encode_pool.make_functor(functors.id("f"), {original, encode_pool.make_var(1)});
+    std::ostringstream out;
+    insert_expr.insert_expr(out, original);
+    std::istringstream in(out.str());
+    const expr* loaded = extract_expr.extract_expr(in);
+    std::ostringstream reencoded;
+    insert_expr.insert_expr(reencoded, loaded);
+    EXPECT_EQ(reencoded.str(), out.str());
+    EXPECT_TRUE(in.peek() == std::char_traits<char>::eof());
+}
