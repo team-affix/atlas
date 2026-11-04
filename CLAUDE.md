@@ -57,7 +57,9 @@ cli/entry/main.cpp            CLI11 subcommand → options struct → handler(..
 - Solver policy types take capabilities like everything else. `docs/pud-solver-architecture.md`
   (decision 3) still allows a heuristic to read its own manifest's internals, but Lodestar no longer needs to:
   its driver is a small orchestrator over injected parts (slot index, round-robins,
-  unit propagator, unfold applier).
+  goal chooser, unfold applier). The rings pick only which leaf to unfold, and a unit goal never forces an unfold.
+  The goal chooser then picks the leaf's goal: a unit goal if the leaf holds one
+  (`pud_lodestar_unit_goal_chooser`), otherwise its smallest open goal (`pud_lodestar_smallest_goal_chooser`).
 
 ### Sim-based engine (`docs/solving-loop.md`, `docs/lifecycle.md`)
 

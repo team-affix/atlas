@@ -26,13 +26,13 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , root_goal_list_builder_()
     , live_child_counts_()
     , refutation_propagator_(modules_, live_child_counts_, modules_)
-    , unit_queries_()
+    , unit_goal_finder_(query_introducers_, mhq_, node_queries_)
     , replayer_(modules_, modules_, expr_pool, bind_map_factory_, cycle_detector_factory_, unifier_factory_)
     , mhws_(replayer_, modules_, modules_, modules_)
     , witness_search_recorder_(mhws_)
     , mhcs_(replayer_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, witness_search_recorder_, modules_, modules_, modules_)
     , candidate_witness_index_(mhcs_, witness_search_recorder_)
-    , mhq_(replayer_, modules_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, unit_queries_)
+    , mhq_(replayer_, modules_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, candidate_witness_index_, unit_goal_finder_)
     , node_lvcs_()
     , node_bindings_()
     , node_watches_()
@@ -75,19 +75,18 @@ pud_lodestar_manifest::pud_lodestar_manifest(
           focus_frontier_, focus_frontier_, focus_frontier_, focus_frontier_, frontier_, focus_set_, unfold_allower_)
     , slot_index_(
           focus_leaf_tally_, focus_leaf_tally_, focus_leaf_tally_, focus_leaf_tally_, witness_search_recorder_,
-          witness_search_recorder_, focus_frontier_, frontier_, modules_, focus_set_, node_queries_, mhq_, mhq_,
+          witness_search_recorder_, focus_frontier_, frontier_, modules_, focus_set_, node_goals_, mhq_,
           candidate_witness_index_, witness_search_recorder_, unfold_allower_, introduction_recorder_,
           introduction_recorder_)
     , non_conjecture_round_robin_(slot_index_, false)
     , conjecture_round_robin_(slot_index_, true)
     , unfold_applier_(unfolder_, slot_index_, focus_set_)
     , unfold_depth_recorder_(node_depths_, unfold_applier_)
-    , unit_propagator_(
-          unit_queries_, query_leaf_finder_, mhq_, frontier_, modules_, unfold_allower_,
-          unfold_depth_recorder_)
+    , smallest_goal_chooser_(node_goals_)
+    , goal_chooser_(unit_goal_finder_, smallest_goal_chooser_)
     , driver_(
-          unit_propagator_, non_conjecture_round_robin_, conjecture_round_robin_,
-          unfold_depth_recorder_, non_conjecture_unfolds_per_conjecture_unfold)
+          non_conjecture_round_robin_, conjecture_round_robin_, goal_chooser_, unfold_depth_recorder_,
+          non_conjecture_unfolds_per_conjecture_unfold)
     , solved_leaf_finder_(focus_frontier_, modules_)
     , stored_solution_dropper_(solved_leaf_finder_, modules_, slot_index_, report_stored_solutions)
     , solution_term_reader_(node_axioms_, modules_, node_bindings_)

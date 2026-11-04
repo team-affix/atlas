@@ -30,10 +30,10 @@
 // Each live query introduced at a focus node opens entries once, however many leaves inherit it: one per witness
 // search its candidates were recorded with (side a for the first, b after), or one for a candidate that is its
 // own witness. The entries close when the query is withdrawn. An entry rests on the leaf its search or candidate is
-// at now and holds a choice while that leaf is live, unrefuted, may be unfolded and has a goal with candidates; the
-// choice unfolds that leaf on its smallest such goal and sits in the ring of the leaf's side of the focus. Each
-// live, unrefuted focus leaf that may be unfolded also holds one caller choice in the conjecture ring, which
-// unfolds it on its smallest such goal.
+// at now and holds a choice while that leaf is live, unrefuted, may be unfolded and has an open goal; the choice
+// unfolds that leaf and sits in the ring of the leaf's side of the focus. Each live, unrefuted focus leaf that may
+// be unfolded and has an open goal also holds one caller choice in the conjecture ring, which unfolds it. Which
+// goal a dealt leaf is unfolded on is chosen when it is unfolded, not here.
 //
 // Entries are grouped by the witness search they follow, and each search's leaf is kept once for its group. A
 // touched node opens or closes its caller choice as it joins or leaves the live focus, and replaces the choices of
@@ -50,8 +50,7 @@ template<
     typename IGetLiveNodes,
     typename IIsNodeRefuted,
     typename IContainsFocusNode,
-    typename IGetNodeQueries,
-    typename IIsQueryExhausted,
+    typename IGetNodeGoals,
     typename IGetQueryCandidates,
     typename IFindCandidateWitnesses,
     typename IFindWitnessNode,
@@ -70,8 +69,7 @@ struct pud_lodestar_slot_index {
         IGetLiveNodes& get_live_nodes,
         IIsNodeRefuted& is_node_refuted,
         IContainsFocusNode& contains_focus_node,
-        IGetNodeQueries& get_node_queries,
-        IIsQueryExhausted& is_query_exhausted,
+        IGetNodeGoals& get_node_goals,
         IGetQueryCandidates& get_query_candidates,
         IFindCandidateWitnesses& find_candidate_witnesses,
         IFindWitnessNode& find_witness_node,
@@ -112,7 +110,7 @@ private:
     void move_group(pud_mhws_head_id witness, witness_group& moved, std::optional<pud_global_node_id> leaf);
     void place(size_t entry_id);
     void unplace(entry& placed);
-    std::optional<pud_body_goal_id> find_ready_goal(pud_global_node_id leaf);
+    bool has_open_goal(pud_global_node_id leaf) const;
     std::multiset<pud_lodestar_choice>& ring_for(bool focus_ring);
 
     IApplyRegister& apply_register_;
@@ -125,8 +123,7 @@ private:
     IGetLiveNodes& get_live_nodes_;
     IIsNodeRefuted& is_node_refuted_;
     IContainsFocusNode& contains_focus_node_;
-    IGetNodeQueries& get_node_queries_;
-    IIsQueryExhausted& is_query_exhausted_;
+    IGetNodeGoals& get_node_goals_;
     IGetQueryCandidates& get_query_candidates_;
     IFindCandidateWitnesses& find_candidate_witnesses_;
     IFindWitnessNode& find_witness_node_;
@@ -141,7 +138,6 @@ private:
     std::unordered_map<pud_global_node_id, std::unordered_set<pud_mhws_head_id>, pud_global_node_id_hash>
         resting_witnesses_;
     std::unordered_map<pud_global_node_id, std::unordered_set<size_t>, pud_global_node_id_hash> self_entries_;
-    std::unordered_map<pud_global_node_id, std::optional<pud_body_goal_id>, pud_global_node_id_hash> ready_goals_;
     std::multiset<pud_lodestar_choice> conjecture_ring_;
     std::multiset<pud_lodestar_choice> non_conjecture_ring_;
 };
@@ -149,14 +145,14 @@ private:
 #define PUD_LODESTAR_SLOT_INDEX_TEMPLATE                                                                 \
     template<typename IApplyRegister, typename IApplyUnfold, typename IEraseRefuted, typename IEraseLeaf,  \
              typename ITakeUnsettledLeaves, typename ITakeUnsettledSearches, typename IGetLiveFocusLeaves,  \
-             typename IGetLiveNodes, typename IIsNodeRefuted, typename IContainsFocusNode, typename IGetNodeQueries, \
-             typename IIsQueryExhausted, typename IGetQueryCandidates, typename IFindCandidateWitnesses,   \
+             typename IGetLiveNodes, typename IIsNodeRefuted, typename IContainsFocusNode, typename IGetNodeGoals,   \
+             typename IGetQueryCandidates, typename IFindCandidateWitnesses,   \
              typename IFindWitnessNode, typename IAllowUnfold, typename ITakeIntroducedQueries,           \
              typename ITakeWithdrawnQueries>
 #define PUD_LODESTAR_SLOT_INDEX                                                                          \
     pud_lodestar_slot_index<IApplyRegister, IApplyUnfold, IEraseRefuted, IEraseLeaf, ITakeUnsettledLeaves, \
         ITakeUnsettledSearches, IGetLiveFocusLeaves, IGetLiveNodes, IIsNodeRefuted, IContainsFocusNode,    \
-        IGetNodeQueries, IIsQueryExhausted, IGetQueryCandidates, IFindCandidateWitnesses, IFindWitnessNode,   \
+        IGetNodeGoals, IGetQueryCandidates, IFindCandidateWitnesses, IFindWitnessNode,   \
         IAllowUnfold, ITakeIntroducedQueries, ITakeWithdrawnQueries>
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
@@ -171,8 +167,7 @@ PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
     IGetLiveNodes& get_live_nodes,
     IIsNodeRefuted& is_node_refuted,
     IContainsFocusNode& contains_focus_node,
-    IGetNodeQueries& get_node_queries,
-    IIsQueryExhausted& is_query_exhausted,
+    IGetNodeGoals& get_node_goals,
     IGetQueryCandidates& get_query_candidates,
     IFindCandidateWitnesses& find_candidate_witnesses,
     IFindWitnessNode& find_witness_node,
@@ -189,8 +184,7 @@ PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
     , get_live_nodes_(get_live_nodes)
     , is_node_refuted_(is_node_refuted)
     , contains_focus_node_(contains_focus_node)
-    , get_node_queries_(get_node_queries)
-    , is_query_exhausted_(is_query_exhausted)
+    , get_node_goals_(get_node_goals)
     , get_query_candidates_(get_query_candidates)
     , find_candidate_witnesses_(find_candidate_witnesses)
     , find_witness_node_(find_witness_node)
@@ -204,7 +198,6 @@ PUD_LODESTAR_SLOT_INDEX::pud_lodestar_slot_index(
     , witness_groups_()
     , resting_witnesses_()
     , self_entries_()
-    , ready_goals_()
     , conjecture_ring_()
     , non_conjecture_ring_() {}
 
@@ -290,8 +283,6 @@ void PUD_LODESTAR_SLOT_INDEX::follow_search(pud_mhws_head_id witness) {
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
 void PUD_LODESTAR_SLOT_INDEX::sync(pud_global_node_id node) {
-    if (!get_live_nodes_.live().contains(node))
-        ready_goals_.erase(node);
     const bool open_focus_leaf = get_live_focus_leaves_.live().contains(node) && !is_node_refuted_.is_refuted(node);
     const bool opened = open_leaves_.contains(node);
     if (open_focus_leaf && !opened)
@@ -317,18 +308,16 @@ void PUD_LODESTAR_SLOT_INDEX::open(pud_global_node_id leaf) {
     std::optional<pud_lodestar_choice>& caller = open_leaves_[leaf];
     if (!allow_unfold_.allow(leaf))
         return;
-    const std::optional<pud_body_goal_id> ready_goal = find_ready_goal(leaf);
-    if (!ready_goal.has_value())
+    if (!has_open_goal(leaf))
         return;
     caller = pud_lodestar_choice{
         .slot = pud_lodestar_slot_id{
             .query_node = leaf,
-            .query_goal = ready_goal.value(),
+            .query_goal = std::numeric_limits<pud_body_goal_id>::max(),
             .candidate = std::numeric_limits<pud_mhcs_head_id>::max(),
             .side = pud_lodestar_side::caller,
         },
         .leaf = leaf,
-        .body_goal = ready_goal.value(),
     };
     conjecture_ring_.insert(caller.value());
 }
@@ -449,8 +438,7 @@ void PUD_LODESTAR_SLOT_INDEX::place(size_t entry_id) {
         return;
     if (is_node_refuted_.is_refuted(leaf))
         return;
-    const std::optional<pud_body_goal_id> ready_goal = find_ready_goal(leaf);
-    if (!ready_goal.has_value())
+    if (!has_open_goal(leaf))
         return;
     if (!allow_unfold_.allow(leaf))
         return;
@@ -462,7 +450,6 @@ void PUD_LODESTAR_SLOT_INDEX::place(size_t entry_id) {
             .side = placed.side,
         },
         .leaf = leaf,
-        .body_goal = ready_goal.value(),
     };
     placed.placed = choice;
     placed.placed_in_focus_ring = contains_focus_node_.contains(leaf);
@@ -479,20 +466,8 @@ void PUD_LODESTAR_SLOT_INDEX::unplace(entry& placed) {
 }
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE
-std::optional<pud_body_goal_id> PUD_LODESTAR_SLOT_INDEX::find_ready_goal(pud_global_node_id leaf) {
-    const auto cached = ready_goals_.find(leaf);
-    if (cached != ready_goals_.end())
-        return cached->second;
-    std::optional<pud_body_goal_id> smallest_ready_goal;
-    for (const auto& [goal, owner] : get_node_queries_.get(leaf)) {
-        if (is_query_exhausted_.is_exhausted(owner->head_id()))
-            continue;
-        if (smallest_ready_goal.has_value() && goal >= smallest_ready_goal.value())
-            continue;
-        smallest_ready_goal = goal;
-    }
-    ready_goals_.emplace(leaf, smallest_ready_goal);
-    return smallest_ready_goal;
+bool PUD_LODESTAR_SLOT_INDEX::has_open_goal(pud_global_node_id leaf) const {
+    return !get_node_goals_.get(leaf).goals.empty();
 }
 
 PUD_LODESTAR_SLOT_INDEX_TEMPLATE

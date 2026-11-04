@@ -42,7 +42,6 @@ std::optional<pud_lodestar_choice> PUD_LODESTAR_ROUND_ROBIN::next() {
                 .module = std::numeric_limits<pud_module_id>::max(),
                 .node = std::numeric_limits<pud_node_id>::max(),
             },
-            .body_goal = std::numeric_limits<pud_body_goal_id>::max(),
         };
         const auto past_cursor = ring.upper_bound(last_at_cursor);
         if (past_cursor != ring.end())
