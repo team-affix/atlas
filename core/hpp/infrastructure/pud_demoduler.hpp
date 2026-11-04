@@ -27,6 +27,14 @@ private:
     struct memo_hash {
         size_t operator()(const memo_key& key) const noexcept;
     };
+    // One functor being rebuilt: its stored skeleton (none for the functor demodule_functor was handed), and the
+    // arguments rebuilt so far.
+    struct frame {
+        const expr* skeleton;
+        const expr::functor* functor;
+        pud_module_id module;
+        std::vector<const expr*> args;
+    };
 
     IGetGlobalFunctorIdFromLocalFunctorId& get_global_functor_id_;
     IMakeVar& make_var_;
@@ -72,15 +80,44 @@ const expr* PUD_DEMODULER::demodule(moduled_expr term) {
     return demoduled;
 }
 
+// Walks with an explicit stack instead of recursing, so a term nested arbitrarily deep cannot exhaust the call
+// stack. Every argument rebuilt on the way is memoized, as demodule memoizes a whole term.
 PUD_DEMODULER_TEMPLATE
 const expr* PUD_DEMODULER::demodule_functor(moduled_functor functor) {
-    std::vector<const expr*> args;
-    args.reserve(functor.functor->args.size());
-    for (const expr* arg : functor.functor->args)
-        args.push_back(demodule(moduled_expr{arg, functor.frame_offset, functor.module}));
-    const uint32_t global_functor_id = get_global_functor_id_.get_global_functor_id_from_local_functor_id(
-        functor.module, functor.functor->id);
-    return make_functor_.make_functor(global_functor_id, args);
+    std::vector<frame> pending;
+    pending.push_back(frame{.skeleton = nullptr, .functor = functor.functor, .module = functor.module, .args = {}});
+    while (true) {
+        frame& top = pending.back();
+        const bool unfinished = top.args.size() < top.functor->args.size();
+        if (unfinished) {
+            const expr* arg = top.functor->args.at(top.args.size());
+            const memo_key key{arg, top.module};
+            const auto found = memo_.find(key);
+            if (found != memo_.end()) {
+                top.args.push_back(found->second);
+                continue;
+            }
+            if (const expr::var* variable = std::get_if<expr::var>(&arg->content)) {
+                const expr* made = make_var_.make_var(variable->index);
+                memo_.emplace(key, made);
+                top.args.push_back(made);
+                continue;
+            }
+            const pud_module_id module = top.module;
+            pending.push_back(frame{
+                .skeleton = arg, .functor = &std::get<expr::functor>(arg->content), .module = module, .args = {}});
+            continue;
+        }
+        const uint32_t global_functor_id =
+            get_global_functor_id_.get_global_functor_id_from_local_functor_id(top.module, top.functor->id);
+        const expr* rebuilt = make_functor_.make_functor(global_functor_id, top.args);
+        const memo_key key{top.skeleton, top.module};
+        pending.pop_back();
+        if (pending.empty())
+            return rebuilt;
+        memo_.emplace(key, rebuilt);
+        pending.back().args.push_back(rebuilt);
+    }
 }
 
 #undef PUD_DEMODULER

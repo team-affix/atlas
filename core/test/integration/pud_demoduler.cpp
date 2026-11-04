@@ -75,3 +75,18 @@ TEST_F(PudDemodulerTest, TheSameLocalIdInAnotherModuleCanMapToAnotherGlobalId) {
     EXPECT_CALL(make_functor, make_functor(20u, std::vector<const expr*>{})).WillOnce(Return(global_term));
     EXPECT_EQ(demoduler.demodule(moduled_expr{term, 0, 9}), global_term);
 }
+
+TEST_F(PudDemodulerTest, ATermNestedFarDeeperThanTheCallStackCouldRecurseIsRewritten) {
+    const size_t depth = 200000;
+    const expr* term = functor(7, {});
+    for (size_t level = 0; level < depth; ++level)
+        term = functor(5, {term});
+    const expr* global_leaf = functor(17, {});
+    const expr* global_term = functor(15, {global_leaf});
+    EXPECT_CALL(global_ids, get_global_functor_id_from_local_functor_id(4u, 7u)).WillOnce(Return(17u));
+    EXPECT_CALL(global_ids, get_global_functor_id_from_local_functor_id(4u, 5u))
+        .Times(static_cast<int>(depth)).WillRepeatedly(Return(15u));
+    EXPECT_CALL(make_functor, make_functor(17u, _)).WillOnce(Return(global_leaf));
+    EXPECT_CALL(make_functor, make_functor(15u, _)).Times(static_cast<int>(depth)).WillRepeatedly(Return(global_term));
+    EXPECT_EQ(demoduler.demodule(moduled_expr{term, 0, 4}), global_term);
+}
