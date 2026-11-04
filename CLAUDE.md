@@ -72,7 +72,10 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
   Nodes are never deleted, and refutation is a flag. This plane is what gets serialized.
 - **Live plane:** frontier leaves with active fields, one `pud_node_table` each (lvc, bindings, structure watch,
   `pud_node_queries`), erased on deactivation; goals/axiom tables outlive it,
-  plus `pud_query_holders`. This plane is rebuilt by activation on load and never persisted.
+  plus `pud_query_introducers`. This plane is rebuilt by activation on load and never persisted.
+- **Queries are inherited structurally:** a child shares its parent's boxed head owners for every goal it doesn't
+  fork or close, and a head is removed when the last live node's map lets go of it. Only the opening or forking
+  node is recorded (`pud_query_introducers`); `pud_query_leaf_finder` walks down from it to the holding leaves.
 - **Search stack per query head:** `pud_mhq` → `pud_mhcs` → `pud_mhws` → `pud_replayer`, which walks stored inferences.
 - `unfold(leaf, body_goal)` materializes a child via the resolver and inference builder, moves activity to the
   children (`pud_activity_mover`) and retires the parent. Lodestar's driver decides which unfolds to make.

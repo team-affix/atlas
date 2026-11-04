@@ -22,7 +22,9 @@
 #include "value_objects/pud_goal_list.hpp"
 #include "infrastructure/pud_node_live_child_counts.hpp"
 #include "value_objects/pud_node_queries.hpp"
-#include "infrastructure/pud_query_holders.hpp"
+#include "infrastructure/pud_query_introducers.hpp"
+#include "infrastructure/pud_query_leaf_finder.hpp"
+#include "infrastructure/pud_query_remover.hpp"
 #include "infrastructure/pud_replayer.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
@@ -36,7 +38,7 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-// Leaf activation over the real binder, watcher, search stack, and explicit query holders. The tree's
+// Leaf activation over the real binder, watcher, search stack, query introducers and leaf finder. The tree's
 // root and the facts its goals resolve against are the axioms of one module.
 struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using bind_map_factory_t = pud_bind_map_factory;
@@ -51,17 +53,22 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     using mhcs_t =
         pud_mhcs<replayer_t, mhws_t, mhws_t, mhws_t, mhws_t, mhws_t, module_registry_t, module_registry_t, module_registry_t>;
     using mhq_t = pud_mhq<replayer_t, module_registry_t, mhcs_t, mhcs_t, mhcs_t, mhcs_t, unit_queries_t>;
+    using query_remover_t = pud_query_remover<pud_query_introducers, mhq_t>;
+    using node_queries_table_t = pud_node_table<pud_node_queries<query_remover_t>>;
+    using leaf_finder_t = pud_query_leaf_finder<
+        pud_query_introducers, module_registry_t, module_registry_t, module_registry_t, node_queries_table_t>;
     using binder_t = pud_binder<bind_map_factory_t, module_registry_t>;
     using watcher_t = pud_structure_watcher<bind_map_factory_t, module_registry_t, expr_pool>;
     using root_activator_t = pud_root_activator<
-        module_registry_t, pud_root_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, pud_node_table<pud_node_queries>, watcher_t, mhq_t,
-        pud_query_holders>;
+        module_registry_t, pud_root_goal_list_builder, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, node_queries_table_t, watcher_t, mhq_t,
+        query_remover_t, pud_query_introducers>;
     using child_activator_t = pud_child_activator<
-        pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, pud_node_table<pud_node_queries>, pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, pud_node_table<pud_node_queries>, module_registry_t, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_child_goal_list_builder,
+        pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, node_queries_table_t, pud_node_table<uint32_t>, pud_node_table<pud_ubs_state>, pud_node_table<pud_structure_watch>, node_queries_table_t, module_registry_t, pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_child_goal_list_builder,
         pud_node_table<pud_goal_list>, pud_node_table<pud_global_node_id>, pud_node_live_child_counts, binder_t, watcher_t, mhq_t,
-        mhq_t, pud_query_holders, mhq_t>;
+        mhq_t, query_remover_t, pud_query_introducers, pud_query_introducers>;
     using node_deactivator_t =
-        pud_node_deactivator<pud_node_table<pud_node_queries>, pud_node_table<pud_node_queries>, pud_node_table<pud_structure_watch>, pud_node_table<pud_ubs_state>, pud_node_table<uint32_t>, pud_query_holders, mhq_t, mhq_t, pud_query_holders>;
+        pud_node_deactivator<node_queries_table_t, pud_node_table<pud_structure_watch>, pud_node_table<pud_ubs_state>,
+            pud_node_table<uint32_t>, mhq_t, pud_query_introducers, leaf_finder_t>;
 
     static constexpr pud_module_id k_module = 0;
     static constexpr pud_module_id k_lone_module = 1;
@@ -85,20 +92,25 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
     pud_node_table<uint32_t> node_lvcs;
     pud_node_table<pud_ubs_state> node_bindings;
     pud_node_table<pud_structure_watch> node_watches;
-    pud_node_table<pud_node_queries> node_queries;
-    pud_query_holders query_holders;
     replayer_t replayer{modules, modules, exprs, bind_maps, cycle_detectors, unifiers};
     mhws_t mhws{replayer, modules, modules, modules};
     mhcs_t mhcs{replayer, mhws, mhws, mhws, mhws, mhws, modules, modules, modules};
     mhq_t mhq{replayer, modules, mhcs, mhcs, mhcs, mhcs, unit_queries};
+    pud_query_introducers query_introducers;
+    query_remover_t query_remover{query_introducers, mhq};
+    // Declared after the MHQ and the remover so the head owners in the node queries are destroyed first.
+    node_queries_table_t node_queries;
+    leaf_finder_t leaf_finder{query_introducers, modules, modules, modules, node_queries};
     binder_t binder{bind_maps, modules};
     watcher_t structure_watcher{bind_maps, modules, exprs};
     root_activator_t root_activator{
-        modules, root_goal_lists, node_goals, node_axioms, node_lvcs, node_bindings, node_watches, node_queries, structure_watcher, mhq, query_holders};
+        modules, root_goal_lists, node_goals, node_axioms, node_lvcs, node_bindings, node_watches, node_queries, structure_watcher, mhq, query_remover,
+        query_introducers};
     child_activator_t child_activator{
         node_lvcs, node_bindings, node_watches, node_queries, node_lvcs, node_bindings, node_watches, node_queries, modules, node_goals, node_axioms, child_goal_lists, node_goals,
-        node_axioms, live_child_counts, binder, structure_watcher, mhq, mhq, query_holders, mhq};
-    node_deactivator_t node_deactivator{node_queries, node_queries, node_watches, node_bindings, node_lvcs, query_holders, mhq, mhq, query_holders};
+        node_axioms, live_child_counts, binder, structure_watcher, mhq, mhq, query_remover, query_introducers,
+        query_introducers};
+    node_deactivator_t node_deactivator{node_queries, node_watches, node_bindings, node_lvcs, mhq, query_introducers, leaf_finder};
 
     pud_global_node_id root{};
     pud_global_node_id child{};
@@ -196,19 +208,25 @@ struct PudLeafActivationIntegrationTest : public ::testing::Test {
 
 TEST_F(PudLeafActivationIntegrationTest, RootAdmitsAQueryPerOpenGoal) {
     EXPECT_FALSE(root_activator.activate_root(root));
-    const pud_node_queries& queries = node_queries.get(root);
+    const pud_node_queries<query_remover_t>& queries = node_queries.get(root);
     EXPECT_NE(queries.find(0), nullptr);
     EXPECT_NE(queries.find(1), nullptr);
     EXPECT_EQ(queries.size(), 2u);
-    EXPECT_EQ(query_holders.get_holders(node_queries.get(root).at(0)).size(), 1u);
-    EXPECT_EQ(query_holders.get_holders(node_queries.get(root).at(1)).size(), 1u);
+    EXPECT_EQ(
+        query_introducers.find_introduction(queries.at(0)->head_id()),
+        (pud_query_introduction{.node = root, .goal = 0}));
+    EXPECT_EQ(
+        query_introducers.find_introduction(queries.at(1)->head_id()),
+        (pud_query_introduction{.node = root, .goal = 1}));
 }
 
 TEST_F(PudLeafActivationIntegrationTest, ChildAdmitsAQueryForEachNewGoal) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     EXPECT_TRUE(node_queries.get(child).find(2) != nullptr);
-    EXPECT_EQ(*query_holders.get_holders(node_queries.get(child).at(2)).begin(), child);
+    EXPECT_EQ(
+        query_introducers.find_introduction(node_queries.get(child).at(2)->head_id()),
+        (pud_query_introduction{.node = child, .goal = 2}));
 }
 
 TEST_F(PudLeafActivationIntegrationTest, FactChildWithNoGoalsOpensNothingNew) {
@@ -219,74 +237,74 @@ TEST_F(PudLeafActivationIntegrationTest, FactChildWithNoGoalsOpensNothingNew) {
 
 TEST_F(PudLeafActivationIntegrationTest, BindingTheClosedGoalDoesNotForkItsQuery) {
     EXPECT_FALSE(root_activator.activate_root(root));
-    const pud_mhq_head_id before = node_queries.get(root).at(1);
+    const pud_mhq_head_id before = node_queries.get(root).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
-    EXPECT_EQ(node_queries.get(child).at(1), before);
+    EXPECT_EQ(node_queries.get(child).at(1)->head_id(), before);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, CollapseForksTheAffectedGoal) {
     EXPECT_FALSE(root_activator.activate_root(root));
-    const pud_mhq_head_id before = node_queries.get(root).at(1);
+    const pud_mhq_head_id before = node_queries.get(root).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(sibling).value(), sibling));
-    EXPECT_NE(node_queries.get(sibling).at(1), before);
+    EXPECT_NE(node_queries.get(sibling).at(1)->head_id(), before);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, InstantiationForksTheAffectedGoal) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
-    const pud_mhq_head_id before = node_queries.get(child).at(1);
+    const pud_mhq_head_id before = node_queries.get(child).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(nephew).value(), nephew));
-    EXPECT_NE(node_queries.get(nephew).at(1), before);
+    EXPECT_NE(node_queries.get(nephew).at(1)->head_id(), before);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, ForkedQueryShadowsTheParentsQuery) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
-    const pud_mhq_head_id at_child = node_queries.get(child).at(1);
+    const pud_mhq_head_id at_child = node_queries.get(child).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(nephew).value(), nephew));
-    const pud_mhq_head_id at_nephew = node_queries.get(nephew).at(1);
+    const pud_mhq_head_id at_nephew = node_queries.get(nephew).at(1)->head_id();
     EXPECT_NE(at_nephew, at_child);
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(great_nephew).value(), great_nephew));
-    EXPECT_NE(node_queries.get(great_nephew).at(1), at_nephew);
+    EXPECT_NE(node_queries.get(great_nephew).at(1)->head_id(), at_nephew);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, SiblingsForkFromTheSameRootQuery) {
     EXPECT_FALSE(root_activator.activate_root(root));
-    const pud_mhq_head_id at_root = node_queries.get(root).at(1);
+    const pud_mhq_head_id at_root = node_queries.get(root).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(sibling).value(), sibling));
-    const pud_mhq_head_id at_sibling = node_queries.get(sibling).at(1);
+    const pud_mhq_head_id at_sibling = node_queries.get(sibling).at(1)->head_id();
     EXPECT_NE(at_sibling, at_root);
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(nephew).value(), nephew));
-    EXPECT_NE(node_queries.get(nephew).at(1), at_root);
+    EXPECT_NE(node_queries.get(nephew).at(1)->head_id(), at_root);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, FactBelowClosesTheCallSiteWithoutForking) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
-    const pud_mhq_head_id before = node_queries.get(child).at(1);
+    const pud_mhq_head_id before = node_queries.get(child).at(1)->head_id();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(grandchild).value(), grandchild));
-    EXPECT_EQ(node_queries.get(grandchild).at(1), before);
+    EXPECT_EQ(node_queries.get(grandchild).at(1)->head_id(), before);
 }
 
 TEST_F(PudLeafActivationIntegrationTest, UnitForkSurfacesInTheUnitQueue) {
     EXPECT_FALSE(root_activator.activate_root(root));
     unit_queries.clear();
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(sibling).value(), sibling));
-    EXPECT_THAT(unit_queries, ElementsAre(node_queries.get(sibling).at(1)));
+    EXPECT_THAT(unit_queries, ElementsAre(node_queries.get(sibling).at(1)->head_id()));
 }
 
 TEST_F(PudLeafActivationIntegrationTest, ReleasingALeafRemovesQueriesOnlyItHeld) {
     EXPECT_FALSE(root_activator.activate_root(root));
     EXPECT_FALSE(child_activator.activate_child(modules.get_parent(child).value(), child));
     ASSERT_NE(node_queries.get(child).find(2), nullptr);
-    const pud_mhq_head_id child_only = node_queries.get(child).at(2);
-    const pud_mhq_head_id shared = node_queries.get(child).at(1);
+    const pud_mhq_head_id child_only = node_queries.get(child).at(2)->head_id();
+    const pud_mhq_head_id shared = node_queries.get(child).at(1)->head_id();
     node_deactivator.deactivate(child);
-    EXPECT_FALSE(query_holders.find_holder(child_only).has_value());
-    EXPECT_TRUE(query_holders.find_holder(shared).has_value());
+    EXPECT_FALSE(query_introducers.find_introduction(child_only).has_value());
+    EXPECT_TRUE(query_introducers.find_introduction(shared).has_value());
     node_deactivator.deactivate(root);
-    EXPECT_FALSE(query_holders.find_holder(shared).has_value());
+    EXPECT_FALSE(query_introducers.find_introduction(shared).has_value());
 }
 
 TEST_F(PudLeafActivationIntegrationTest, RefutedOpenSurfacesThroughActivation) {

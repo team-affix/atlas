@@ -36,25 +36,26 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , node_lvcs_()
     , node_bindings_()
     , node_watches_()
+    , query_introducers_()
+    , query_remover_(query_introducers_, mhq_)
     , node_queries_()
-    , query_holders_()
+    , query_leaf_finder_(query_introducers_, modules_, modules_, modules_, node_queries_)
     , focus_set_()
     , binder_(bind_map_factory_, modules_)
     , structure_watcher_(bind_map_factory_, modules_, expr_pool)
     , root_activator_(
           modules_, root_goal_list_builder_, node_goals_, node_axioms_, node_lvcs_, node_bindings_, node_watches_, node_queries_, structure_watcher_,
-          mhq_, query_holders_)
+          mhq_, query_remover_, query_introducers_)
     , child_activator_(
           node_lvcs_, node_bindings_, node_watches_, node_queries_, node_lvcs_, node_bindings_, node_watches_, node_queries_,
           modules_, node_goals_, node_axioms_, child_goal_list_builder_, node_goals_,
-          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_holders_,
-          mhq_)
+          node_axioms_, live_child_counts_, binder_, structure_watcher_, mhq_, mhq_, query_remover_,
+          query_introducers_, query_introducers_)
     , root_depth_recorder_(node_depths_, root_activator_)
     , child_depth_recorder_(node_depths_, node_depths_, child_activator_)
     , child_focus_recorder_(focus_set_, focus_set_, child_depth_recorder_)
     , node_deactivator_(
-          node_queries_, node_queries_, node_watches_, node_bindings_, node_lvcs_, query_holders_, mhq_, mhq_,
-          query_holders_)
+          node_queries_, node_watches_, node_bindings_, node_lvcs_, mhq_, query_introducers_, query_leaf_finder_)
     , leaf_refuter_(modules_, refutation_propagator_, node_deactivator_, modules_, modules_)
     , inference_builder_(
           node_goals_, modules_, modules_, expr_pool, expr_pool, bind_map_factory_, cycle_detector_factory_,
@@ -79,7 +80,7 @@ pud_lodestar_manifest::pud_lodestar_manifest(
     , unfold_applier_(unfolder_, slot_index_, focus_set_)
     , unfold_depth_recorder_(node_depths_, unfold_applier_)
     , unit_propagator_(
-          unit_queries_, query_holders_, query_holders_, mhq_, frontier_, modules_, unfold_allower_,
+          unit_queries_, query_leaf_finder_, mhq_, frontier_, modules_, unfold_allower_,
           unfold_depth_recorder_)
     , driver_(
           unit_propagator_, non_conjecture_round_robin_, conjecture_round_robin_,

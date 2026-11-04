@@ -71,3 +71,10 @@ TEST_F(PudNodeTableTest, AnErasedNodeCanBeStoredAgain) {
 TEST_F(PudNodeTableTest, ErasingANodeWithoutAValueFails) {
     EXPECT_THROW(table.erase(pud_test_node(3)), std::logic_error);
 }
+
+TEST_F(PudNodeTableTest, FindingANodeReturnsItsValueOrNothing) {
+    table.store(pud_test_node(4), {9});
+    ASSERT_NE(table.find(pud_test_node(4)), nullptr);
+    EXPECT_EQ(*table.find(pud_test_node(4)), (std::vector<pud_node_id>{9}));
+    EXPECT_EQ(table.find(pud_test_node(5)), nullptr);
+}

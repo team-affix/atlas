@@ -12,9 +12,9 @@ Legend: **Resolved** = removed or redesigned. **Justified** = kept intentionally
 | ID | Status | Notes |
 |----|--------|-------|
 | D1 | Resolved | `docs/pud-query-model.txt` rewritten for current stack; `prompts/pud.txt` fills candidate storage; old om_interval/FPA narrative deprecated in docs. |
-| D2 | Resolved | Query ownership via `pud_query_holders` + `pud_node_deactivator`; no destructor-driven head lifetime. |
-| D3 | Resolved | Single removal path: `mhq::remove` when last holder releases; no parallel erase guards. |
-| D4 | Resolved | Holders are authoritative; not rebuilt from side maps on each descent. |
+| D2 | Superseded | Query ownership is destructor-driven again: node query maps share boxed `pud_mhq_head_owner`s, so inheriting a query costs nothing per child. |
+| D3 | Resolved | Single removal path: `mhq::remove`, through `pud_query_remover`, when the last owner box goes; no parallel erase guards. |
+| D4 | Superseded | Per-leaf holders are gone; `pud_query_introducers` records where each query was introduced and `pud_query_leaf_finder` walks to its leaves. |
 | D5 | Resolved | One candidacy list per `pud_mhq` head (axiom-ordered); mhcs holds search state only. |
 | D6 | Resolved | `pud_inference_builder` replays the candidate path in one bind map and notes each caller class as `pud_unifier::unify` reports editing it; no bind-map diff, no redo stack. |
 | D7 | Resolved | `ubs_bind_map` is concrete; `pud_transient_ubs_state` and fake bind-map template stacks deleted. |

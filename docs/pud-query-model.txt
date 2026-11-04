@@ -82,20 +82,24 @@ Activation
   leaf's group sees, in the leaf's environment.
 - pud_query_forker::fork(inherited, leaf, bindings, goal): an inherited query
   forked into the leaf's environment for a goal whose structure changed.
-- pud_child_activator: the child inherits every parent query but the call
-  site's, forks each changed goal, opens a query for each goal of its own, then
-  holds every query.
-- pud_root_activator: opens a query per goal and holds them.
+- pud_child_activator: the child copies its parent's query map without the call
+  site's goal, forks each changed goal, opens a query for each goal of its own,
+  and introduces only the queries it forked or opened.
+- pud_root_activator: opens a query per goal and introduces them.
 - Both return whether the node arrived refuted: a goal whose query failed to
-  open or fork, or an inherited query already exhausted.
+  open or fork, or, for a child, a query it inherited that pud_query_introducers
+  lists as exhausted.
 
 Query ownership
 
-- pud_query_holders maps head id -> { goal id, set of leaf ids holding it }.
-- Nodes acquire heads in pud_root_activator / pud_child_activator and release them in
-  pud_node_deactivator, which also invalidates the node as a witness and returns
-  the nodes left holding a query without a candidate.
-- When the last holder releases a head, mhq::remove is the only removal path.
+- pud_node_queries maps goal id -> immer::box<pud_mhq_head_owner>. Nodes share
+  the owners of inherited goals through their maps.
+- pud_query_introducers maps head id -> { introducing node, goal id }.
+- pud_node_deactivator erases the node's queries, which drops its share of each
+  owner; the owner of a head no live node references calls pud_query_remover,
+  which withdraws the introduction and calls mhq::remove, the only removal path.
+  It then invalidates the node as a witness and returns, via
+  pud_query_leaf_finder, the leaves left holding a query without a candidate.
 
 Expansion
 

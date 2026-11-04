@@ -18,7 +18,7 @@ flowchart LR
   end
   subgraph live [Frontier]
     AS[active field tables]
-    QH[pud_query_holders]
+    QI[pud_query_introducers]
   end
   subgraph search [Per query head]
     MHQ[mhq]
@@ -36,7 +36,9 @@ flowchart LR
 
 **Stored:** `pud_module_registry` registers `pud_module` instances. Each node has its body goals and its root axiom (both `pud_node_table`s, filled on activation), and inferences are appended when unfold succeeds. Nodes are never deleted; refutation is a flag on the tree.
 
-**Live:** Only leaves (and the transient parent during an unfold step) have active fields, each in its own `pud_node_table`: the local variable count, a binding snapshot (`pud_ubs_state`), a structure watch, and the node's queries (`pud_node_queries`, a map from `pud_body_goal_id` to an MHQ head). The root and child activators store them; the node deactivator erases them when the node is retired. Fields that outlive activation (body goals, root axiom, and in Lodestar the node depth) stay. Each reader injects only the field tables it reads. `pud_query_holders` records which leaves hold which heads so admitting or refuting a query can find every dependent leaf.
+**Live:** Only leaves (and the transient parent during an unfold step) have active fields, each in its own `pud_node_table`: the local variable count, a binding snapshot (`pud_ubs_state`), a structure watch, and the node's queries (`pud_node_queries`, a map from `pud_body_goal_id` to a boxed `pud_mhq_head_owner`). The root and child activators store them; the node deactivator erases them when the node is retired. Fields that outlive activation (body goals, root axiom, and in Lodestar the node depth) stay. Each reader injects only the field tables it reads.
+
+**Query inheritance is structural.** A child copies its parent's query map and changes only the goals it forks, closes or adds, so it shares the head owners of every other goal. A head is removed (`pud_query_remover`) when the last live node's map stops referencing its owner. `pud_query_introducers` records only the node that opened or forked each query and the goal it answers there. `pud_query_leaf_finder` walks down from that node to the live leaves that still hold the query, skipping refuted subtrees and children that closed the goal; unit propagation and stranded refutation read the leaves from it.
 
 **Search:** For one body goal’s query head, `pud_mhq` coordinates heads; `pud_mhcs` chooses among axiom-level candidates; `pud_mhws` DFS-es witness paths along one edge; `pud_replayer` walks the stored inference chain inside a single `ubs_bind_map`, unifying substitutions. Resolver and inference builder use the same stack when materializing a chosen candidate into a `pud_inference`.
 
