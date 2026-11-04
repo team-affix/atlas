@@ -241,7 +241,9 @@ TEST_F(PudRuntimeIntegrationTest, AReloadedTreeKeepsUnfoldingTheWayTheOriginalDo
         for (pud_global_node_id refuted : change.refuted)
             live.erase(refuted);
         ASSERT_EQ(change.offspring.size(), 2u) << "unfold " << step_index;
-        deepest = change.offspring.back();
+        // Children are stored in a shuffled order, so the recursive one is the child that opened a goal.
+        const bool first_recurses = !dependent.get_inference(change.offspring.front().node).body_goals.empty();
+        deepest = first_recurses ? change.offspring.front() : change.offspring.back();
         ++goal;
     }
     std::deque<pud_module> reloaded;

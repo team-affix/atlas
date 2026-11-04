@@ -66,6 +66,7 @@
 #include "infrastructure/pud_unfold_allower.hpp"
 #include "infrastructure/pud_unfold_depth_recorder.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
+#include "infrastructure/pud_child_shuffler.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
@@ -226,8 +227,10 @@ struct pud_lodestar_manifest {
     struct activity_mover_t : pud_activity_mover<child_focus_recorder_t, leaf_refuter_t, node_deactivator_t> {
         using pud_activity_mover<child_focus_recorder_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
     };
-    struct unfolder_t : pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t> {
-        using pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
+    struct unfolder_t : pud_unfolder<
+        resolver_t, pud_child_shuffler, module_registry_t, activity_mover_t, module_registry_t> {
+        using pud_unfolder<
+            resolver_t, pud_child_shuffler, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
     };
     struct module_activator_t : pud_module_activator<
         module_registry_t, module_registry_t, module_registry_t, root_depth_recorder_t, leaf_refuter_t, activity_mover_t> {
@@ -376,6 +379,7 @@ struct pud_lodestar_manifest {
     inference_builder_t                 inference_builder_;
     resolver_t                 resolver_;
     activity_mover_t           activity_mover_;
+    pud_child_shuffler         child_shuffler_;
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 

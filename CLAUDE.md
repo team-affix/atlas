@@ -79,6 +79,8 @@ Solvers differ only in decision policy and MCTS reward, which come from what the
 - **Search stack per query head:** `pud_mhq` → `pud_mhcs` → `pud_mhws` → `pud_replayer`, which walks stored inferences.
 - `unfold(leaf, body_goal)` materializes a child via the resolver and inference builder, moves activity to the
   children (`pud_activity_mover`) and retires the parent. Lodestar's driver decides which unfolds to make.
+  Children are stored in a pseudo-random order (`pud_child_shuffler`, seeded by the parent's id), so depth-first
+  walks over children, such as MHWS witness searches, don't depend on rule order.
 - A live leaf holds a query for every goal: a failed open or fork refutes the node. Code asserts this
   (`DEBUG_ASSERT`) rather than guarding the impossible case.
 - `pud_runtime` / `pud_manifest` are the manual harness tests drive; they live in `core/test/`.

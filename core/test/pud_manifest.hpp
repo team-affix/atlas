@@ -36,6 +36,7 @@
 #include "infrastructure/pud_root_activator.hpp"
 #include "infrastructure/pud_structure_watcher.hpp"
 #include "infrastructure/pud_unifier_factory.hpp"
+#include "infrastructure/pud_child_shuffler.hpp"
 #include "infrastructure/pud_unfolder.hpp"
 #include "value_objects/pud_mhq_head_id.hpp"
 #include "value_objects/pud_node_queries.hpp"
@@ -175,8 +176,10 @@ struct pud_manifest {
     struct activity_mover_t : pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t> {
         using pud_activity_mover<child_activator_t, leaf_refuter_t, node_deactivator_t>::pud_activity_mover;
     };
-    struct unfolder_t : pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t> {
-        using pud_unfolder<resolver_t, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
+    struct unfolder_t : pud_unfolder<
+        resolver_t, pud_child_shuffler, module_registry_t, activity_mover_t, module_registry_t> {
+        using pud_unfolder<
+            resolver_t, pud_child_shuffler, module_registry_t, activity_mover_t, module_registry_t>::pud_unfolder;
     };
     struct module_activator_t : pud_module_activator<
         module_registry_t, module_registry_t, module_registry_t, root_activator_t, leaf_refuter_t, activity_mover_t> {
@@ -228,6 +231,7 @@ struct pud_manifest {
     inference_builder_t                 inference_builder_;
     resolver_t                 resolver_;
     activity_mover_t           activity_mover_;
+    pud_child_shuffler         child_shuffler_;
     unfolder_t                 unfolder_;
     module_activator_t         module_activator_;
 };
@@ -278,7 +282,8 @@ pud_manifest<IModule, IExprPool>::pud_manifest(IExprPool& expr_pool)
           unifier_factory_, term_exporter_factory_)
     , resolver_(node_queries_, node_bindings_, node_lvcs_, node_goals_, mhq_, mhcs_, inference_builder_)
     , activity_mover_(child_activator_, leaf_refuter_, node_deactivator_)
-    , unfolder_(resolver_, modules_, activity_mover_, modules_)
+    , child_shuffler_()
+    , unfolder_(resolver_, child_shuffler_, modules_, activity_mover_, modules_)
     , module_activator_(modules_, modules_, modules_, root_activator_, leaf_refuter_, activity_mover_) {}
 
 #endif

@@ -1638,7 +1638,7 @@ TEST_F(PudLodestarRuntimeSuiteTest, EnumeratesCollatzOneStepPreimagesOfTen) {
      * step(N, M) — if even(N) then M = N/2; if odd(N) then M = 3N+1.
      * Goal: step(N, ten). One-step preimages of 10 are N=3 (3*3+1) and N=20 (20/2).
      */
-    static constexpr size_t kCollatzBudget = 128;
+    static constexpr size_t kCollatzBudget = 192;
 
     auto peano_saved = [&](int n) -> const expr* {
         const expr* p = saved_expr_pool_.make_functor(holder_.functors.id("zero"), {});
