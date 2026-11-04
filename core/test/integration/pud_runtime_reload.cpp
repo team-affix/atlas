@@ -11,6 +11,7 @@
 #include <gmock/gmock.h>
 #include "functor_fixture.hpp"
 #include "reference_pud_frontier.hpp"
+#include "reference_pud_normalize_with_bindings.hpp"
 #include "reference_pud_module_differences.hpp"
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_module.hpp"
@@ -948,8 +949,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
         for (pud_global_node_id refuted : change.refuted)
             live.erase(refuted);
     }
-    size_t taken = 0;
-    for (; taken < 40; ++taken) {
+    bool fully_unfolded = false;
+    for (size_t taken = 0; taken < 40; ++taken) {
         std::vector<pud_global_node_id> unfoldable;
         for (pud_global_node_id leaf : live) {
             const std::optional<pud_module_id> only = std::nullopt;
@@ -959,7 +960,8 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
                 continue;
             unfoldable.push_back(leaf);
         }
-        if (unfoldable.empty())
+        fully_unfolded = unfoldable.empty();
+        if (fully_unfolded)
             break;
         const pud_global_node_id leaf = unfoldable.at(rng() % unfoldable.size());
         std::vector<pud_body_goal_id> goal_ids;
@@ -974,12 +976,20 @@ TYPED_TEST(PudRuntimeReloadIntegrationTest, AGraphUnfoldedEverywhereReloads) {
             live.erase(refuted);
     }
 
-    EXPECT_GT(taken, 20u);
-    size_t node_count = 0;
-    for (const pud_module& module : modules)
-        node_count += reference_pud_count_nodes(module);
-
-    EXPECT_GT(node_count, 50u);
+    // The setup must have unfolded the whole graph: no leaf has goals left, `unreachable` (no path from d to a) is
+    // refuted, and `reach` derived every node reachable from a.
+    ASSERT_TRUE(fully_unfolded);
+    EXPECT_TRUE(modules.at(1).is_refuted(1));
+    std::set<const expr*> reached;
+    for (const pud_global_node_id leaf : live) {
+        if (leaf.module != 4002)
+            continue;
+        const pud_unnormalized_rule_information leaf_info = runtime.get_rule_information(leaf);
+        reached.insert(reference_pud_normalize_with_bindings(leaf_info.bindings, this->exprs, leaf_info.head));
+    }
+    EXPECT_EQ(reached, (std::set<const expr*>{
+        this->functor("reach", {this->atom("b")}), this->functor("reach", {this->atom("c")}),
+        this->functor("reach", {this->atom("d")}), this->functor("reach", {this->atom("e")})}));
     EXPECT_EQ(live, reference_pud_frontier(modules));
     EXPECT_THAT(reference_pud_stranded_nodes(modules), IsEmpty());
     std::deque<pud_module> reloaded_modules(modules.begin(), modules.end());
