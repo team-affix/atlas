@@ -30,6 +30,7 @@
 #include "infrastructure/ridge_fc_command_handler.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
+#include "infrastructure/forager_command_handler.hpp"
 #include "infrastructure/lodestar_command_handler.hpp"
 #include "infrastructure/hex_uint64.hpp"
 
@@ -187,6 +188,61 @@ int main(int argc, char** argv) {
             lodestar_opts.save_every,
             lodestar_opts.report_stored_solutions,
             lodestar_opts.quiet};
+        handler();
+    });
+
+    struct {
+        std::vector<std::string> modules;
+        std::string focus;
+        size_t max_unfolds = 1000;
+        size_t cascade_depth = 1;
+        size_t max_node_depth = 64;
+        size_t max_open_goals = std::numeric_limits<size_t>::max();
+        size_t sim_progress_interval = 1000;
+        size_t save_every = 0;
+        bool report_stored_solutions = false;
+        bool quiet = false;
+    } forager_opts;
+
+    auto* forager_sub = app.add_subcommand("forager", "Run the Forager PUD solver");
+    forager_sub->add_option("modules", forager_opts.modules, "PUD module files")->required()->expected(1, -1);
+    forager_sub->add_option("--focus", forager_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
+    forager_sub->add_option(
+        "--max-unfolds", forager_opts.max_unfolds, "Max unfolds this run; when spent the run ends without a final line");
+    forager_sub->add_option(
+        "--cascade-depth",
+        forager_opts.cascade_depth,
+        "Witness levels unfolded after each focus unfold (0 unfolds focus leaves only)");
+    forager_sub->add_option("--max-node-depth", forager_opts.max_node_depth, "Max inference depth of a node");
+    forager_sub->add_option(
+        "--max-open-goals", forager_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
+    forager_sub->add_option("--sim-progress-interval", forager_opts.sim_progress_interval,
+                            "Print progress every N unfolds (0 disables)");
+    forager_sub->add_option(
+        "--save-every",
+        forager_opts.save_every,
+        "Overwrite each module file with its current state every N unfolds and when the run ends "
+        "(0, the default, never writes)");
+    forager_sub->add_flag(
+        "--report-stored-solutions",
+        forager_opts.report_stored_solutions,
+        "Also report solutions an earlier run already derived and saved in the modules");
+    forager_sub->add_flag(
+        "-q,--quiet",
+        forager_opts.quiet,
+        "Do not print runtime initialization and module loading; progress lines still follow --sim-progress-interval");
+    forager_sub->callback([&]() {
+        forager_command_handler handler{
+            forager_opts.modules,
+            forager_opts.focus,
+            forager_opts.max_unfolds,
+            forager_opts.cascade_depth,
+            forager_opts.max_node_depth,
+            forager_opts.max_open_goals,
+            forager_opts.sim_progress_interval,
+            forager_opts.save_every,
+            forager_opts.report_stored_solutions,
+            forager_opts.quiet};
         handler();
     });
 

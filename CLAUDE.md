@@ -17,6 +17,11 @@ Two generations of engine live side by side:
 - **PUD (progressive unfolding database)** is the **current focus**. Modules are append-only
   resolution trees that serialize to binary (`atlas module create|inspect`). A live frontier of leaves
   sits on top. **Lodestar** (`pud_lodestar_*`, `atlas lodestar`) is the first automated PUD solver.
+  **Forager** (`pud_forager_*`, `atlas forager`) is the simple eager PUD solver: live leaves keep only goals,
+  axiom, lvc and bindings. Visiting a leaf queries all its goals then and there (`pud_eager_goal_querier` over the
+  resumable specializer and witness search), refutes it if a goal has no candidate, and unfolds a unit goal first.
+  `pud_witness_cascade_driver` unfolds a round-robin focus leaf, then its chosen goal's witness leaves, down to
+  `--cascade-depth`. No MHQ/MHCS/MHWS state outlives a visit.
   Read `docs/pud-architecture.md` and `docs/pud-solver-architecture.md` before touching `pud_*`.
 
 `README.md` predates PUD and lists only some of the subcommands. `cli/entry/main.cpp` is the
