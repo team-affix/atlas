@@ -30,6 +30,7 @@
 #include "infrastructure/ridge_fc_command_handler.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
+#include "infrastructure/cairn_command_handler.hpp"
 #include "infrastructure/forager_command_handler.hpp"
 #include "infrastructure/lodestar_command_handler.hpp"
 #include "infrastructure/hex_uint64.hpp"
@@ -243,6 +244,61 @@ int main(int argc, char** argv) {
             forager_opts.save_every,
             forager_opts.report_stored_solutions,
             forager_opts.quiet};
+        handler();
+    });
+
+    struct {
+        std::vector<std::string> modules;
+        std::string focus;
+        size_t max_unfolds = 1000;
+        size_t cascade_depth = 1;
+        size_t max_node_depth = 64;
+        size_t max_open_goals = std::numeric_limits<size_t>::max();
+        size_t sim_progress_interval = 1000;
+        size_t save_every = 0;
+        bool report_stored_solutions = false;
+        bool quiet = false;
+    } cairn_opts;
+
+    auto* cairn_sub = app.add_subcommand("cairn", "Run the Cairn PUD solver");
+    cairn_sub->add_option("modules", cairn_opts.modules, "PUD module files")->required()->expected(1, -1);
+    cairn_sub->add_option("--focus", cairn_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
+    cairn_sub->add_option(
+        "--max-unfolds", cairn_opts.max_unfolds, "Max unfolds this run; when spent the run ends without a final line");
+    cairn_sub->add_option(
+        "--cascade-depth",
+        cairn_opts.cascade_depth,
+        "Witness levels unfolded after each focus unfold (0 unfolds focus leaves only)");
+    cairn_sub->add_option("--max-node-depth", cairn_opts.max_node_depth, "Max inference depth of a node");
+    cairn_sub->add_option(
+        "--max-open-goals", cairn_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
+    cairn_sub->add_option("--sim-progress-interval", cairn_opts.sim_progress_interval,
+                            "Print progress every N unfolds (0 disables)");
+    cairn_sub->add_option(
+        "--save-every",
+        cairn_opts.save_every,
+        "Overwrite each module file with its current state every N unfolds and when the run ends "
+        "(0, the default, never writes)");
+    cairn_sub->add_flag(
+        "--report-stored-solutions",
+        cairn_opts.report_stored_solutions,
+        "Also report solutions an earlier run already derived and saved in the modules");
+    cairn_sub->add_flag(
+        "-q,--quiet",
+        cairn_opts.quiet,
+        "Do not print runtime initialization and module loading; progress lines still follow --sim-progress-interval");
+    cairn_sub->callback([&]() {
+        cairn_command_handler handler{
+            cairn_opts.modules,
+            cairn_opts.focus,
+            cairn_opts.max_unfolds,
+            cairn_opts.cascade_depth,
+            cairn_opts.max_node_depth,
+            cairn_opts.max_open_goals,
+            cairn_opts.sim_progress_interval,
+            cairn_opts.save_every,
+            cairn_opts.report_stored_solutions,
+            cairn_opts.quiet};
         handler();
     });
 

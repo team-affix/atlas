@@ -22,6 +22,11 @@ Two generations of engine live side by side:
   resumable specializer and witness search), refutes it if a goal has no candidate, and unfolds a unit goal first.
   `pud_witness_cascade_driver` unfolds a round-robin focus leaf, then its chosen goal's witness leaves, down to
   `--cascade-depth`. No MHQ/MHCS/MHWS state outlives a visit.
+  **Cairn** (`pud_cairn_*`, `atlas cairn`) is Forager plus id-only trails: a visited leaf keeps, per goal, each
+  candidate's node and witness leaves (`pud_node_trails`), and its children inherit them, forked where the structure
+  watcher reports a change. An unforked trail with live witnesses is reused without a replay; any other trail
+  resumes forward (`pud_candidate_trail_resumer`), its paths rebuilt from parent links. Resuming gives what a fresh
+  query gives, so Cairn makes exactly Forager's unfolds (`pud_cairn_forager_equivalence`).
   Read `docs/pud-architecture.md` and `docs/pud-solver-architecture.md` before touching `pud_*`.
 
 `README.md` predates PUD and lists only some of the subcommands. `cli/entry/main.cpp` is the
