@@ -138,6 +138,8 @@ void PUD_SOLVE_LOOP::run() {
         std::cout << "REFUTED\n";
     if (reason == pud_search_stop_reason::exhausted)
         std::cout << "EXHAUSTED\n";
+    if (reason == pud_search_stop_reason::disk_full)
+        std::cout << "DISK FULL\n";
 }
 
 #undef PUD_SOLVE_LOOP

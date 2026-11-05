@@ -27,6 +27,15 @@ Two generations of engine live side by side:
   watcher reports a change. An unforked trail with live witnesses is reused without a replay; any other trail
   resumes forward (`pud_candidate_trail_resumer`), its paths rebuilt from parent links. Resuming gives what a fresh
   query gives, so Cairn makes exactly Forager's unfolds (`pud_cairn_forager_equivalence`).
+  **Burrow** (`pud_burrow_*`, `atlas burrow`) is Forager over lazy, disk-backed storage, so memory stays bounded.
+  - No node keeps fields. A node's state (goals, axiom, depth, lvc, bindings) is folded from its path on demand
+    into `pud_node_state_cache`, a byte-budgeted LRU trimmed only between search steps.
+  - Modules are paged directories (`atlas module page|unpage`): an mmapped record file holding each node's parent,
+    contiguous child range and refuted flag, an append-only inference payload, and a name log. These are read
+    through `pud_decoded_node_cache` (`pud_paged_module`, composed by `pud_paged_module_assembly`). Every write
+    goes straight to the files.
+  - Loading walks only the focus tree's ids (`pud_focus_leaf_scanner`); there is no activation pass.
+  - Burrow makes exactly Forager's unfolds whatever the budgets (`pud_burrow_forager_equivalence`).
   Read `docs/pud-architecture.md` and `docs/pud-solver-architecture.md` before touching `pud_*`.
 
 `README.md` predates PUD and lists only some of the subcommands. `cli/entry/main.cpp` is the

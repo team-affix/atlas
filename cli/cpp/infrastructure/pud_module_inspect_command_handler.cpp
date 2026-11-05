@@ -1,7 +1,10 @@
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
 
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -12,6 +15,8 @@
 #include "infrastructure/named_functor_printer.hpp"
 #include "infrastructure/pud_module.hpp"
 #include "infrastructure/pud_module_deserializer_stack.hpp"
+#include "infrastructure/pud_module_pager.hpp"
+#include "infrastructure/pud_paged_module_assembly.hpp"
 #include "infrastructure/rule_printer.hpp"
 #include "value_objects/pud_inference.hpp"
 #include "value_objects/pud_node_id.hpp"
@@ -28,12 +33,20 @@ pud_module_inspect_command_handler::pud_module_inspect_command_handler(
     , detailed_(detailed)
     , show_inferences_(show_inferences) {}
 
+// A paged module directory is read back into memory first; a binary module file is read directly.
 void pud_module_inspect_command_handler::operator()() {
-    std::ifstream in(input_path_, std::ios::binary);
-    if (!in)
-        throw std::runtime_error("cannot open input file: " + input_path_);
     pud_module_deserializer_stack deserializer_stack;
-    const pud_module module = deserializer_stack.deserialize_module(in);
+    const bool paged = std::filesystem::is_directory(input_path_);
+    std::ifstream in;
+    if (!paged)
+        in.open(input_path_, std::ios::binary);
+    if (!paged && !in)
+        throw std::runtime_error("cannot open input file: " + input_path_);
+    std::optional<pud_paged_module_assembly> assembly;
+    if (paged)
+        assembly.emplace(input_path_, deserializer_stack.exprs(), size_t{1} << 26);
+    const pud_module module = paged ? pud_module_pager{}.unpage(assembly->module())
+                                    : deserializer_stack.deserialize_module(in);
     hex_uint64 hex_codec;
     if (id_only_) {
         std::cout << hex_codec.format_hex(module.get_module_id()) << '\n';
