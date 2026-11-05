@@ -180,10 +180,9 @@ struct PudTrailGoalQuerierIntegrationTest : public ::testing::Test {
                 const std::optional<pud_goal_trails> trails = find_trails(leaf, goal);
                 const std::vector<pud_eager_candidate> resumed = trail_querier.query(
                     leaf.module, bindings, goal_expr, lvc, trails.has_value() ? &trails.value() : nullptr);
-                const std::vector<pud_eager_candidate> fresh =
-                    sorted_all(querier.query(leaf.module, bindings, goal_expr, lvc));
-                EXPECT_EQ(sorted_all(resumed), fresh) << "leaf " << leaf.node << " goal " << goal;
-                EXPECT_EQ(fresh, reactive_candidates(leaf.module, bindings, goal_expr, lvc))
+                const std::vector<pud_eager_candidate> fresh = querier.query(leaf.module, bindings, goal_expr, lvc);
+                EXPECT_EQ(resumed, fresh) << "leaf " << leaf.node << " goal " << goal;
+                EXPECT_EQ(sorted_all(fresh), reactive_candidates(leaf.module, bindings, goal_expr, lvc))
                     << "leaf " << leaf.node << " goal " << goal;
                 pud_goal_trails left{.candidates = {}, .forked = false};
                 for (const pud_eager_candidate& candidate : resumed)

@@ -79,6 +79,17 @@ pud_witness_search_stack pud_stack_on(const pud_replay&, const std::vector<pud_g
     return search;
 }
 
+// The specializer refilled witness a under child 5 after b survived under child 3.
+bool pud_refill_after_survivor(pud_specialization_state& state) {
+    const pud_replay under_three{.node = pud_test_node(3), .frame_offset = 0u, .ubs_state = {}};
+    const pud_replay under_five{.node = pud_test_node(5), .frame_offset = 0u, .ubs_state = {}};
+    state.witnesses->a = pud_specialization_witness{
+        .search_root = under_five, .search = {.frames = {}}, .leaf = pud_test_node(5)};
+    state.witnesses->b = pud_specialization_witness{
+        .search_root = under_three, .search = {.frames = {}}, .leaf = pud_test_node(6)};
+    return true;
+}
+
 using test_resumer_t = pud_candidate_trail_resumer<
     NiceMock<MockEnterReplay>, NiceMock<MockDescendReplay>, NiceMock<MockFindAncestorPath>,
     NiceMock<MockRebuildWitnessSearch>, NiceMock<MockResumeWitnessSearch>, NiceMock<MockSpecializeCandidate>,
@@ -150,6 +161,8 @@ TEST_F(PudCandidateTrailResumerTest, EachWitnessSearchIsRebuiltFromTheChainBelow
 }
 
 TEST_F(PudCandidateTrailResumerTest, AWitnessTheSearchLosesIsLeftForTheSpecializerToRefill) {
+    // The specializer refills what is missing; this test only reads the state it was handed.
+    ON_CALL(specialize, specialize(_)).WillByDefault(DoAll(SaveArg<0>(&specialized), Return(false)));
     ON_CALL(resume, resume(Field(&pud_replay::node, pud_test_node(3)), _)).WillByDefault(Return(std::nullopt));
     resumer.resume(k_test_module, bindings, &goal, 4, trail);
     EXPECT_FALSE(specialized.witnesses->a.has_value());
@@ -157,6 +170,8 @@ TEST_F(PudCandidateTrailResumerTest, AWitnessTheSearchLosesIsLeftForTheSpecializ
 }
 
 TEST_F(PudCandidateTrailResumerTest, AWitnessRootThatNoLongerReplaysIsLost) {
+    // The specializer refills what is missing; this test only reads the state it was handed.
+    ON_CALL(specialize, specialize(_)).WillByDefault(DoAll(SaveArg<0>(&specialized), Return(false)));
     ON_CALL(descend, descend(_, pud_test_node(5))).WillByDefault(Return(std::nullopt));
     resumer.resume(k_test_module, bindings, &goal, 4, trail);
     EXPECT_FALSE(specialized.witnesses->b.has_value());
@@ -164,6 +179,8 @@ TEST_F(PudCandidateTrailResumerTest, AWitnessRootThatNoLongerReplaysIsLost) {
 }
 
 TEST_F(PudCandidateTrailResumerTest, APathNodeThatNoLongerReplaysLeavesTheCandidateOnItsParentLookingAfterIt) {
+    // The specializer refills what is missing; this test only reads the state it was handed.
+    ON_CALL(specialize, specialize(_)).WillByDefault(DoAll(SaveArg<0>(&specialized), Return(false)));
     ON_CALL(descend, descend(_, pud_test_node(2))).WillByDefault(Return(std::nullopt));
     EXPECT_CALL(rebuild, rebuild(_, _)).Times(0);
     resumer.resume(k_test_module, bindings, &goal, 4, trail);
@@ -193,4 +210,12 @@ TEST_F(PudCandidateTrailResumerTest, TheResumedCandidateListsItsPathAndWitnessLe
 TEST_F(PudCandidateTrailResumerTest, AnUnjustifiedCandidateIsLeftOut) {
     ON_CALL(specialize, specialize(_)).WillByDefault(Return(false));
     EXPECT_FALSE(resumer.resume(k_test_module, bindings, &goal, 4, trail).has_value());
+}
+
+TEST_F(PudCandidateTrailResumerTest, WitnessLeavesAreListedInTheirChildOrderLikeAFreshQuery) {
+    ON_CALL(specialize, specialize(_)).WillByDefault(Invoke(&pud_refill_after_survivor));
+    EXPECT_THAT(
+        resumer.resume(k_test_module, bindings, &goal, 4, trail),
+        Optional(pud_eager_candidate{
+            .path = {pud_test_node(0), pud_test_node(2)}, .witness_leaves = {pud_test_node(6), pud_test_node(5)}}));
 }

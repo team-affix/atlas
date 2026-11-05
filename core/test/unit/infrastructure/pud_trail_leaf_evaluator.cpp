@@ -35,6 +35,9 @@ struct MockGetNodeLvc {
 struct MockGetNodeTrails {
     MOCK_METHOD(const pud_node_trails&, get, (pud_global_node_id));
 };
+struct MockEraseNodeTrails {
+    MOCK_METHOD(void, erase, (pud_global_node_id));
+};
 struct MockStoreNodeTrails {
     MOCK_METHOD(void, store, (pud_global_node_id, pud_node_trails));
 };
@@ -47,7 +50,7 @@ struct MockQueryGoal {
 
 using test_evaluator_t = pud_trail_leaf_evaluator<
     NiceMock<MockGetNodeGoals>, NiceMock<MockGetNodeBindings>, NiceMock<MockGetNodeLvc>, NiceMock<MockGetNodeTrails>,
-    NiceMock<MockStoreNodeTrails>, NiceMock<MockQueryGoal>>;
+    NiceMock<MockEraseNodeTrails>, NiceMock<MockStoreNodeTrails>, NiceMock<MockQueryGoal>>;
 
 // The leaf 2 has goals 1 and 4; it holds trails for goal 1 only, and every query finds candidate 9.
 struct PudTrailLeafEvaluatorTest : public ::testing::Test {
@@ -55,9 +58,10 @@ struct PudTrailLeafEvaluatorTest : public ::testing::Test {
     NiceMock<MockGetNodeBindings> bindings;
     NiceMock<MockGetNodeLvc> lvcs;
     NiceMock<MockGetNodeTrails> get_trails;
+    NiceMock<MockEraseNodeTrails> erase_trails;
     NiceMock<MockStoreNodeTrails> store_trails;
     NiceMock<MockQueryGoal> querier;
-    test_evaluator_t evaluator{goals, bindings, lvcs, get_trails, store_trails, querier};
+    test_evaluator_t evaluator{goals, bindings, lvcs, get_trails, erase_trails, store_trails, querier};
     expr goal_a{.content = expr::var{.index = 0}};
     expr goal_b{.content = expr::var{.index = 1}};
     pud_goal_list leaf_goals{
@@ -102,6 +106,13 @@ TEST_F(PudTrailLeafEvaluatorTest, TheLeafThenHoldsTheUnforkedTrailsTheEvaluation
     ASSERT_NE(stored.find(4), nullptr);
     EXPECT_EQ(stored.find(1)->get(), left_by_candidate);
     EXPECT_EQ(stored.find(4)->get(), left_by_candidate);
+}
+
+TEST_F(PudTrailLeafEvaluatorTest, TheNewTrailsReplaceTheHeldOnes) {
+    ::testing::InSequence in_order;
+    EXPECT_CALL(erase_trails, erase(pud_test_node(2)));
+    EXPECT_CALL(store_trails, store(pud_test_node(2), _));
+    evaluator.evaluate(pud_test_node(2));
 }
 
 TEST_F(PudTrailLeafEvaluatorTest, TrailsThatComeOutUnchangedKeepTheirBox) {

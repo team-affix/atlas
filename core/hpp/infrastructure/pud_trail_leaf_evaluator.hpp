@@ -16,12 +16,14 @@
 
 // Queries every open goal of a leaf now, in goal order, from the trails the leaf holds, and stops at the first goal
 // without a candidate: the leaf is refuted. The leaf then holds the trails this evaluation leaves, for its children
-// to inherit; a goal whose trails came out unchanged keeps its box, still shared with its relatives.
+// to inherit, in place of those it held; a goal whose trails came out unchanged keeps its box, still shared with its
+// relatives.
 template<
     typename IGetNodeGoals,
     typename IGetNodeBindings,
     typename IGetNodeLvc,
     typename IGetNodeTrails,
+    typename IEraseNodeTrails,
     typename IStoreNodeTrails,
     typename IQueryGoal>
 struct pud_trail_leaf_evaluator {
@@ -30,6 +32,7 @@ struct pud_trail_leaf_evaluator {
         IGetNodeBindings& get_node_bindings,
         IGetNodeLvc& get_node_lvc,
         IGetNodeTrails& get_node_trails,
+        IEraseNodeTrails& erase_node_trails,
         IStoreNodeTrails& store_node_trails,
         IQueryGoal& query_goal);
     pud_leaf_evaluation evaluate(pud_global_node_id leaf) const;
@@ -38,16 +41,17 @@ private:
     IGetNodeBindings& get_node_bindings_;
     IGetNodeLvc& get_node_lvc_;
     IGetNodeTrails& get_node_trails_;
+    IEraseNodeTrails& erase_node_trails_;
     IStoreNodeTrails& store_node_trails_;
     IQueryGoal& query_goal_;
 };
 
 #define PUD_TRAIL_LEAF_EVALUATOR_TEMPLATE                                                                \
     template<typename IGetNodeGoals, typename IGetNodeBindings, typename IGetNodeLvc,                    \
-             typename IGetNodeTrails, typename IStoreNodeTrails, typename IQueryGoal>
+             typename IGetNodeTrails, typename IEraseNodeTrails, typename IStoreNodeTrails, typename IQueryGoal>
 #define PUD_TRAIL_LEAF_EVALUATOR                                                                         \
     pud_trail_leaf_evaluator<IGetNodeGoals, IGetNodeBindings, IGetNodeLvc, IGetNodeTrails,               \
-        IStoreNodeTrails, IQueryGoal>
+        IEraseNodeTrails, IStoreNodeTrails, IQueryGoal>
 
 PUD_TRAIL_LEAF_EVALUATOR_TEMPLATE
 PUD_TRAIL_LEAF_EVALUATOR::pud_trail_leaf_evaluator(
@@ -55,12 +59,14 @@ PUD_TRAIL_LEAF_EVALUATOR::pud_trail_leaf_evaluator(
     IGetNodeBindings& get_node_bindings,
     IGetNodeLvc& get_node_lvc,
     IGetNodeTrails& get_node_trails,
+    IEraseNodeTrails& erase_node_trails,
     IStoreNodeTrails& store_node_trails,
     IQueryGoal& query_goal)
     : get_node_goals_(get_node_goals)
     , get_node_bindings_(get_node_bindings)
     , get_node_lvc_(get_node_lvc)
     , get_node_trails_(get_node_trails)
+    , erase_node_trails_(erase_node_trails)
     , store_node_trails_(store_node_trails)
     , query_goal_(query_goal) {}
 
@@ -86,6 +92,7 @@ pud_leaf_evaluation PUD_TRAIL_LEAF_EVALUATOR::evaluate(pud_global_node_id leaf) 
         if (evaluation.refuted)
             break;
     }
+    erase_node_trails_.erase(leaf);
     store_node_trails_.store(leaf, std::move(left));
     return evaluation;
 }

@@ -130,10 +130,18 @@ std::optional<pud_eager_candidate> PUD_CANDIDATE_TRAIL_RESUMER::resume(
     if (!specialize_candidate_.specialize(state))
         return std::nullopt;
     pud_eager_candidate found{.path = std::move(state.path), .witness_leaves = {}};
-    if (!state.witnesses.has_value())
+    if (!state.witnesses.has_value()) {
         found.witness_leaves.push_back(state.current.node);
-    else
-        found.witness_leaves = {state.witnesses->a->leaf, state.witnesses->b->leaf};
+        return found;
+    }
+    // A fresh query finds its witnesses in child order; a refilled witness may stand after the one that survived.
+    const pud_specialization_witness& a = state.witnesses->a.value();
+    const pud_specialization_witness& b = state.witnesses->b.value();
+    const size_t a_child = find_child_index(state.current.node, a.search_root.node);
+    const size_t b_child = find_child_index(state.current.node, b.search_root.node);
+    const bool a_first = a_child < b_child;
+    found.witness_leaves = a_first ? std::vector<pud_global_node_id>{a.leaf, b.leaf}
+                                   : std::vector<pud_global_node_id>{b.leaf, a.leaf};
     return found;
 }
 
