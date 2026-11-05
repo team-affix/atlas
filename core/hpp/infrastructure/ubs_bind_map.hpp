@@ -20,8 +20,8 @@ struct ubs_bind_map {
     void instantiate(const ubs_class& unbound, moduled_functor value);
     pud_ubs_state persist() &&;
 private:
-    immer::map<uint32_t, uint32_t>::transient_type parents_;
-    immer::map<uint32_t, ubs_class>::transient_type classes_;
+    ubs_map<uint32_t>::transient_type parents_;
+    ubs_map<ubs_class>::transient_type classes_;
 };
 
 #endif
