@@ -30,6 +30,9 @@ struct MockIsNodeRefuted {
 struct MockIsNodeLeaf {
     MOCK_METHOD(bool, is_leaf, (pud_global_node_id), (const));
 };
+struct MockTrimCaches {
+    MOCK_METHOD(void, trim, ());
+};
 
 // The stored tree: axiom 0 has children 1, 2; node 1 has children 3, 4; nodes 2, 3, 4 are leaves.
 // Axiom 5 of the same module and node 9 of another module lie outside the focus 0.
@@ -59,8 +62,10 @@ struct StoredTree {
 
 
 struct PudFocusLeafScannerTest : public ::testing::Test, StoredTree {
-    pud_focus_leaf_scanner<NiceMock<MockGetChildren>, NiceMock<MockIsNodeRefuted>, NiceMock<MockIsNodeLeaf>> scanner{
-        children, refuted, leaves, pud_test_node(0)};
+    NiceMock<MockTrimCaches> caches;
+    pud_focus_leaf_scanner<
+        NiceMock<MockGetChildren>, NiceMock<MockIsNodeRefuted>, NiceMock<MockIsNodeLeaf>, NiceMock<MockTrimCaches>>
+        scanner{children, refuted, leaves, caches, pud_test_node(0)};
     void SetUp() override { stub(); }
 };
 
@@ -82,4 +87,17 @@ TEST_F(PudFocusLeafScannerTest, ARefutedSubtreeIsNotWalked) {
 
 TEST_F(PudFocusLeafScannerTest, AnotherModuleHasNoOffspring) {
     EXPECT_THAT(scanner.activate_module(k_test_module + 1).offspring, IsEmpty());
+}
+
+TEST_F(PudFocusLeafScannerTest, ASmallTreeIsWalkedWithoutTrimming) {
+    EXPECT_CALL(caches, trim()).Times(0);
+    scanner.activate_module(k_test_module);
+}
+
+TEST_F(PudFocusLeafScannerTest, ALargeTreeIsWalkedWithTheCachesTrimmedAlongTheWay) {
+    child_lists[0].clear();
+    for (pud_node_id child = 10; child < 10 + 10000; ++child)
+        child_lists[0].push_back(child);
+    EXPECT_CALL(caches, trim()).Times(2);
+    EXPECT_EQ(scanner.activate_module(k_test_module).offspring.size(), 10000u);
 }

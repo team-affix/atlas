@@ -1,5 +1,12 @@
 #include "infrastructure/pud_burrow_manifest.hpp"
 
+namespace {
+
+// Leaves taken into the frontier at a time when a module is registered, between cache trims.
+constexpr size_t k_register_chunk_size = 4096;
+
+}
+
 pud_burrow_manifest::pud_burrow_manifest(
     expr_pool& expr_pool,
     pud_global_node_id focus_axiom,
@@ -31,6 +38,8 @@ pud_burrow_manifest::pud_burrow_manifest(
     , node_depths_(node_states_)
     , node_lvcs_(node_states_)
     , node_bindings_(node_states_)
+    , module_trim_list_()
+    , cache_trimmer_(node_states_, module_trim_list_)
     , focus_test_(modules_, focus_axiom)
     , refutation_propagator_(modules_, modules_, modules_, modules_)
     , replayer_(modules_, modules_, expr_pool, bind_map_factory_, cycle_detector_factory_, unifier_factory_)
@@ -48,7 +57,7 @@ pud_burrow_manifest::pud_burrow_manifest(
     , activity_mover_()
     , child_shuffler_()
     , unfolder_(resolver_, child_shuffler_, modules_, activity_mover_, modules_)
-    , module_activator_(modules_, modules_, modules_, focus_axiom)
+    , module_activator_(modules_, modules_, modules_, cache_trimmer_, focus_axiom)
     , solution_store_()
     , pending_conflict_store_()
     , unfold_allower_(node_depths_, node_goals_, max_node_depth, max_open_goals)
@@ -65,9 +74,8 @@ pud_burrow_manifest::pud_burrow_manifest(
     , driver_(
           focus_round_robin_, unfoldable_leaf_filter_, leaf_evaluator_, evaluation_store_, leaf_refuter_,
           focus_leaf_tally_, goal_chooser_, unfold_depth_recorder_, cascade_depth)
-    , state_trimming_step_(driver_, node_states_)
-    , module_trim_list_()
-    , trimming_step_(state_trimming_step_, module_trim_list_)
+    , trimming_step_(driver_, cache_trimmer_)
+    , register_applier_(focus_leaf_tally_, cache_trimmer_, k_register_chunk_size)
     , disk_meter_()
     , disk_budget_step_(trimming_step_, disk_meter_, max_disk_bytes)
     , solved_leaf_finder_(focus_frontier_, modules_)
@@ -82,5 +90,5 @@ pud_burrow_manifest::pud_burrow_manifest(
           solution_store_, pending_conflict_store_, solution_taker_, disk_budget_step_, focus_frontier_, max_unfolds)
     , search_driver_(searcher_.search())
     , module_loader_(
-          functor_linker_, modules_, module_activator_, focus_leaf_tally_, pending_conflict_store_,
+          functor_linker_, modules_, module_activator_, register_applier_, pending_conflict_store_,
           stored_solution_dropper_) {}

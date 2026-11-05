@@ -8,10 +8,12 @@
 #include "infrastructure/pud_axiom_focus_test.hpp"
 #include "infrastructure/pud_bind_map_factory.hpp"
 #include "infrastructure/pud_binder.hpp"
+#include "infrastructure/pud_cache_trimmer.hpp"
 #include "infrastructure/pud_cache_trimming_step.hpp"
 #include "infrastructure/pud_child_goal_list_builder.hpp"
 #include "infrastructure/pud_child_scan_refutation_propagator.hpp"
 #include "infrastructure/pud_child_shuffler.hpp"
+#include "infrastructure/pud_chunked_register_applier.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_demoduler.hpp"
 #include "infrastructure/pud_disk_budget_step.hpp"
@@ -128,6 +130,12 @@ struct pud_burrow_manifest {
     struct node_bindings_t : pud_state_bindings<node_states_t> {
         using pud_state_bindings<node_states_t>::pud_state_bindings;
     };
+    struct module_trim_list_t : pud_module_trim_list<module_t> {
+        using pud_module_trim_list<module_t>::pud_module_trim_list;
+    };
+    struct cache_trimmer_t : pud_cache_trimmer<node_states_t, module_trim_list_t> {
+        using pud_cache_trimmer<node_states_t, module_trim_list_t>::pud_cache_trimmer;
+    };
     struct focus_test_t : pud_axiom_focus_test<module_registry_t> {
         using pud_axiom_focus_test<module_registry_t>::pud_axiom_focus_test;
     };
@@ -190,8 +198,10 @@ struct pud_burrow_manifest {
             resolver_t, pud_child_shuffler, module_registry_t, pud_lazy_activity_mover,
             module_registry_t>::pud_unfolder;
     };
-    struct module_activator_t : pud_focus_leaf_scanner<module_registry_t, module_registry_t, module_registry_t> {
-        using pud_focus_leaf_scanner<module_registry_t, module_registry_t, module_registry_t>::pud_focus_leaf_scanner;
+    struct module_activator_t : pud_focus_leaf_scanner<
+        module_registry_t, module_registry_t, module_registry_t, cache_trimmer_t> {
+        using pud_focus_leaf_scanner<
+            module_registry_t, module_registry_t, module_registry_t, cache_trimmer_t>::pud_focus_leaf_scanner;
     };
     struct unfold_allower_t : pud_unfold_allower<node_depths_t, node_goals_t> {
         using pud_unfold_allower<node_depths_t, node_goals_t>::pud_unfold_allower;
@@ -234,14 +244,11 @@ struct pud_burrow_manifest {
             focus_round_robin_t, unfoldable_leaf_filter_t, leaf_evaluator_t, pud_leaf_evaluation_store,
             leaf_refuter_t, focus_leaf_tally_t, goal_chooser_t, unfold_depth_recorder_t>::pud_witness_cascade_driver;
     };
-    struct state_trimming_step_t : pud_cache_trimming_step<driver_t, node_states_t> {
-        using pud_cache_trimming_step<driver_t, node_states_t>::pud_cache_trimming_step;
+    struct trimming_step_t : pud_cache_trimming_step<driver_t, cache_trimmer_t> {
+        using pud_cache_trimming_step<driver_t, cache_trimmer_t>::pud_cache_trimming_step;
     };
-    struct module_trim_list_t : pud_module_trim_list<module_t> {
-        using pud_module_trim_list<module_t>::pud_module_trim_list;
-    };
-    struct trimming_step_t : pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t> {
-        using pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t>::pud_cache_trimming_step;
+    struct register_applier_t : pud_chunked_register_applier<focus_leaf_tally_t, cache_trimmer_t> {
+        using pud_chunked_register_applier<focus_leaf_tally_t, cache_trimmer_t>::pud_chunked_register_applier;
     };
     struct disk_meter_t : pud_disk_meter<pud_paged_module_assembly> {
         using pud_disk_meter<pud_paged_module_assembly>::pud_disk_meter;
@@ -280,10 +287,10 @@ struct pud_burrow_manifest {
             solved_leaf_finder_t, module_registry_t, focus_leaf_tally_t>::pud_stored_solution_dropper;
     };
     struct module_loader_t : pud_module_loader<
-        module_t, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
+        module_t, functor_linker_t, module_registry_t, module_activator_t, register_applier_t,
         pud_pending_conflict_store, stored_solution_dropper_t> {
         using pud_module_loader<
-            module_t, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
+            module_t, functor_linker_t, module_registry_t, module_activator_t, register_applier_t,
             pud_pending_conflict_store, stored_solution_dropper_t>::pud_module_loader;
     };
 
@@ -318,6 +325,8 @@ struct pud_burrow_manifest {
     node_depths_t                 node_depths_;
     node_lvcs_t                   node_lvcs_;
     node_bindings_t               node_bindings_;
+    module_trim_list_t            module_trim_list_;
+    cache_trimmer_t               cache_trimmer_;
     focus_test_t                  focus_test_;
     refutation_propagator_t       refutation_propagator_;
 
@@ -350,9 +359,8 @@ struct pud_burrow_manifest {
     smallest_goal_chooser_t       smallest_goal_chooser_;
     goal_chooser_t                goal_chooser_;
     driver_t                      driver_;
-    state_trimming_step_t         state_trimming_step_;
-    module_trim_list_t            module_trim_list_;
     trimming_step_t               trimming_step_;
+    register_applier_t            register_applier_;
     disk_meter_t                  disk_meter_;
     disk_budget_step_t            disk_budget_step_;
     solved_leaf_finder_t          solved_leaf_finder_;
