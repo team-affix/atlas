@@ -42,7 +42,8 @@ TEST_F(PudAncestorPathFinderTest, ARootsPathIsItself) {
 }
 
 TEST_F(PudAncestorPathFinderTest, TheChainBelowAnAncestorLeavesTheAncestorOut) {
-    EXPECT_THAT(finder.find_path_below(pud_test_node(2), pud_test_node(9)), ElementsAre(pud_test_node(5), pud_test_node(9)));
+    EXPECT_THAT(
+        finder.find_path_below(pud_test_node(2), pud_test_node(9)), ElementsAre(pud_test_node(5), pud_test_node(9)));
 }
 
 TEST_F(PudAncestorPathFinderTest, TheChainBelowANodeItselfIsEmpty) {
