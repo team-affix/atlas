@@ -14,7 +14,8 @@ pud_burrow_runtime::pud_burrow_runtime(
           max_open_goals, state_cache_bytes,
           report_stored_solutions) {}
 
-void pud_burrow_runtime::register_module(pud_module& module) {
+void pud_burrow_runtime::register_module(pud_burrow_manifest::module_t& module) {
+    manifest_.module_trim_list_.add(module);
     manifest_.module_loader_.load(module);
 }
 

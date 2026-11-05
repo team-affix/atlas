@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <set>
@@ -10,6 +11,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <unistd.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "infrastructure/db.hpp"
@@ -21,6 +23,8 @@
 #include "infrastructure/pud_burrow_runtime.hpp"
 #include "pud_burrow_steps.hpp"
 #include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_module_pager.hpp"
+#include "infrastructure/pud_paged_module_assembly.hpp"
 #include "infrastructure/functor_names.hpp"
 #include "infrastructure/var_names.hpp"
 #include "value_objects/expr.hpp"
@@ -55,12 +59,26 @@ const expr* solution_arg(runtime_ref& session, uint32_t index) {
     return std::get<expr::functor>(head->content).args.at(index);
 }
 
+// Each session pages its program into a scratch directory of its own, removed with the session.
 struct runtime_session_holder {
+    ~runtime_session_holder() { reset(); }
+    void reset() {
+        ref.reset();
+        burrow.reset();
+        paged.clear();
+        if (!scratch.empty())
+            std::filesystem::remove_all(scratch);
+        scratch.clear();
+    }
     test_functors functors;
     std::deque<pud_module> modules;
+    std::filesystem::path scratch;
+    std::deque<pud_paged_module_assembly> paged;
     std::optional<pud_burrow_runtime> burrow;
     std::optional<runtime_ref> ref;
 };
+
+inline size_t next_scratch_index = 0;
 
 runtime_ref& make_runtime_session(
     runtime_session_holder& holder,
@@ -89,9 +107,10 @@ runtime_ref& make_runtime_session(
     std::vector<const expr*> body;
     for (size_t index = 0; index < initial_goals.count(); ++index)
         body.push_back(initial_goals.get(index));
+    holder.reset();
     holder.modules.clear();
-    holder.burrow.reset();
-    holder.ref.reset();
+    holder.scratch = std::filesystem::temp_directory_path()
+                     / ("atlas_burrow_suite_" + std::to_string(::getpid()) + "_" + std::to_string(next_scratch_index++));
     holder.modules.emplace_back(1, std::vector<pud_module_id>{}, std::move(dependency_axioms));
     holder.modules.emplace_back(2, std::vector<pud_module_id>{1}, std::vector<rule>{
         rule(head, std::move(body), initial_frame_offset),
@@ -101,7 +120,10 @@ runtime_ref& make_runtime_session(
         k_test_max_open_goals, k_test_state_cache_bytes, false);
     for (pud_module& module : holder.modules) {
         install_shared_functor_names(module, holder.functors);
-        holder.burrow->register_module(module);
+        const std::string directory = (holder.scratch / std::to_string(module.get_module_id())).string();
+        pud_module_pager{}.page(module, directory, exprs);
+        holder.paged.emplace_back(directory, exprs, k_test_state_cache_bytes);
+        holder.burrow->register_module(holder.paged.back().module());
     }
     holder.ref.emplace(&*holder.burrow);
     return holder.ref.value();

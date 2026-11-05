@@ -1,6 +1,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
+#include <string>
 #include <tuple>
 #include <vector>
 #include <gtest/gtest.h>
@@ -9,14 +11,17 @@
 #include "infrastructure/pud_burrow_runtime.hpp"
 #include "infrastructure/pud_forager_runtime.hpp"
 #include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_module_pager.hpp"
+#include "infrastructure/pud_paged_module_assembly.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 #include "value_objects/rule.hpp"
 
-// Burrow works node states out from their paths when read and drops them when its cache is full; Forager keeps them
-// from activation on. A worked-out state equals a kept one, so the two make the same unfolds whatever the cache budget.
-// Both run the same program side by side, over their own copies of its modules and one shared expression pool, and
-// must report the same step, solution and depth every time, then stop for the same reason after the same number of
-// unfolds. A budget of zero drops every state after every step.
+// Burrow works node states out from their paths when read and reads its modules from disk, dropping both when their
+// caches are full; Forager keeps everything in memory from activation on. What is worked out or read again equals
+// what was kept, so the two make the same unfolds whatever the cache budgets. Both run the same program side by side,
+// Burrow over modules paged into a scratch directory, Forager over its own in-memory copies, sharing one expression
+// pool. They must report the same step, solution and depth every time, then stop for the same reason after the same
+// number of unfolds. A budget of zero drops every state and decoded node after every step.
 struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithParam<std::tuple<size_t, size_t>> {
     static constexpr pud_module_id k_library = 1;
     static constexpr pud_module_id k_query = 2;
@@ -28,8 +33,9 @@ struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithPa
     expr_pool exprs;
     std::vector<rule> library;
     std::vector<rule> query;
-    std::deque<pud_module> burrow_modules;
     std::deque<pud_module> forager_modules;
+    std::deque<pud_paged_module_assembly> burrow_modules;
+    std::filesystem::path scratch;
     size_t compared_steps = 0;
     size_t solutions = 0;
 
@@ -45,15 +51,36 @@ struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithPa
         return number;
     }
 
-    void load(std::deque<pud_module>& modules, pud_burrow_runtime* burrow, pud_forager_runtime* forager) {
-        modules.emplace_back(k_library, std::vector<pud_module_id>{}, library);
-        modules.emplace_back(k_query, std::vector<pud_module_id>{k_library}, query);
-        for (pud_module& module : modules) {
+    void SetUp() override {
+        const ::testing::TestInfo* test = ::testing::UnitTest::GetInstance()->current_test_info();
+        std::string name = std::string(test->test_suite_name()) + "." + test->name();
+        for (char& character : name)
+            character = character == '/' ? '_' : character;
+        scratch = std::filesystem::temp_directory_path() / ("atlas_burrow_" + name);
+        std::filesystem::remove_all(scratch);
+    }
+
+    void TearDown() override { std::filesystem::remove_all(scratch); }
+
+    void load_forager(pud_forager_runtime& forager) {
+        forager_modules.emplace_back(k_library, std::vector<pud_module_id>{}, library);
+        forager_modules.emplace_back(k_query, std::vector<pud_module_id>{k_library}, query);
+        for (pud_module& module : forager_modules) {
             install_shared_functor_names(module, functors);
-            if (burrow != nullptr)
-                burrow->register_module(module);
-            if (forager != nullptr)
-                forager->register_module(module);
+            forager.register_module(module);
+        }
+    }
+
+    void load_burrow(pud_burrow_runtime& burrow, size_t cache_bytes) {
+        std::deque<pud_module> unpaged;
+        unpaged.emplace_back(k_library, std::vector<pud_module_id>{}, library);
+        unpaged.emplace_back(k_query, std::vector<pud_module_id>{k_library}, query);
+        for (pud_module& module : unpaged) {
+            install_shared_functor_names(module, functors);
+            const std::string directory = (scratch / std::to_string(module.get_module_id())).string();
+            pud_module_pager{}.page(module, directory, exprs);
+            burrow_modules.emplace_back(directory, exprs, cache_bytes);
+            burrow.register_module(burrow_modules.back().module());
         }
     }
 
@@ -65,8 +92,8 @@ struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithPa
             exprs, focus, k_max_unfolds, cascade_depth, k_max_node_depth, k_max_open_goals, state_cache_bytes, false);
         pud_forager_runtime forager(
             exprs, focus, k_max_unfolds, cascade_depth, k_max_node_depth, k_max_open_goals, false);
-        load(burrow_modules, &burrow, nullptr);
-        load(forager_modules, nullptr, &forager);
+        load_burrow(burrow, state_cache_bytes);
+        load_forager(forager);
         for (;;) {
             const bool burrow_stepped = burrow.next();
             ASSERT_EQ(burrow_stepped, forager.next()) << "step " << compared_steps;

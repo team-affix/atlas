@@ -23,7 +23,7 @@ struct pud_burrow_runtime {
         size_t max_open_goals,
         size_t state_cache_bytes,
         bool report_stored_solutions);
-    void register_module(pud_module& module);
+    void register_module(pud_burrow_manifest::module_t& module);
     bool next();
     pud_search_step last_step() const;
     const expr* solution() const;

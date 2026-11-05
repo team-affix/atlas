@@ -64,7 +64,9 @@ pud_burrow_manifest::pud_burrow_manifest(
     , driver_(
           focus_round_robin_, unfoldable_leaf_filter_, leaf_evaluator_, evaluation_store_, leaf_refuter_,
           focus_leaf_tally_, goal_chooser_, unfold_depth_recorder_, cascade_depth)
-    , trimming_step_(driver_, node_states_)
+    , state_trimming_step_(driver_, node_states_)
+    , module_trim_list_()
+    , trimming_step_(state_trimming_step_, module_trim_list_)
     , solved_leaf_finder_(focus_frontier_, modules_)
     , stored_solution_dropper_(solved_leaf_finder_, modules_, focus_leaf_tally_, report_stored_solutions)
     , solution_term_reader_(node_axioms_, modules_, node_bindings_)

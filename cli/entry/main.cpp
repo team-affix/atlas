@@ -30,6 +30,8 @@
 #include "infrastructure/ridge_fc_command_handler.hpp"
 #include "infrastructure/pud_module_create_command_handler.hpp"
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
+#include "infrastructure/pud_module_page_command_handler.hpp"
+#include "infrastructure/pud_module_unpage_command_handler.hpp"
 #include "infrastructure/cairn_command_handler.hpp"
 #include "infrastructure/forager_command_handler.hpp"
 #include "infrastructure/lodestar_command_handler.hpp"
@@ -100,6 +102,36 @@ int main(int argc, char** argv) {
 
     struct {
         std::string input_path;
+        std::string output_directory;
+    } module_page_opts;
+
+    auto* module_page_sub = module_app->add_subcommand(
+        "page", "Write a binary PUD module file out as a paged module directory, for Burrow");
+    module_page_sub->add_option("module", module_page_opts.input_path, "Binary PUD module file")->required();
+    module_page_sub->add_option("-o,--output", module_page_opts.output_directory, "New paged module directory")
+        ->required();
+    module_page_sub->callback([&]() {
+        pud_module_page_command_handler handler{module_page_opts.input_path, module_page_opts.output_directory};
+        handler();
+    });
+
+    struct {
+        std::string input_directory;
+        std::string output_path;
+    } module_unpage_opts;
+
+    auto* module_unpage_sub = module_app->add_subcommand(
+        "unpage", "Write a paged module directory back out as a binary PUD module file");
+    module_unpage_sub->add_option("module", module_unpage_opts.input_directory, "Paged module directory")->required();
+    module_unpage_sub->add_option("-o,--output", module_unpage_opts.output_path, "Binary module file to write")
+        ->required();
+    module_unpage_sub->callback([&]() {
+        pud_module_unpage_command_handler handler{module_unpage_opts.input_directory, module_unpage_opts.output_path};
+        handler();
+    });
+
+    struct {
+        std::string input_path;
         bool id_only = false;
         bool deps_only = false;
         bool detailed = false;
@@ -108,7 +140,7 @@ int main(int argc, char** argv) {
 
     auto* module_inspect_sub = module_app->add_subcommand(
         "inspect",
-        "Print metadata from a binary PUD module file");
+        "Print metadata from a binary PUD module file or a paged module directory");
     module_inspect_sub->add_option("module", module_inspect_opts.input_path, "Binary PUD module file")->required();
     auto* module_inspect_id_flag = module_inspect_sub->add_flag(
         "--id",

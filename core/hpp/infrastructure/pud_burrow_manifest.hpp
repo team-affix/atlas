@@ -28,7 +28,8 @@
 #include "infrastructure/pud_leaf_refuter.hpp"
 #include "infrastructure/pud_leaf_round_robin.hpp"
 #include "infrastructure/pud_link_table.hpp"
-#include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_module_trim_list.hpp"
+#include "infrastructure/pud_paged_module_assembly.hpp"
 #include "infrastructure/pud_module_loader.hpp"
 #include "infrastructure/pud_module_registry.hpp"
 #include "infrastructure/pud_node_state_cache.hpp"
@@ -65,15 +66,17 @@
 #include "infrastructure/pud_witness_cascade_driver.hpp"
 #include "value_objects/pud_global_node_id.hpp"
 
-// Burrow: Forager's search over lazily worked-out node state. No node keeps goals, bindings or any other field: a
-// node's state is folded from its path when read and kept in a bounded cache, trimmed after every step. Loading
-// replays nothing; it only walks the focus tree's ids for its live leaves.
+// Burrow: Forager's search over lazily worked-out node state and modules paged from disk. No node keeps goals,
+// bindings or any other field: a node's state is folded from its path when read and kept in a bounded cache, and each
+// module's decoded nodes are kept in another; both are trimmed after every step. Loading replays nothing; it only
+// walks the focus tree's ids for its live leaves.
 struct pud_burrow_manifest {
+    using module_t = pud_paged_module_assembly::module_t;
     struct bind_map_factory_t : pud_bind_map_factory {
         using pud_bind_map_factory::pud_bind_map_factory;
     };
-    struct module_registry_t : pud_module_registry<pud_module> {
-        using pud_module_registry<pud_module>::pud_module_registry;
+    struct module_registry_t : pud_module_registry<module_t> {
+        using pud_module_registry<module_t>::pud_module_registry;
     };
     struct demoduler_t : pud_demoduler<pud_link_table, expr_pool, expr_pool> {
         using pud_demoduler<pud_link_table, expr_pool, expr_pool>::pud_demoduler;
@@ -229,8 +232,14 @@ struct pud_burrow_manifest {
             focus_round_robin_t, unfoldable_leaf_filter_t, leaf_evaluator_t, pud_leaf_evaluation_store,
             leaf_refuter_t, focus_leaf_tally_t, goal_chooser_t, unfold_depth_recorder_t>::pud_witness_cascade_driver;
     };
-    struct trimming_step_t : pud_cache_trimming_step<driver_t, node_states_t> {
+    struct state_trimming_step_t : pud_cache_trimming_step<driver_t, node_states_t> {
         using pud_cache_trimming_step<driver_t, node_states_t>::pud_cache_trimming_step;
+    };
+    struct module_trim_list_t : pud_module_trim_list<module_t> {
+        using pud_module_trim_list<module_t>::pud_module_trim_list;
+    };
+    struct trimming_step_t : pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t> {
+        using pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t>::pud_cache_trimming_step;
     };
     struct solved_leaf_finder_t : pud_solved_leaf_finder<focus_frontier_t, module_registry_t> {
         using pud_solved_leaf_finder<focus_frontier_t, module_registry_t>::pud_solved_leaf_finder;
@@ -263,10 +272,10 @@ struct pud_burrow_manifest {
             solved_leaf_finder_t, module_registry_t, focus_leaf_tally_t>::pud_stored_solution_dropper;
     };
     struct module_loader_t : pud_module_loader<
-        pud_module, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
+        module_t, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
         pud_pending_conflict_store, stored_solution_dropper_t> {
         using pud_module_loader<
-            pud_module, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
+            module_t, functor_linker_t, module_registry_t, module_activator_t, focus_leaf_tally_t,
             pud_pending_conflict_store, stored_solution_dropper_t>::pud_module_loader;
     };
 
@@ -332,6 +341,8 @@ struct pud_burrow_manifest {
     smallest_goal_chooser_t       smallest_goal_chooser_;
     goal_chooser_t                goal_chooser_;
     driver_t                      driver_;
+    state_trimming_step_t         state_trimming_step_;
+    module_trim_list_t            module_trim_list_;
     trimming_step_t               trimming_step_;
     solved_leaf_finder_t          solved_leaf_finder_;
     stored_solution_dropper_t     stored_solution_dropper_;
