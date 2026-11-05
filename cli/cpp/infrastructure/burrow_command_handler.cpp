@@ -1,6 +1,7 @@
 #include "infrastructure/burrow_command_handler.hpp"
 
 #include <cstdio>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -50,8 +51,17 @@ burrow_command_handler::burrow_command_handler(
           solve_timer_, autosaver_, autosaver_, sim_progress_interval) {}
 
 // Opening a directory reads its header only, and registering a module walks just the focus tree's ids, so the
-// runtime is ready at once whatever the modules' size. The cache totals follow the final line unless quiet.
+// runtime is ready at once whatever the modules' size. The cache totals follow the final line unless quiet. A binary
+// module file given in place of a directory is turned away with the command that pages it.
 void burrow_command_handler::operator()() {
+    for (const std::string& directory : module_directories_) {
+        if (std::filesystem::is_regular_file(directory))
+            throw std::runtime_error(
+                directory + " is a module file, but burrow reads paged module directories. Page it first with: "
+                + "atlas module page " + directory + " -o " + directory + ".dir");
+        if (!std::filesystem::is_directory(directory))
+            throw std::runtime_error("no paged module directory at " + directory);
+    }
     for (const std::string& directory : module_directories_) {
         const readout_t::time_point opened = readout_.begin("Opening module " + directory);
         opened_.open(directory);
