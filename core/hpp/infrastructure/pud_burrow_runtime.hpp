@@ -6,7 +6,7 @@
 #include <string>
 #include "infrastructure/expr_pool.hpp"
 #include "infrastructure/pud_burrow_manifest.hpp"
-#include "infrastructure/pud_module.hpp"
+#include "infrastructure/pud_paged_module_assembly.hpp"
 #include "value_objects/expr.hpp"
 #include "value_objects/pud_focus_leaf_counts.hpp"
 #include "value_objects/pud_global_node_id.hpp"
@@ -22,8 +22,9 @@ struct pud_burrow_runtime {
         size_t max_node_depth,
         size_t max_open_goals,
         size_t state_cache_bytes,
+        size_t max_disk_bytes,
         bool report_stored_solutions);
-    void register_module(pud_burrow_manifest::module_t& module);
+    void register_module(pud_paged_module_assembly& module_files);
     bool next();
     pud_search_step last_step() const;
     const expr* solution() const;
@@ -34,6 +35,7 @@ struct pud_burrow_runtime {
     size_t count_nodes() const;
     size_t state_cache_hits() const;
     size_t state_cache_misses() const;
+    size_t disk_bytes() const;
     pud_focus_leaf_counts count_focus_leaves() const;
     bool has_pending_solution() const;
     const std::string& functor_name(uint32_t global_functor_id) const;

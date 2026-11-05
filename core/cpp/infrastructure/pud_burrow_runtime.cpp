@@ -8,15 +8,17 @@ pud_burrow_runtime::pud_burrow_runtime(
     size_t max_node_depth,
     size_t max_open_goals,
     size_t state_cache_bytes,
+    size_t max_disk_bytes,
     bool report_stored_solutions)
     : manifest_(
           exprs, focus_axiom, max_unfolds, cascade_depth, max_node_depth,
           max_open_goals, state_cache_bytes,
-          report_stored_solutions) {}
+          max_disk_bytes, report_stored_solutions) {}
 
-void pud_burrow_runtime::register_module(pud_burrow_manifest::module_t& module) {
-    manifest_.module_trim_list_.add(module);
-    manifest_.module_loader_.load(module);
+void pud_burrow_runtime::register_module(pud_paged_module_assembly& module_files) {
+    manifest_.module_trim_list_.add(module_files.module());
+    manifest_.disk_meter_.add(module_files);
+    manifest_.module_loader_.load(module_files.module());
 }
 
 bool pud_burrow_runtime::next() {
@@ -36,6 +38,8 @@ size_t pud_burrow_runtime::solution_depth() const {
 }
 
 pud_search_stop_reason pud_burrow_runtime::stop_reason() const {
+    if (manifest_.disk_budget_step_.exceeded())
+        return pud_search_stop_reason::disk_full;
     return manifest_.searcher_.stop_reason();
 }
 
@@ -49,6 +53,10 @@ size_t pud_burrow_runtime::unfold_depth_sum() const {
 
 size_t pud_burrow_runtime::count_nodes() const {
     return manifest_.modules_.count_nodes();
+}
+
+size_t pud_burrow_runtime::disk_bytes() const {
+    return manifest_.disk_meter_.bytes();
 }
 
 size_t pud_burrow_runtime::state_cache_hits() const {

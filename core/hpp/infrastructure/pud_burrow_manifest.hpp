@@ -14,6 +14,8 @@
 #include "infrastructure/pud_child_shuffler.hpp"
 #include "infrastructure/pud_cycle_detector_factory.hpp"
 #include "infrastructure/pud_demoduler.hpp"
+#include "infrastructure/pud_disk_budget_step.hpp"
+#include "infrastructure/pud_disk_meter.hpp"
 #include "infrastructure/pud_eager_goal_querier.hpp"
 #include "infrastructure/pud_eager_leaf_evaluator.hpp"
 #include "infrastructure/pud_evaluation_resolver.hpp"
@@ -241,6 +243,12 @@ struct pud_burrow_manifest {
     struct trimming_step_t : pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t> {
         using pud_cache_trimming_step<state_trimming_step_t, module_trim_list_t>::pud_cache_trimming_step;
     };
+    struct disk_meter_t : pud_disk_meter<pud_paged_module_assembly> {
+        using pud_disk_meter<pud_paged_module_assembly>::pud_disk_meter;
+    };
+    struct disk_budget_step_t : pud_disk_budget_step<trimming_step_t, disk_meter_t> {
+        using pud_disk_budget_step<trimming_step_t, disk_meter_t>::pud_disk_budget_step;
+    };
     struct solved_leaf_finder_t : pud_solved_leaf_finder<focus_frontier_t, module_registry_t> {
         using pud_solved_leaf_finder<focus_frontier_t, module_registry_t>::pud_solved_leaf_finder;
     };
@@ -261,9 +269,9 @@ struct pud_burrow_manifest {
             focus_leaf_tally_t>::pud_solution_taker;
     };
     struct searcher_t : pud_searcher<
-        pud_solution_store, pud_pending_conflict_store, solution_taker_t, trimming_step_t, focus_frontier_t> {
+        pud_solution_store, pud_pending_conflict_store, solution_taker_t, disk_budget_step_t, focus_frontier_t> {
         using pud_searcher<
-            pud_solution_store, pud_pending_conflict_store, solution_taker_t, trimming_step_t,
+            pud_solution_store, pud_pending_conflict_store, solution_taker_t, disk_budget_step_t,
             focus_frontier_t>::pud_searcher;
     };
     struct stored_solution_dropper_t : pud_stored_solution_dropper<
@@ -287,6 +295,7 @@ struct pud_burrow_manifest {
         size_t max_node_depth,
         size_t max_open_goals,
         size_t state_cache_bytes,
+        size_t max_disk_bytes,
         bool report_stored_solutions);
 
     pud_symbol_table              symbol_table_;
@@ -344,6 +353,8 @@ struct pud_burrow_manifest {
     state_trimming_step_t         state_trimming_step_;
     module_trim_list_t            module_trim_list_;
     trimming_step_t               trimming_step_;
+    disk_meter_t                  disk_meter_;
+    disk_budget_step_t            disk_budget_step_;
     solved_leaf_finder_t          solved_leaf_finder_;
     stored_solution_dropper_t     stored_solution_dropper_;
     solution_term_reader_t        solution_term_reader_;

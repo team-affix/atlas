@@ -32,6 +32,7 @@
 #include "infrastructure/pud_module_inspect_command_handler.hpp"
 #include "infrastructure/pud_module_page_command_handler.hpp"
 #include "infrastructure/pud_module_unpage_command_handler.hpp"
+#include "infrastructure/burrow_command_handler.hpp"
 #include "infrastructure/cairn_command_handler.hpp"
 #include "infrastructure/forager_command_handler.hpp"
 #include "infrastructure/lodestar_command_handler.hpp"
@@ -331,6 +332,76 @@ int main(int argc, char** argv) {
             cairn_opts.save_every,
             cairn_opts.report_stored_solutions,
             cairn_opts.quiet};
+        handler();
+    });
+
+    struct {
+        std::vector<std::string> modules;
+        std::string focus;
+        size_t max_unfolds = 1000;
+        size_t cascade_depth = 1;
+        size_t max_node_depth = 64;
+        size_t max_open_goals = std::numeric_limits<size_t>::max();
+        size_t state_cache_mb = 1024;
+        size_t node_cache_mb = 256;
+        size_t max_disk_gb = 100;
+        size_t sim_progress_interval = 1000;
+        size_t save_every = 0;
+        bool report_stored_solutions = false;
+        bool quiet = false;
+    } burrow_opts;
+
+    auto* burrow_sub = app.add_subcommand("burrow", "Run the Burrow PUD solver over paged module directories");
+    burrow_sub->add_option("modules", burrow_opts.modules, "Paged module directories (atlas module page)")
+        ->required()
+        ->expected(1, -1);
+    burrow_sub->add_option("--focus", burrow_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
+    burrow_sub->add_option(
+        "--max-unfolds", burrow_opts.max_unfolds, "Max unfolds this run; when spent the run ends without a final line");
+    burrow_sub->add_option(
+        "--cascade-depth",
+        burrow_opts.cascade_depth,
+        "Witness levels unfolded after each focus unfold (0 unfolds focus leaves only)");
+    burrow_sub->add_option("--max-node-depth", burrow_opts.max_node_depth, "Max inference depth of a node");
+    burrow_sub->add_option(
+        "--max-open-goals", burrow_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
+    burrow_sub->add_option(
+        "--state-cache-mb", burrow_opts.state_cache_mb, "Memory for node states worked out from their paths");
+    burrow_sub->add_option(
+        "--node-cache-mb", burrow_opts.node_cache_mb, "Memory per module for nodes decoded from its files");
+    burrow_sub->add_option(
+        "--max-disk-gb", burrow_opts.max_disk_gb, "Stop with DISK FULL once the modules' files take this much");
+    burrow_sub->add_option("--sim-progress-interval", burrow_opts.sim_progress_interval,
+                           "Print progress every N unfolds (0 disables)");
+    burrow_sub->add_option(
+        "--save-every",
+        burrow_opts.save_every,
+        "Flush the module files to disk every N unfolds and when the run ends (0, the default, flushes only at the "
+        "end)");
+    burrow_sub->add_flag(
+        "--report-stored-solutions",
+        burrow_opts.report_stored_solutions,
+        "Also report solutions an earlier run already derived and saved in the modules");
+    burrow_sub->add_flag(
+        "-q,--quiet",
+        burrow_opts.quiet,
+        "Do not print runtime initialization, module opening or cache totals");
+    burrow_sub->callback([&]() {
+        constexpr size_t megabyte = size_t{1} << 20;
+        burrow_command_handler handler{
+            burrow_opts.modules,
+            burrow_opts.focus,
+            burrow_opts.max_unfolds,
+            burrow_opts.cascade_depth,
+            burrow_opts.max_node_depth,
+            burrow_opts.max_open_goals,
+            burrow_opts.state_cache_mb * megabyte,
+            burrow_opts.node_cache_mb * megabyte,
+            burrow_opts.max_disk_gb * 1024 * megabyte,
+            burrow_opts.sim_progress_interval,
+            burrow_opts.save_every,
+            burrow_opts.report_stored_solutions,
+            burrow_opts.quiet};
         handler();
     });
 

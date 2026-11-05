@@ -8,6 +8,7 @@ pud_burrow_manifest::pud_burrow_manifest(
     size_t max_node_depth,
     size_t max_open_goals,
     size_t state_cache_bytes,
+    size_t max_disk_bytes,
     bool report_stored_solutions)
     : symbol_table_()
     , link_table_()
@@ -67,6 +68,8 @@ pud_burrow_manifest::pud_burrow_manifest(
     , state_trimming_step_(driver_, node_states_)
     , module_trim_list_()
     , trimming_step_(state_trimming_step_, module_trim_list_)
+    , disk_meter_()
+    , disk_budget_step_(trimming_step_, disk_meter_, max_disk_bytes)
     , solved_leaf_finder_(focus_frontier_, modules_)
     , stored_solution_dropper_(solved_leaf_finder_, modules_, focus_leaf_tally_, report_stored_solutions)
     , solution_term_reader_(node_axioms_, modules_, node_bindings_)
@@ -76,7 +79,7 @@ pud_burrow_manifest::pud_burrow_manifest(
           solved_leaf_finder_, solution_term_reader_, solution_normalizer_, node_depths_, solution_store_,
           focus_leaf_tally_)
     , searcher_(
-          solution_store_, pending_conflict_store_, solution_taker_, trimming_step_, focus_frontier_, max_unfolds)
+          solution_store_, pending_conflict_store_, solution_taker_, disk_budget_step_, focus_frontier_, max_unfolds)
     , search_driver_(searcher_.search())
     , module_loader_(
           functor_linker_, modules_, module_activator_, focus_leaf_tally_, pending_conflict_store_,

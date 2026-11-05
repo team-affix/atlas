@@ -80,7 +80,7 @@ struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithPa
             const std::string directory = (scratch / std::to_string(module.get_module_id())).string();
             pud_module_pager{}.page(module, directory, exprs);
             burrow_modules.emplace_back(directory, exprs, cache_bytes);
-            burrow.register_module(burrow_modules.back().module());
+            burrow.register_module(burrow_modules.back());
         }
     }
 
@@ -89,7 +89,8 @@ struct PudBurrowForagerEquivalenceIntegrationTest : public ::testing::TestWithPa
         const size_t cascade_depth = std::get<0>(GetParam());
         const size_t state_cache_bytes = std::get<1>(GetParam());
         pud_burrow_runtime burrow(
-            exprs, focus, k_max_unfolds, cascade_depth, k_max_node_depth, k_max_open_goals, state_cache_bytes, false);
+            exprs, focus, k_max_unfolds, cascade_depth, k_max_node_depth, k_max_open_goals, state_cache_bytes,
+            SIZE_MAX, false);
         pud_forager_runtime forager(
             exprs, focus, k_max_unfolds, cascade_depth, k_max_node_depth, k_max_open_goals, false);
         load_burrow(burrow, state_cache_bytes);

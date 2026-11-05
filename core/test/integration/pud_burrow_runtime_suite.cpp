@@ -117,13 +117,13 @@ runtime_ref& make_runtime_session(
     });
     holder.burrow.emplace(
         exprs, pud_global_node_id{.module = 2, .node = 0}, max_resolutions, cascade_depth, max_node_depth,
-        k_test_max_open_goals, k_test_state_cache_bytes, false);
+        k_test_max_open_goals, k_test_state_cache_bytes, SIZE_MAX, false);
     for (pud_module& module : holder.modules) {
         install_shared_functor_names(module, holder.functors);
         const std::string directory = (holder.scratch / std::to_string(module.get_module_id())).string();
         pud_module_pager{}.page(module, directory, exprs);
         holder.paged.emplace_back(directory, exprs, k_test_state_cache_bytes);
-        holder.burrow->register_module(holder.paged.back().module());
+        holder.burrow->register_module(holder.paged.back());
     }
     holder.ref.emplace(&*holder.burrow);
     return holder.ref.value();
