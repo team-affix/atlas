@@ -36,6 +36,13 @@ Two generations of engine live side by side:
     goes straight to the files.
   - Loading walks only the focus tree's ids (`pud_focus_leaf_scanner`); there is no activation pass.
   - Burrow makes exactly Forager's unfolds whatever the budgets (`pud_burrow_forager_equivalence`).
+  **Warren** (`pud_warren_*`, `atlas warren`) is Burrow plus Cairn's trails, kept in a third bounded cache,
+  `pud_trail_cache`.
+  - A visit stores the trails it leaves.
+  - A leaf without trails of its own takes its nearest cached ancestor's, marked forked
+    (`pud_inherited_trail_source`).
+  - A leaf with neither is queried afresh. There is no structure watcher, so per-leaf memory stays bounded.
+  - Warren makes exactly Forager's unfolds (`pud_warren_forager_equivalence`).
   Read `docs/pud-architecture.md` and `docs/pud-solver-architecture.md` before touching `pud_*`.
 
 `README.md` predates PUD and lists only some of the subcommands. `cli/entry/main.cpp` is the
