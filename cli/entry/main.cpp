@@ -36,6 +36,7 @@
 #include "infrastructure/cairn_command_handler.hpp"
 #include "infrastructure/forager_command_handler.hpp"
 #include "infrastructure/lodestar_command_handler.hpp"
+#include "infrastructure/warren_command_handler.hpp"
 #include "infrastructure/hex_uint64.hpp"
 
 #ifndef ATLAS_GIT_TAG
@@ -402,6 +403,80 @@ int main(int argc, char** argv) {
             burrow_opts.save_every,
             burrow_opts.report_stored_solutions,
             burrow_opts.quiet};
+        handler();
+    });
+
+    struct {
+        std::vector<std::string> modules;
+        std::string focus;
+        size_t max_unfolds = 1000;
+        size_t cascade_depth = 1;
+        size_t max_node_depth = 64;
+        size_t max_open_goals = std::numeric_limits<size_t>::max();
+        size_t state_cache_mb = 1024;
+        size_t trail_cache_mb = 512;
+        size_t node_cache_mb = 256;
+        size_t max_disk_gb = 100;
+        size_t sim_progress_interval = 1000;
+        size_t save_every = 0;
+        bool report_stored_solutions = false;
+        bool quiet = false;
+    } warren_opts;
+
+    auto* warren_sub = app.add_subcommand("warren", "Run the Warren PUD solver (Burrow with Cairn's trails) over paged module directories");
+    warren_sub->add_option("modules", warren_opts.modules, "Paged module directories (atlas module page)")
+        ->required()
+        ->expected(1, -1);
+    warren_sub->add_option("--focus", warren_opts.focus, "Conjecture node, <module-hex>:<node>")->required();
+    warren_sub->add_option(
+        "--max-unfolds", warren_opts.max_unfolds, "Max unfolds this run; when spent the run ends without a final line");
+    warren_sub->add_option(
+        "--cascade-depth",
+        warren_opts.cascade_depth,
+        "Witness levels unfolded after each focus unfold (0 unfolds focus leaves only)");
+    warren_sub->add_option("--max-node-depth", warren_opts.max_node_depth, "Max inference depth of a node");
+    warren_sub->add_option(
+        "--max-open-goals", warren_opts.max_open_goals, "Max open goals of a node that may be unfolded (default: no limit)");
+    warren_sub->add_option(
+        "--state-cache-mb", warren_opts.state_cache_mb, "Memory for node states worked out from their paths");
+    warren_sub->add_option(
+        "--trail-cache-mb", warren_opts.trail_cache_mb, "Memory for the trails visits leave, resumed by later visits");
+    warren_sub->add_option(
+        "--node-cache-mb", warren_opts.node_cache_mb, "Memory per module for nodes decoded from its files");
+    warren_sub->add_option(
+        "--max-disk-gb", warren_opts.max_disk_gb, "Stop with DISK FULL once the modules' files take this much");
+    warren_sub->add_option("--sim-progress-interval", warren_opts.sim_progress_interval,
+                           "Print progress every N unfolds (0 disables)");
+    warren_sub->add_option(
+        "--save-every",
+        warren_opts.save_every,
+        "Flush the module files to disk every N unfolds and when the run ends (0, the default, flushes only at the "
+        "end)");
+    warren_sub->add_flag(
+        "--report-stored-solutions",
+        warren_opts.report_stored_solutions,
+        "Also report solutions an earlier run already derived and saved in the modules");
+    warren_sub->add_flag(
+        "-q,--quiet",
+        warren_opts.quiet,
+        "Do not print runtime initialization, module opening or cache totals");
+    warren_sub->callback([&]() {
+        constexpr size_t megabyte = size_t{1} << 20;
+        warren_command_handler handler{
+            warren_opts.modules,
+            warren_opts.focus,
+            warren_opts.max_unfolds,
+            warren_opts.cascade_depth,
+            warren_opts.max_node_depth,
+            warren_opts.max_open_goals,
+            warren_opts.state_cache_mb * megabyte,
+            warren_opts.trail_cache_mb * megabyte,
+            warren_opts.node_cache_mb * megabyte,
+            warren_opts.max_disk_gb * 1024 * megabyte,
+            warren_opts.sim_progress_interval,
+            warren_opts.save_every,
+            warren_opts.report_stored_solutions,
+            warren_opts.quiet};
         handler();
     });
 
